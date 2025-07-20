@@ -30,6 +30,12 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum LessonStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
 enum ClassStatus {
   SCHEDULED
   CONFIRMED
@@ -162,7 +168,6 @@ model ClassSchedule {
 // GLOBAL CONTENT REPOSITORY - Modular & Extensible Exercises
 // ================================================================= //
 
-// NEW: A Unit is a lesson plan or chapter, a collection of exercises.
 model Unit {
   id          String   @id @default(uuid()) @db.Uuid
   creatorId   String?  @db.Uuid
@@ -176,16 +181,14 @@ model Unit {
   // Relations
   creator Teacher?   @relation(fields: [creatorId], references: [id], onDelete: SetNull)
   items   UnitItem[]
+  lessons Lesson[] // Added inverse relation
 }
 
-// NEW: A UnitItem is a single step in a Unit, linking to one type of exercise.
-// This provides the modular, polymorphic structure.
 model UnitItem {
   id                       String @id @default(uuid()) @db.Uuid
   unitId                   String @db.Uuid
-  order                    Int // The sequence of this item within the unit
+  order                    Int
 
-  // Polymorphic relation: ONE of these will be populated.
   vocabularyDeckId         String? @unique @db.Uuid
   grammarExerciseId        String? @unique @db.Uuid
   listeningExerciseId      String? @unique @db.Uuid
@@ -197,9 +200,13 @@ model UnitItem {
   grammarExercise          GrammarExercise?          @relation(fields: [grammarExerciseId], references: [id], onDelete: Cascade)
   listeningExercise        ListeningExercise?        @relation(fields: [listeningExerciseId], references: [id], onDelete: Cascade)
   vocabFillInBlankExercise VocabFillInBlankExercise? @relation(fields: [vocabFillInBlankExerciseId], references: [id], onDelete: Cascade)
-
+  
+  // Added inverse relation for tracking current lesson item
+  activeLesson             Lesson?
+  
   @@index([unitId])
 }
+
 
 model VocabularyDeck {
   id              String   @id @default(uuid()) @db.Uuid
@@ -384,21 +391,29 @@ model StudentFsrsParams {
 }
 
 model Lesson {
-  id                          String   @id @default(uuid()) @db.Uuid
-  studentId                   String   @db.Uuid
-  teacherId                   String   @db.Uuid
-  classScheduleId             String?  @unique @db.Uuid
-  startTime                   DateTime @default(now())
+  id                          String       @id @default(uuid()) @db.Uuid
+  studentId                   String       @db.Uuid
+  teacherId                   String       @db.Uuid
+  unitId                      String       @db.Uuid // A lesson is always based on a Unit
+  classScheduleId             String?      @unique @db.Uuid
+  
+  // NEW: Fields for state management
+  status                      LessonStatus @default(IN_PROGRESS)
+  currentUnitItemId           String?      @db.Uuid
+
+  startTime                   DateTime     @default(now())
   endTime                     DateTime?
-  // Metrics are now tracked via ReviewHistory, this provides more granular data
   lessonSummary               String?
   homeworkAssigned            Json?
   nextLessonNotes             String?
-  createdAt                   DateTime @default(now())
+  createdAt                   DateTime     @default(now())
 
   // Relations
-  student       Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  teacher       Teacher         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  classSchedule ClassSchedule?  @relation(fields: [classScheduleId], references: [id], onDelete: SetNull)
-  reviewHistory ReviewHistory[]
+  student         Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher         Teacher         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  unit            Unit            @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  classSchedule   ClassSchedule?  @relation(fields: [classScheduleId], references: [id], onDelete: SetNull)
+  reviewHistory   ReviewHistory[]
+  
+  currentUnitItem UnitItem?       @relation(fields: [currentUnitItemId], references: [id], onDelete: SetNull)
 }
