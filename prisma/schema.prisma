@@ -75,6 +75,7 @@ enum JobStatus {
   RUNNING
   COMPLETED
   FAILED
+  SKIPPED // ADDED: For jobs that are intentionally not run.
 }
 
 // ================================================================= //
@@ -221,7 +222,7 @@ model VocabularyDeck {
   description      String?
   isPublic         Boolean  @default(false)
   isArchived       Boolean  @default(false)
-  originExerciseId String?  @db.Uuid // ADDED: For tracking forks
+  originExerciseId String?  @db.Uuid
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -264,7 +265,7 @@ model GrammarExercise {
   tags             String[]
   isPublic         Boolean  @default(false)
   isArchived       Boolean  @default(false)
-  originExerciseId String?  @db.Uuid // ADDED: For tracking forks
+  originExerciseId String?  @db.Uuid
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -283,7 +284,7 @@ model ListeningExercise {
   tags             String[]
   isPublic         Boolean  @default(false)
   isArchived       Boolean  @default(false)
-  originExerciseId String?  @db.Uuid // ADDED: For tracking forks
+  originExerciseId String?  @db.Uuid
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -301,7 +302,7 @@ model VocabFillInBlankExercise {
   tags             String[]
   isPublic         Boolean  @default(false)
   isArchived       Boolean  @default(false)
-  originExerciseId String?  @db.Uuid // ADDED: For tracking forks
+  originExerciseId String?  @db.Uuid
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

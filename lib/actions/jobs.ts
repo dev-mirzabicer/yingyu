@@ -1,6 +1,12 @@
 import { prisma } from '@/lib/db';
 import { Job, JobType, Prisma } from '@prisma/client';
 
+// Define a type for Prisma's transaction client to improve readability.
+type PrismaTransactionClient = Omit<
+  Prisma.TransactionClient,
+  '$use' | '$on' | '$connect' | '$disconnect' | '$executeRaw' | '$queryRaw'
+>;
+
 /**
  * Service responsible for managing asynchronous jobs.
  * This service acts as a secure gateway for creating and monitoring background tasks.
@@ -9,33 +15,36 @@ import { Job, JobType, Prisma } from '@prisma/client';
  */
 export const JobService = {
   /**
-   * Creates a new job record in the database, placing it in the queue for the worker.
-   * This is the primary method for initiating any long-running, asynchronous task.
+   * Creates a new job record in the database.
+   * This method is now transaction-aware. If a Prisma transaction client (`tx`)
+   * is provided, the job creation will become part of that transaction,
+   * ensuring atomicity with other database operations.
    *
-   * @param ownerId The UUID of the Teacher who is initiating the job. This is crucial for authorization.
-   * @param type The type of job to be executed, defined by the JobType enum.
+   * @param ownerId The UUID of the Teacher who is initiating the job.
+   * @param type The type of job to be executed.
    * @param payload The JSON data required by the worker to execute the job.
+   * @param tx An optional Prisma transaction client.
    * @returns A promise that resolves to the newly created Job object.
    * @throws {Error} if the ownerId is not provided.
    */
   async createJob(
     ownerId: string,
     type: JobType,
-    payload: Prisma.InputJsonValue
+    payload: Prisma.InputJsonValue,
+    tx?: PrismaTransactionClient
   ): Promise<Job> {
-    // check: A job must always have an owner.
     if (!ownerId) {
-      // We throw a standard error here as this is a fundamental logic violation,
-      // indicating a programming error in the calling service.
       throw new Error('Job creation requires a valid ownerId.');
     }
 
-    const job = await prisma.job.create({
+    // Use the provided transaction client, or fall back to the global prisma instance.
+    const db = tx || prisma;
+
+    const job = await db.job.create({
       data: {
         ownerId,
         type,
         payload,
-        // The status defaults to PENDING as per the schema, so it's not explicitly set here.
       },
     });
 
@@ -52,18 +61,14 @@ export const JobService = {
    * @returns A promise that resolves to the Job object if found and authorized, otherwise null.
    */
   async getJobStatus(jobId: string, ownerId: string): Promise<Job | null> {
-    // Meticulous check: Ensure valid identifiers are provided before querying.
     if (!jobId || !ownerId) {
       return null;
     }
-    // The job must belong to the owner.
-    const job = await prisma.job.findFirst({
+    return prisma.job.findFirst({
       where: {
         id: jobId,
         ownerId: ownerId,
       },
     });
-
-    return job;
   },
 };

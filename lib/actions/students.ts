@@ -3,6 +3,7 @@ import { authorizeTeacherForStudent } from '@/lib/auth';
 import { FullStudentProfile, PopulatedStudentDeck } from '@/lib/types';
 import {
   CardState,
+  Job,
   Payment,
   Prisma,
   Student,
@@ -10,6 +11,7 @@ import {
 } from '@prisma/client';
 import { CreateStudentSchema, RecordPaymentSchema } from '../schemas';
 import { z } from 'zod';
+import { JobService } from './jobs';
 
 type CreateStudentInput = z.infer<typeof CreateStudentSchema>;
 type RecordPaymentInput = z.infer<typeof RecordPaymentSchema>;
@@ -48,10 +50,7 @@ export const StudentService = {
    * @returns A promise that resolves to the archived Student object.
    */
   async archiveStudent(studentId: string, teacherId: string): Promise<Student> {
-    // Authorization is still crucial.
     await authorizeTeacherForStudent(teacherId, studentId);
-
-    // The "delete" operation is now a simple update.
     return prisma.student.update({
       where: { id: studentId },
       data: { isArchived: true },
@@ -71,13 +70,12 @@ export const StudentService = {
     teacherId: string
   ): Promise<FullStudentProfile | null> {
     await authorizeTeacherForStudent(teacherId, studentId);
-
     const student = await prisma.student.findUnique({
-      where: { id: studentId }, // No need to add `isArchived: false` here!
+      where: { id: studentId },
       include: {
         payments: { orderBy: { paymentDate: 'desc' } },
         studentDecks: {
-          where: { deck: { isArchived: false } }, // Also filter out archived decks
+          where: { deck: { isArchived: false } },
           include: { deck: true },
           orderBy: { assignedAt: 'desc' },
         },
@@ -87,11 +85,7 @@ export const StudentService = {
         },
       },
     });
-
-    if (!student) {
-      return null;
-    }
-
+    if (!student) return null;
     const totalPurchased = student.payments.reduce(
       (sum, p) => sum + p.classesPurchased,
       0
@@ -101,7 +95,6 @@ export const StudentService = {
       0
     );
     const classesRemaining = totalPurchased - totalUsed;
-
     return {
       ...student,
       classesRemaining,
@@ -111,31 +104,56 @@ export const StudentService = {
   },
 
   /**
-   * Assigns a vocabulary deck to a student or updates the settings if already assigned.
-   * This function is idempotent.
+   * Assigns a vocabulary deck to a student. If the deck is already assigned, it updates
+   * the settings. If it's a new assignment, it atomically creates a background job
+   * to initialize the FSRS card states.
    *
    * @param studentId The UUID of the student.
    * @param teacherId The UUID of the teacher performing the action.
    * @param deckId The UUID of the global vocabulary deck to assign.
    * @param settings Student-specific settings for this deck.
-   * @returns A promise that resolves to the created or updated StudentDeck record.
+   * @returns A promise that resolves to an object containing the StudentDeck record
+   *          and the Job if one was created.
    */
   async assignDeckToStudent(
     studentId: string,
     teacherId: string,
     deckId: string,
     settings: { dailyNewCards?: number; dailyReviewLimit?: number }
-  ): Promise<StudentDeck> {
-    await authorizeTeacherForStudent(teacherId, studentId);
+  ): Promise<{ studentDeck: StudentDeck; job: Job | null }> {
+    // An active student is required to assign new learning material.
+    await authorizeTeacherForStudent(teacherId, studentId, {
+      checkIsActive: true,
+    });
 
-    return prisma.studentDeck.upsert({
-      where: { studentId_deckId: { studentId, deckId } },
-      update: { ...settings, isActive: true },
-      create: {
-        studentId,
-        deckId,
-        ...settings,
-      },
+    return prisma.$transaction(async (tx) => {
+      const existingAssignment = await tx.studentDeck.findUnique({
+        where: { studentId_deckId: { studentId, deckId } },
+      });
+
+      if (existingAssignment) {
+        // This is an update to an existing assignment. No job needed.
+        const updatedAssignment = await tx.studentDeck.update({
+          where: { id: existingAssignment.id },
+          data: { ...settings, isActive: true },
+        });
+        return { studentDeck: updatedAssignment, job: null };
+      } else {
+        // This is a new assignment. We must create the link AND the job.
+        const newAssignment = await tx.studentDeck.create({
+          data: { studentId, deckId, ...settings },
+        });
+
+        // Call the now transaction-aware JobService, passing the transaction client.
+        const newJob = await JobService.createJob(
+          teacherId,
+          'INITIALIZE_CARD_STATES',
+          { studentId, deckId },
+          tx
+        );
+
+        return { studentDeck: newAssignment, job: newJob };
+      }
     });
   },
 
@@ -201,20 +219,14 @@ export const StudentService = {
     if (!studentId || !deckId) {
       throw new Error('Invalid payload: studentId and deckId are required.');
     }
-
     const cards = await prisma.vocabularyCard.findMany({
       where: { deckId: deckId },
       select: { id: true },
     });
-
-    if (cards.length === 0) {
-      return { cardsInitialized: 0 };
-    }
-
+    if (cards.length === 0) return { cardsInitialized: 0 };
     const now = new Date();
     const defaultDifficulty = 5.0;
     const defaultStability = 1.0;
-
     const cardStatesToCreate: Prisma.StudentCardStateCreateManyInput[] =
       cards.map((card) => ({
         studentId: studentId,
@@ -226,12 +238,10 @@ export const StudentService = {
         reps: 0,
         lapses: 0,
       }));
-
     const result = await prisma.studentCardState.createMany({
       data: cardStatesToCreate,
       skipDuplicates: true,
     });
-
     return { cardsInitialized: result.count };
   },
 };

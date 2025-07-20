@@ -1,7 +1,6 @@
 import { prisma } from '@/lib/db';
 import { FullUnit, NewUnitItemData } from '@/lib/types';
 import {
-  Prisma,
   Unit,
   UnitItem,
   UnitItemType,

@@ -7,15 +7,11 @@ import { vocabularyDeckHandler } from './vocabularyDeckHandler';
 
 // A map that associates each UnitItemType with its corresponding handler instance.
 // This is the heart of the dispatcher pattern.
-const handlerMap: Record<UnitItemType, ExerciseHandler> = {
+const handlerMap: Partial<Record<UnitItemType, ExerciseHandler>> = {
   [UnitItemType.FSRS_REVIEW_SESSION]: fsrsReviewHandler,
   [UnitItemType.VOCABULARY_DECK]: vocabularyDeckHandler,
 
-  // Add other handlers here. The system will throw an error if a handler is not implemented.
-  [UnitItemType.GRAMMAR_EXERCISE]: null as unknown as ExerciseHandler, // Placeholder
-  [UnitItemType.LISTENING_EXERCISE]: null as unknown as ExerciseHandler, // Placeholder
-  [UnitItemType.VOCAB_FILL_IN_BLANK_EXERCISE]:
-    null as unknown as ExerciseHandler, // Placeholder
+  // Unimplemented handlers are now simply omitted from the map.
 };
 
 /**
@@ -23,12 +19,19 @@ const handlerMap: Record<UnitItemType, ExerciseHandler> = {
  *
  * @param type The UnitItemType from the current session's unit item.
  * @returns The corresponding ExerciseHandler instance.
- * @throws {Error} if no handler is registered for the given type.
+ * @throws {Error} if no handler is registered for the given type. This is a critical
+ *         safeguard against runtime errors from unimplemented features.
  */
 export function getHandler(type: UnitItemType): ExerciseHandler {
   const handler = handlerMap[type];
+
+  // Check: If no handler is found, we throw an explicit, informative error.
+  // This prevents the system from crashing with a vague 'null pointer' exception.
   if (!handler) {
-    throw new Error(`No ExerciseHandler registered for type: ${type}`);
+    throw new Error(
+      `No ExerciseHandler is registered for the type: '${type}'.`
+    );
   }
+
   return handler;
 }

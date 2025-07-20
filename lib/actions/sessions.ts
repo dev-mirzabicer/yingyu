@@ -61,6 +61,7 @@ export const SessionService = {
 
   /**
    * Starts a new session for a student based on a specific unit.
+   * This is a core learning activity and is status-aware.
    *
    * @param teacherId The UUID of the teacher initiating the session.
    * @param studentId The UUID of the student.
@@ -72,7 +73,10 @@ export const SessionService = {
     studentId: string,
     unitId: string
   ): Promise<FullSessionState> {
-    await authorizeTeacherForStudent(teacherId, studentId);
+    // MODIFIED: The readiness check is now active.
+    await authorizeTeacherForStudent(teacherId, studentId, {
+      checkIsActive: true,
+    });
 
     const unit = await ContentService.getUnitWithDetails(unitId);
     if (!unit || unit.items.length === 0) {
@@ -124,11 +128,9 @@ export const SessionService = {
       throw new Error('This session is not active.');
     }
 
-    // 1. Dispatch to the correct handler.
     const handler = getHandler(sessionState.currentUnitItem.type);
     await handler.submitAnswer(sessionState, payload);
 
-    // 2. Perform state transition (this logic remains the same).
     const currentItemIndex = sessionState.unit.items.findIndex(
       (item) => item.id === sessionState.currentUnitItemId
     );
