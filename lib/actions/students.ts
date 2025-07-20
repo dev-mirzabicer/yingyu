@@ -1,7 +1,13 @@
 import { prisma } from '@/lib/db';
 import { authorizeTeacherForStudent } from '@/lib/auth';
 import { FullStudentProfile, PopulatedStudentDeck } from '@/lib/types';
-import { Payment, Student, StudentDeck } from '@prisma/client';
+import {
+  CardState,
+  Payment,
+  Prisma,
+  Student,
+  StudentDeck,
+} from '@prisma/client';
 
 /**
  * Service responsible for managing student profiles, their assignments,
@@ -134,5 +140,62 @@ export const StudentService = {
       where: { id: studentId },
       data: { notes },
     });
+  },
+
+  /**
+   * [INTERNAL METHOD] Initializes the FSRS state for every card in a given deck for a specific student.
+   * This method is designed to be called by a trusted background worker, not directly from the API.
+   * It performs a high-volume, efficient bulk insertion.
+   *
+   * @param payload The job payload, expected to contain studentId and deckId.
+   * @returns A result object indicating the number of cards initialized.
+   * @throws {Error} if payload is invalid or resources are not found.
+   */
+  async _initializeCardStates(
+    payload: Prisma.JsonValue
+  ): Promise<{ cardsInitialized: number }> {
+    // 1. Meticulous Payload Validation
+    const { studentId, deckId } = payload as {
+      studentId: string;
+      deckId: string;
+    };
+    if (!studentId || !deckId) {
+      throw new Error('Invalid payload: studentId and deckId are required.');
+    }
+
+    // 2. Fetch all card IDs from the specified deck.
+    const cards = await prisma.vocabularyCard.findMany({
+      where: { deckId: deckId },
+      select: { id: true },
+    });
+
+    if (cards.length === 0) {
+      return { cardsInitialized: 0 }; // Nothing to do.
+    }
+
+    const now = new Date();
+    const defaultDifficulty = 5.0;
+    const defaultStability = 1.0;
+
+    // 3. Prepare the data for bulk insertion.
+    const cardStatesToCreate: Prisma.StudentCardStateCreateManyInput[] =
+      cards.map((card) => ({
+        studentId: studentId,
+        cardId: card.id,
+        state: CardState.NEW,
+        due: now,
+        difficulty: defaultDifficulty,
+        stability: defaultStability,
+        reps: 0,
+        lapses: 0,
+      }));
+
+    // 4. Perform a single, highly efficient bulk creation operation.
+    const result = await prisma.studentCardState.createMany({
+      data: cardStatesToCreate,
+      skipDuplicates: true, // Prevents errors if a card state somehow already exists.
+    });
+
+    return { cardsInitialized: result.count };
   },
 };
