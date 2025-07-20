@@ -1,0 +1,408 @@
+// This schema is the single source of truth for your database.
+// It's used by Prisma to generate the database client and migrations.
+// We are using the PostgreSQL provider, as planned in the architecture.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ================================================================= //
+// ENUMS - For type safety and data consistency
+// ================================================================= //
+
+enum StudentStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+enum ProficiencyLevel {
+  BEGINNER
+  ELEMENTARY
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum PaymentStatus {
+  ACTIVE
+  EXPIRED
+  REFUNDED
+}
+
+enum ClassStatus {
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  RESCHEDULED
+}
+
+enum CardState {
+  NEW
+  LEARNING
+  REVIEW
+  RELEARNING
+}
+
+enum ReviewType {
+  VOCABULARY
+  LISTENING
+  SPELLING
+  GRAMMAR
+}
+
+// ================================================================= //
+// MODELS - Reflecting a Global Repository and Modular Units
+// ================================================================= //
+
+model Teacher {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  passwordHash String
+  name         String
+  phone        String?
+  timezone     String    @default("Asia/Shanghai")
+  avatarUrl    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  settings              TeacherSettings?
+  students              Student[]
+  lessons               Lesson[]
+  // 'creator' relations show who authored global content
+  createdDecks          VocabularyDeck[]
+  createdGrammar        GrammarExercise[]
+  createdListening      ListeningExercise[]
+  createdVocabFillBlank VocabFillInBlankExercise[]
+  createdUnits          Unit[]
+}
+
+model TeacherSettings {
+  id                        String   @id @default(uuid()) @db.Uuid
+  teacherId                 String   @unique @db.Uuid
+  paymentAlertThreshold     Int      @default(3) // classes remaining
+  autoScheduleNextClass     Boolean  @default(true)
+  preferredLessonDuration   Int      @default(60) // in minutes
+  dashboardLayout           Json     @default("{\"view\": \"grid\", \"sortBy\": \"nextClass\"}")
+  notificationPreferences   Json     @default("{\"email\": true, \"inApp\": true}")
+  updatedAt                 DateTime @updatedAt
+
+  // Relations
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+}
+
+model Student {
+  id                    String   @id @default(uuid()) @db.Uuid
+  teacherId             String   @db.Uuid
+  name                  String
+  email                 String?
+  phone                 String?
+  proficiencyLevel      ProficiencyLevel @default(BEGINNER)
+  learningGoal          String?
+  weeklyStudyHours      Int      @default(3)
+  notes                 String?
+  avatarUrl             String?
+  status                StudentStatus @default(ACTIVE)
+  totalLessons          Int      @default(0)
+  totalStudyTimeMinutes Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relations
+  teacher         Teacher              @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  payments        Payment[]
+  classSchedules  ClassSchedule[]
+  studentDecks    StudentDeck[]
+  cardStates      StudentCardState[]
+  reviewHistory   ReviewHistory[]
+  fsrsParams      StudentFsrsParams[]
+  lessons         Lesson[]
+}
+
+model Payment {
+  id               String        @id @default(uuid()) @db.Uuid
+  studentId        String        @db.Uuid
+  amount           Decimal       @db.Decimal(10, 2)
+  currency         String        @default("CNY")
+  classesPurchased Int
+  classesUsed      Int           @default(0)
+  paymentDate      DateTime      @db.Date
+  expiryDate       DateTime?     @db.Date
+  paymentMethod    String?
+  receiptUrl       String?
+  notes            String?
+  status           PaymentStatus @default(ACTIVE)
+  createdAt        DateTime      @default(now())
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model ClassSchedule {
+  id                  String      @id @default(uuid()) @db.Uuid
+  studentId           String      @db.Uuid
+  scheduledTime       DateTime
+  durationMinutes     Int         @default(60)
+  status              ClassStatus @default(SCHEDULED)
+  teacherNotes        String?
+  studentFeedback     String?
+  effectivenessRating Int? // check constraint (1-5) handled by app logic
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lesson  Lesson?
+}
+
+// ================================================================= //
+// GLOBAL CONTENT REPOSITORY - Modular & Extensible Exercises
+// ================================================================= //
+
+// NEW: A Unit is a lesson plan or chapter, a collection of exercises.
+model Unit {
+  id          String   @id @default(uuid()) @db.Uuid
+  creatorId   String?  @db.Uuid
+  name        String
+  description String?
+  tags        String[]
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  creator Teacher?   @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  items   UnitItem[]
+}
+
+// NEW: A UnitItem is a single step in a Unit, linking to one type of exercise.
+// This provides the modular, polymorphic structure.
+model UnitItem {
+  id                       String @id @default(uuid()) @db.Uuid
+  unitId                   String @db.Uuid
+  order                    Int // The sequence of this item within the unit
+
+  // Polymorphic relation: ONE of these will be populated.
+  vocabularyDeckId         String? @unique @db.Uuid
+  grammarExerciseId        String? @unique @db.Uuid
+  listeningExerciseId      String? @unique @db.Uuid
+  vocabFillInBlankExerciseId String? @unique @db.Uuid
+
+  // Relations
+  unit                     Unit                      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  vocabularyDeck           VocabularyDeck?           @relation(fields: [vocabularyDeckId], references: [id], onDelete: Cascade)
+  grammarExercise          GrammarExercise?          @relation(fields: [grammarExerciseId], references: [id], onDelete: Cascade)
+  listeningExercise        ListeningExercise?        @relation(fields: [listeningExerciseId], references: [id], onDelete: Cascade)
+  vocabFillInBlankExercise VocabFillInBlankExercise? @relation(fields: [vocabFillInBlankExerciseId], references: [id], onDelete: Cascade)
+
+  @@index([unitId])
+}
+
+model VocabularyDeck {
+  id              String   @id @default(uuid()) @db.Uuid
+  creatorId       String?  @db.Uuid
+  name            String
+  description     String?
+  category        String?
+  difficultyLevel Int?
+  totalCards      Int      @default(0)
+  isPublic        Boolean  @default(false)
+  tags            String[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  creator      Teacher?         @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  cards        VocabularyCard[]
+  studentDecks StudentDeck[]
+  unitItem     UnitItem?
+}
+
+model VocabularyCard {
+  id                 String   @id @default(uuid()) @db.Uuid
+  deckId             String   @db.Uuid
+  englishWord        String
+  chineseTranslation String
+  pinyin             String?
+  ipaPronunciation   String?
+  exampleSentences   Json?
+  wordType           String?
+  difficultyLevel    Int      @default(1)
+  audioUrl           String?
+  imageUrl           String?
+  videoUrl           String?
+  frequencyRank      Int?
+  tags               String[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations
+  deck       VocabularyDeck     @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  cardStates StudentCardState[]
+}
+
+model GrammarExercise {
+  id             String   @id @default(uuid()) @db.Uuid
+  creatorId      String?  @db.Uuid
+  title          String
+  grammarTopic   String
+  difficultyLevel Int      @default(1)
+  exerciseData   Json // e.g., { "template": "He ___ (go) to the store.", "blanks": ["went"] }
+  explanation    String?
+  tags           String[]
+  isPublic       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  creator  Teacher?  @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  unitItem UnitItem?
+}
+
+// NEW: Specific model for listening exercises
+model ListeningExercise {
+  id              String   @id @default(uuid()) @db.Uuid
+  creatorId       String?  @db.Uuid
+  title           String
+  difficultyLevel Int      @default(1)
+  audioUrl        String
+  correctSpelling String
+  explanation     String?
+  tags            String[]
+  isPublic        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  creator  Teacher?  @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  unitItem UnitItem?
+}
+
+// NEW: Specific model for vocabulary fill-in-the-blank
+model VocabFillInBlankExercise {
+  id              String   @id @default(uuid()) @db.Uuid
+  creatorId       String?  @db.Uuid
+  title           String
+  difficultyLevel Int      @default(1)
+  exerciseData    Json // e.g., { "template": "A doctor's main goal is to ___ patients.", "targetWord": "heal", "distractors": ["feel", "peel"] }
+  explanation     String?
+  tags            String[]
+  isPublic        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  creator  Teacher?  @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  unitItem UnitItem?
+}
+
+
+// ================================================================= //
+// STUDENT-SPECIFIC DATA & FSRS
+// ================================================================= //
+
+model StudentDeck {
+  id                        String   @id @default(uuid()) @db.Uuid
+  studentId                 String   @db.Uuid
+  deckId                    String   @db.Uuid
+  // Student-specific settings, controlled by the teacher
+  dailyNewCards             Int      @default(10)
+  dailyReviewLimit          Int      @default(50)
+  assignedAt                DateTime @default(now())
+  completedAt               DateTime?
+  isActive                  Boolean  @default(true)
+
+  // Relations
+  student Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  deck    VocabularyDeck   @relation(fields: [deckId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, deckId])
+}
+
+model StudentCardState {
+  id                    String    @id @default(uuid()) @db.Uuid
+  studentId             String    @db.Uuid
+  cardId                String    @db.Uuid
+  stability             Float
+  difficulty            Float
+  due                   DateTime
+  lastReview            DateTime?
+  reps                  Int       @default(0)
+  lapses                Int       @default(0)
+  state                 CardState @default(NEW)
+  averageResponseTimeMs Int       @default(0)
+  consecutiveCorrect    Int       @default(0)
+  retrievability        Float?
+  intervalDays          Int?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Relations
+  student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  card    VocabularyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, cardId])
+}
+
+model ReviewHistory {
+  id                  BigInt     @id @default(autoincrement())
+  studentId           String     @db.Uuid
+  cardId              String     @db.Uuid // For FSRS on vocab cards
+  lessonId            String?    @db.Uuid
+  reviewType          ReviewType
+  rating              Int
+  responseTimeMs      Int?
+  previousStability   Float?
+  previousDifficulty  Float?
+  previousDue         DateTime?
+  previousState       CardState?
+  reviewedAt          DateTime   @default(now())
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lesson  Lesson? @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+
+  @@index([studentId, cardId])
+  @@index([reviewedAt])
+}
+
+model StudentFsrsParams {
+  id                String   @id @default(uuid()) @db.Uuid
+  studentId         String   @unique @db.Uuid
+  w                 Json // Storing the 17 FSRS parameters as a JSON array
+  version           Int      @default(1)
+  optimizationScore Float?
+  trainingDataSize  Int?
+  lastOptimized     DateTime @default(now())
+  isActive          Boolean  @default(true)
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model Lesson {
+  id                          String   @id @default(uuid()) @db.Uuid
+  studentId                   String   @db.Uuid
+  teacherId                   String   @db.Uuid
+  classScheduleId             String?  @unique @db.Uuid
+  startTime                   DateTime @default(now())
+  endTime                     DateTime?
+  // Metrics are now tracked via ReviewHistory, this provides more granular data
+  lessonSummary               String?
+  homeworkAssigned            Json?
+  nextLessonNotes             String?
+  createdAt                   DateTime @default(now())
+
+  // Relations
+  student       Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher       Teacher         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  classSchedule ClassSchedule?  @relation(fields: [classScheduleId], references: [id], onDelete: SetNull)
+  reviewHistory ReviewHistory[]
+}
