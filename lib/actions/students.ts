@@ -30,10 +30,7 @@ export const StudentService = {
     teacherId: string,
     studentData: CreateStudentInput
   ): Promise<Student> {
-    // 1. Meticulous Validation
     CreateStudentSchema.parse(studentData);
-
-    // 2. Create Operation
     return prisma.student.create({
       data: {
         ...studentData,
@@ -41,9 +38,29 @@ export const StudentService = {
       },
     });
   },
+
+  /**
+   * Archives a student, effectively soft-deleting them from the system.
+   * The student's data is preserved but will no longer appear in any standard queries.
+   *
+   * @param studentId The UUID of the student to archive.
+   * @param teacherId The UUID of the teacher for authorization.
+   * @returns A promise that resolves to the archived Student object.
+   */
+  async archiveStudent(studentId: string, teacherId: string): Promise<Student> {
+    // Authorization is still crucial.
+    await authorizeTeacherForStudent(teacherId, studentId);
+
+    // The "delete" operation is now a simple update.
+    return prisma.student.update({
+      where: { id: studentId },
+      data: { isArchived: true },
+    });
+  },
+
   /**
    * Retrieves a complete, rich profile for a single student.
-   * This includes calculated fields like classes remaining and detailed relational data.
+   * The global Prisma extension automatically ensures we don't fetch archived students.
    *
    * @param studentId The UUID of the student to retrieve.
    * @param teacherId The UUID of the teacher requesting the profile (for authorization).
@@ -53,15 +70,14 @@ export const StudentService = {
     studentId: string,
     teacherId: string
   ): Promise<FullStudentProfile | null> {
-    // 1. Authorization: Ensure the teacher has access to this student.
     await authorizeTeacherForStudent(teacherId, studentId);
 
-    // 2. Data Fetching: Get the student and all relevant related data.
     const student = await prisma.student.findUnique({
-      where: { id: studentId },
+      where: { id: studentId }, // No need to add `isArchived: false` here!
       include: {
         payments: { orderBy: { paymentDate: 'desc' } },
         studentDecks: {
+          where: { deck: { isArchived: false } }, // Also filter out archived decks
           include: { deck: true },
           orderBy: { assignedAt: 'desc' },
         },
@@ -76,7 +92,6 @@ export const StudentService = {
       return null;
     }
 
-    // 3. Business Logic: Calculate remaining classes in the application layer.
     const totalPurchased = student.payments.reduce(
       (sum, p) => sum + p.classesPurchased,
       0
@@ -87,7 +102,6 @@ export const StudentService = {
     );
     const classesRemaining = totalPurchased - totalUsed;
 
-    // 4. Return a well-structured, typed object.
     return {
       ...student,
       classesRemaining,
@@ -138,13 +152,8 @@ export const StudentService = {
     teacherId: string,
     paymentData: RecordPaymentInput
   ): Promise<Payment> {
-    // 1. Authorization
     await authorizeTeacherForStudent(teacherId, studentId);
-
-    // 2. Validation
     RecordPaymentSchema.parse(paymentData);
-
-    // 3. Create Operation
     return prisma.payment.create({
       data: {
         ...paymentData,
@@ -167,7 +176,6 @@ export const StudentService = {
     notes: string
   ): Promise<Student> {
     await authorizeTeacherForStudent(teacherId, studentId);
-
     return prisma.student.update({
       where: { id: studentId },
       data: { notes },
@@ -186,7 +194,6 @@ export const StudentService = {
   async _initializeCardStates(
     payload: Prisma.JsonValue
   ): Promise<{ cardsInitialized: number }> {
-    // 1. Meticulous Payload Validation
     const { studentId, deckId } = payload as {
       studentId: string;
       deckId: string;
@@ -195,21 +202,19 @@ export const StudentService = {
       throw new Error('Invalid payload: studentId and deckId are required.');
     }
 
-    // 2. Fetch all card IDs from the specified deck.
     const cards = await prisma.vocabularyCard.findMany({
       where: { deckId: deckId },
       select: { id: true },
     });
 
     if (cards.length === 0) {
-      return { cardsInitialized: 0 }; // Nothing to do.
+      return { cardsInitialized: 0 };
     }
 
     const now = new Date();
     const defaultDifficulty = 5.0;
     const defaultStability = 1.0;
 
-    // 3. Prepare the data for bulk insertion.
     const cardStatesToCreate: Prisma.StudentCardStateCreateManyInput[] =
       cards.map((card) => ({
         studentId: studentId,
@@ -222,10 +227,9 @@ export const StudentService = {
         lapses: 0,
       }));
 
-    // 4. Perform a single, highly efficient bulk creation operation.
     const result = await prisma.studentCardState.createMany({
       data: cardStatesToCreate,
-      skipDuplicates: true, // Prevents errors if a card state somehow already exists.
+      skipDuplicates: true,
     });
 
     return { cardsInitialized: result.count };

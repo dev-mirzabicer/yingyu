@@ -1,23 +1,66 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 
 // Declare a global variable to hold the Prisma Client instance.
-// This is a workaround to persist the client across hot reloads in development.
 declare global {
   var prisma: PrismaClient | undefined;
 }
 
-// Instantiate the Prisma Client.
-// If we are in a development environment and a prisma instance already exists on the global object,
-// we use that existing instance. Otherwise, we create a new one.
-// In production, `globalThis.prisma` will always be undefined, so a new client is always created.
-export const prisma = globalThis.prisma || new PrismaClient({
-  // Optional: Add logging to see the queries being executed by Prisma.
-  // This is very useful for debugging during development.
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-});
+// The list of models that support our soft-delete/archiving pattern.
+const ARCHIVABLE_MODELS = [
+  'Student',
+  'VocabularyDeck',
+  'GrammarExercise',
+  'ListeningExercise',
+  'VocabFillInBlankExercise',
+];
 
-// If we are in development, we assign the newly created prisma instance to the global object.
-// This ensures that on the next hot reload, we reuse the existing connection.
+/**
+ * Creates and configures the Prisma Client instance.
+ * This function applies a powerful global extension to handle soft deletes automatically.
+ */
+function createPrismaClient() {
+  const basePrisma = new PrismaClient({
+    log:
+      process.env.NODE_ENV === 'development'
+        ? ['query', 'error', 'warn']
+        : ['error'],
+  });
+
+  return basePrisma.$extends({
+    query: {
+      $allModels: {
+        // This middleware intercepts all find, update, and delete operations.
+        async $allOperations({ model, operation, args, query }) {
+          // Only apply the logic to models that are archivable.
+          if (ARCHIVABLE_MODELS.includes(model as string)) {
+            // For any operation that finds or modifies records...
+            if (
+              [
+                'findUnique',
+                'findFirst',
+                'findMany',
+                'update',
+                'updateMany',
+                'count',
+              ].includes(operation)
+            ) {
+              // ...we automatically add `isArchived: false` to the `where` clause.
+              // This ensures that from the application's perspective, archived records
+              // are treated as if they do not exist.
+              args.where = { ...(args.where as object), isArchived: false };
+            }
+          }
+          return query(args);
+        },
+      },
+    },
+  });
+}
+
+// Instantiate the Prisma Client using our factory.
+// In development, we reuse the instance across hot reloads.
+export const prisma = globalThis.prisma || createPrismaClient();
+
 if (process.env.NODE_ENV !== 'production') {
   globalThis.prisma = prisma;
 }

@@ -11,43 +11,43 @@ generator client {
 // ENUMS
 // ================================================================= //
 
-enum StudentStatus { 
-    ACTIVE
-    PAUSED 
-    COMPLETED 
+enum StudentStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
 }
 
-enum ProficiencyLevel { 
-    BEGINNER
-    ELEMENTARY
-    INTERMEDIATE
-    ADVANCED
+enum ProficiencyLevel {
+  BEGINNER
+  ELEMENTARY
+  INTERMEDIATE
+  ADVANCED
 }
 
-enum PaymentStatus { 
-    ACTIVE
-    EXPIRED
-    REFUNDED
+enum PaymentStatus {
+  ACTIVE
+  EXPIRED
+  REFUNDED
 }
-enum ClassStatus { 
-    SCHEDULED
-    CONFIRMED
-    IN_PROGRESS
-    COMPLETED
-    CANCELLED
-    RESCHEDULED
+enum ClassStatus {
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  RESCHEDULED
 }
-enum CardState { 
-    NEW
-    LEARNING
-    REVIEW
-    RELEARNING
+enum CardState {
+  NEW
+  LEARNING
+  REVIEW
+  RELEARNING
 }
-enum ReviewType { 
-    VOCABULARY
-    LISTENING
-    SPELLING
-    GRAMMAR
+enum ReviewType {
+  VOCABULARY
+  LISTENING
+  SPELLING
+  GRAMMAR
 }
 
 enum UnitItemType {
@@ -113,16 +113,17 @@ model TeacherSettings {
 }
 
 model Student {
-  id               String    @id @default(uuid()) @db.Uuid
-  teacherId        String    @db.Uuid
+  id               String         @id @default(uuid()) @db.Uuid
+  teacherId        String         @db.Uuid
   name             String
   email            String?
   phone            String?
   proficiencyLevel ProficiencyLevel @default(BEGINNER)
   notes            String?
-  status           StudentStatus @default(ACTIVE)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  status           StudentStatus  @default(ACTIVE)
+  isArchived       Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   teacher        Teacher              @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   payments       Payment[]
@@ -153,24 +154,23 @@ model Unit {
 }
 
 model UnitItem {
-  id    String       @id @default(uuid()) @db.Uuid
-  unitId  String       @db.Uuid
-  order Int
-  type  UnitItemType
-
-  vocabularyDeckId         String? @unique @db.Uuid
-  grammarExerciseId        String? @unique @db.Uuid
-  listeningExerciseId      String? @unique @db.Uuid
-  vocabFillInBlankExerciseId String? @unique @db.Uuid
+  id                         String       @id @default(uuid()) @db.Uuid
+  unitId                     String       @db.Uuid
+  order                      Int
+  type                       UnitItemType
+  vocabularyDeckId           String?      @unique @db.Uuid
+  grammarExerciseId          String?      @unique @db.Uuid
+  listeningExerciseId        String?      @unique @db.Uuid
+  vocabFillInBlankExerciseId String?      @unique @db.Uuid
 
   unit                     Unit                      @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  vocabularyDeck           VocabularyDeck?           @relation(fields: [vocabularyDeckId], references: [id], onDelete: Cascade)
-  grammarExercise          GrammarExercise?          @relation(fields: [grammarExerciseId], references: [id], onDelete: Cascade)
-  listeningExercise        ListeningExercise?        @relation(fields: [listeningExerciseId], references: [id], onDelete: Cascade)
-  vocabFillInBlankExercise VocabFillInBlankExercise? @relation(fields: [vocabFillInBlankExerciseId], references: [id], onDelete: Cascade)
-  
-  activeSession            Session?
-  
+  vocabularyDeck           VocabularyDeck?           @relation(fields: [vocabularyDeckId], references: [id], onDelete: SetNull)
+  grammarExercise          GrammarExercise?          @relation(fields: [grammarExerciseId], references: [id], onDelete: SetNull)
+  listeningExercise        ListeningExercise?        @relation(fields: [listeningExerciseId], references: [id], onDelete: SetNull)
+  vocabFillInBlankExercise VocabFillInBlankExercise? @relation(fields: [vocabFillInBlankExerciseId], references: [id], onDelete: SetNull)
+
+  activeSession Session?
+
   @@index([unitId])
 }
 
@@ -183,7 +183,8 @@ model Session {
   currentUnitItemId String?       @unique @db.Uuid
   startTime         DateTime      @default(now())
   endTime           DateTime?
-  
+  progress          Json?
+
   student         Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   teacher         Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   unit            Unit      @relation(fields: [unitId], references: [id], onDelete: Restrict)
@@ -214,13 +215,15 @@ model Job {
 // ================================================================= //
 
 model VocabularyDeck {
-  id              String   @id @default(uuid()) @db.Uuid
-  creatorId       String?  @db.Uuid
-  name            String
-  description     String?
-  isPublic        Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id               String   @id @default(uuid()) @db.Uuid
+  creatorId        String?  @db.Uuid
+  name             String
+  description      String?
+  isPublic         Boolean  @default(false)
+  isArchived       Boolean  @default(false)
+  originExerciseId String?  @db.Uuid // ADDED: For tracking forks
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   creator      Teacher?         @relation(fields: [creatorId], references: [id], onDelete: SetNull)
   cards        VocabularyCard[]
@@ -246,75 +249,78 @@ model VocabularyCard {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  // Relations
   deck       VocabularyDeck     @relation(fields: [deckId], references: [id], onDelete: Cascade)
   cardStates StudentCardState[]
 }
 
 model GrammarExercise {
-  id             String   @id @default(uuid()) @db.Uuid
-  creatorId      String?  @db.Uuid
-  title          String
-  grammarTopic   String
-  difficultyLevel Int      @default(1)
-  exerciseData   Json // e.g., { "template": "He ___ (go) to the store.", "blanks": ["went"] }
-  explanation    String?
-  tags           String[]
-  isPublic       Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id               String   @id @default(uuid()) @db.Uuid
+  creatorId        String?  @db.Uuid
+  title            String
+  grammarTopic     String
+  difficultyLevel  Int      @default(1)
+  exerciseData     Json
+  explanation      String?
+  tags             String[]
+  isPublic         Boolean  @default(false)
+  isArchived       Boolean  @default(false)
+  originExerciseId String?  @db.Uuid // ADDED: For tracking forks
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   creator  Teacher?  @relation(fields: [creatorId], references: [id], onDelete: SetNull)
   unitItem UnitItem?
 }
 
 model ListeningExercise {
-  id              String   @id @default(uuid()) @db.Uuid
-  creatorId       String?  @db.Uuid
-  title           String
-  difficultyLevel Int      @default(1)
-  audioUrl        String
-  correctSpelling String
-  explanation     String?
-  tags            String[]
-  isPublic        Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id               String   @id @default(uuid()) @db.Uuid
+  creatorId        String?  @db.Uuid
+  title            String
+  difficultyLevel  Int      @default(1)
+  audioUrl         String
+  correctSpelling  String
+  explanation      String?
+  tags             String[]
+  isPublic         Boolean  @default(false)
+  isArchived       Boolean  @default(false)
+  originExerciseId String?  @db.Uuid // ADDED: For tracking forks
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   creator  Teacher?  @relation(fields: [creatorId], references: [id], onDelete: SetNull)
   unitItem UnitItem?
 }
 
 model VocabFillInBlankExercise {
-  id              String   @id @default(uuid()) @db.Uuid
-  creatorId       String?  @db.Uuid
-  title           String
-  difficultyLevel Int      @default(1)
-  exerciseData    Json // e.g., { "template": "A doctor's main goal is to ___ patients.", "targetWord": "heal", "distractors": ["feel", "peel"] }
-  explanation     String?
-  tags            String[]
-  isPublic        Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id               String   @id @default(uuid()) @db.Uuid
+  creatorId        String?  @db.Uuid
+  title            String
+  difficultyLevel  Int      @default(1)
+  exerciseData     Json
+  explanation      String?
+  tags             String[]
+  isPublic         Boolean  @default(false)
+  isArchived       Boolean  @default(false)
+  originExerciseId String?  @db.Uuid // ADDED: For tracking forks
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   creator  Teacher?  @relation(fields: [creatorId], references: [id], onDelete: SetNull)
   unitItem UnitItem?
 }
 
 model StudentDeck {
-  id                        String   @id @default(uuid()) @db.Uuid
-  studentId                 String   @db.Uuid
-  deckId                    String   @db.Uuid
-  // Student-specific settings, controlled by the teacher
-  dailyNewCards             Int      @default(10)
-  dailyReviewLimit          Int      @default(50)
-  assignedAt                DateTime @default(now())
-  completedAt               DateTime?
-  isActive                  Boolean  @default(true)
+  id           String   @id @default(uuid()) @db.Uuid
+  studentId    String   @db.Uuid
+  deckId       String   @db.Uuid
+  dailyNewCards      Int      @default(10)
+  dailyReviewLimit   Int      @default(50)
+  assignedAt   DateTime @default(now())
+  completedAt  DateTime?
+  isActive     Boolean  @default(true)
 
-  // Relations
-  student Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  deck    VocabularyDeck   @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  deck    VocabularyDeck @relation(fields: [deckId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, deckId])
 }
@@ -337,27 +343,25 @@ model StudentCardState {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  // Relations
   student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
   card    VocabularyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
   @@unique([studentId, cardId])
 }
 
 model ReviewHistory {
-  id                  BigInt     @id @default(autoincrement())
-  studentId           String     @db.Uuid
-  cardId              String     @db.Uuid // For FSRS on vocab cards
-  lessonId            String?    @db.Uuid
-  reviewType          ReviewType
-  rating              Int
-  responseTimeMs      Int?
-  previousStability   Float?
-  previousDifficulty  Float?
-  previousDue         DateTime?
-  previousState       CardState?
-  reviewedAt          DateTime   @default(now())
+  id                 BigInt     @id @default(autoincrement())
+  studentId          String     @db.Uuid
+  cardId             String     @db.Uuid
+  lessonId           String?    @db.Uuid
+  reviewType         ReviewType
+  rating             Int
+  responseTimeMs     Int?
+  previousStability  Float?
+  previousDifficulty Float?
+  previousDue        DateTime?
+  previousState      CardState?
+  reviewedAt         DateTime   @default(now())
 
-  // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   @@index([studentId, cardId])
   @@index([reviewedAt])
@@ -366,25 +370,24 @@ model ReviewHistory {
 model StudentFsrsParams {
   id                String   @id @default(uuid()) @db.Uuid
   studentId         String   @unique @db.Uuid
-  w                 Json // Storing the 17 FSRS parameters as a JSON array
+  w                 Json
   version           Int      @default(1)
   optimizationScore Float?
   trainingDataSize  Int?
   lastOptimized     DateTime @default(now())
   isActive          Boolean  @default(true)
 
-  // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
 
 model Payment {
-  id               String        @id @default(uuid()) @db.Uuid
-  studentId        String        @db.Uuid
-  amount           Decimal       @db.Decimal(10, 2)
+  id               String   @id @default(uuid()) @db.Uuid
+  studentId        String   @db.Uuid
+  amount           Decimal  @db.Decimal(10, 2)
   classesPurchased Int
-  classesUsed      Int           @default(0)
-  paymentDate      DateTime      @db.Date
-  
+  classesUsed      Int      @default(0)
+  paymentDate      DateTime @db.Date
+
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
 
@@ -393,6 +396,6 @@ model ClassSchedule {
   studentId     String      @db.Uuid
   scheduledTime DateTime
   status        ClassStatus @default(SCHEDULED)
-  
+
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }

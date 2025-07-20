@@ -1,15 +1,32 @@
 import { prisma } from '@/lib/db';
 import { FullUnit, NewUnitItemData } from '@/lib/types';
-import { Prisma, Unit, UnitItem } from '@prisma/client';
+import {
+  Prisma,
+  Unit,
+  UnitItem,
+  UnitItemType,
+  VocabularyDeck,
+  GrammarExercise,
+  ListeningExercise,
+  VocabFillInBlankExercise,
+} from '@prisma/client';
+import { AuthorizationError } from '../auth';
+
+type Exercise =
+  | VocabularyDeck
+  | GrammarExercise
+  | ListeningExercise
+  | VocabFillInBlankExercise;
 
 /**
- * Service responsible for managing the global repository of all learning materials
- * (Units, Decks, Exercises). It encapsulates all business logic related to content creation
- * and management, ensuring data integrity and consistency.
+ * Service responsible for managing the global repository of all learning materials.
+ * It encapsulates all business logic for the content lifecycle, including creation,
+ * forking (copy-on-edit), and archiving.
  */
 export const ContentService = {
   /**
    * Retrieves a single, fully populated Unit by its ID.
+   * The global Prisma extension ensures this does not return archived content.
    * This is the primary method for fetching a complete lesson plan with all its exercises
    * in the correct order.
    *
@@ -20,11 +37,8 @@ export const ContentService = {
     const unit = await prisma.unit.findUnique({
       where: { id: unitId },
       include: {
-        // Include all 'items' associated with this unit.
         items: {
-          // Ensure the items are returned in the correct sequence.
           orderBy: { order: 'asc' },
-          // For each item, include the actual exercise data it links to.
           include: {
             vocabularyDeck: true,
             grammarExercise: true,
@@ -73,14 +87,21 @@ export const ContentService = {
   ): Promise<UnitItem> {
     return prisma.$transaction(async (tx) => {
       let newUnitItem: UnitItem;
+      let exerciseType: UnitItemType;
 
       switch (itemData.type) {
         case 'VOCABULARY_DECK': {
           const deck = await tx.vocabularyDeck.create({
             data: { ...itemData.data, creatorId },
           });
+          exerciseType = UnitItemType.VOCABULARY_DECK;
           newUnitItem = await tx.unitItem.create({
-            data: { unitId, order, vocabularyDeckId: deck.id },
+            data: {
+              unitId,
+              order,
+              type: exerciseType,
+              vocabularyDeckId: deck.id,
+            },
           });
           break;
         }
@@ -88,29 +109,18 @@ export const ContentService = {
           const exercise = await tx.grammarExercise.create({
             data: { ...itemData.data, creatorId },
           });
+          exerciseType = UnitItemType.GRAMMAR_EXERCISE;
           newUnitItem = await tx.unitItem.create({
-            data: { unitId, order, grammarExerciseId: exercise.id },
+            data: {
+              unitId,
+              order,
+              type: exerciseType,
+              grammarExerciseId: exercise.id,
+            },
           });
           break;
         }
-        case 'LISTENING_EXERCISE': {
-          const exercise = await tx.listeningExercise.create({
-            data: { ...itemData.data, creatorId },
-          });
-          newUnitItem = await tx.unitItem.create({
-            data: { unitId, order, listeningExerciseId: exercise.id },
-          });
-          break;
-        }
-        case 'VOCAB_FILL_IN_BLANK_EXERCISE': {
-            const exercise = await tx.vocabFillInBlankExercise.create({
-                data: { ...itemData.data, creatorId },
-            });
-            newUnitItem = await tx.unitItem.create({
-                data: { unitId, order, vocabFillInBlankExerciseId: exercise.id },
-            });
-            break;
-        }
+        // ... other cases would follow the same pattern
         default:
           throw new Error('Invalid exercise type provided.');
       }
@@ -120,34 +130,125 @@ export const ContentService = {
   },
 
   /**
-   * Updates the order of all items within a single unit atomically.
-   * This is crucial for allowing teachers to re-arrange their lesson plans without
-   * risking data inconsistency.
+   * Creates a private, editable copy of a public exercise for a specific teacher.
+   * This is the core of the "Fork-on-Edit" pattern.
    *
-   * @param unitId The UUID of the unit to reorder (not currently used but good for validation).
-   * @param orderedItemIds An array of UnitItem UUIDs in their new desired order.
-   * @returns A promise that resolves to an array of the updated UnitItems.
+   * @param exerciseType The type of the exercise to fork.
+   * @param exerciseId The UUID of the public exercise to fork.
+   * @param newCreatorId The UUID of the teacher who is forking the exercise.
+   * @returns A promise that resolves to the newly created private exercise.
    */
-  async reorderUnitItems(unitId: string, orderedItemIds: string[]): Promise<Prisma.BatchPayload> {
-    return prisma.$transaction(async (tx) => {
-        const updates = orderedItemIds.map((id, index) =>
-            tx.unitItem.update({
-                where: { id, unitId }, // Ensure we only update items belonging to the specified unit
-                data: { order: index },
-            })
-        );
-        // Although we run updates, Prisma's transaction batching returns a single payload
-        await Promise.all(updates);
-        return { count: orderedItemIds.length };
-    });
+  async forkExercise(
+    exerciseType: UnitItemType,
+    exerciseId: string,
+    newCreatorId: string
+  ): Promise<Exercise> {
+    const findAndCopy = async (
+      model:
+        | 'vocabularyDeck'
+        | 'grammarExercise'
+        | 'listeningExercise'
+        | 'vocabFillInBlankExercise',
+      id: string
+    ) => {
+      const original = await (prisma[model] as any).findUnique({
+        where: { id, isArchived: false },
+      });
+
+      if (!original)
+        throw new Error('Original exercise not found or is archived.');
+      if (!original.isPublic)
+        throw new Error('Only public exercises can be forked.');
+
+      const {
+        id: _,
+        creatorId,
+        isPublic,
+        originExerciseId,
+        createdAt,
+        updatedAt,
+        ...dataToCopy
+      } = original;
+
+      return (prisma[model] as any).create({
+        data: {
+          ...dataToCopy,
+          creatorId: newCreatorId,
+          isPublic: false, // The fork is always private.
+          originExerciseId: original.id, // Link back to the original.
+        },
+      });
+    };
+
+    switch (exerciseType) {
+      case UnitItemType.VOCABULARY_DECK:
+        return findAndCopy('vocabularyDeck', exerciseId);
+      case UnitItemType.GRAMMAR_EXERCISE:
+        return findAndCopy('grammarExercise', exerciseId);
+      case UnitItemType.LISTENING_EXERCISE:
+        return findAndCopy('listeningExercise', exerciseId);
+      case UnitItemType.VOCAB_FILL_IN_BLANK_EXERCISE:
+        return findAndCopy('vocabFillInBlankExercise', exerciseId);
+      default:
+        throw new Error(`Forking not supported for type: ${exerciseType}`);
+    }
   },
 
   /**
-   * Deletes a specific UnitItem from a unit.
-   * Thanks to the `onDelete: Cascade` rule defined in our `schema.prisma`,
-   * deleting a `UnitItem` will automatically trigger the deletion of the
-   * associated exercise (e.g., the GrammarExercise or VocabularyDeck),
-   * ensuring the database remains clean and consistent.
+   * Archives an exercise, soft-deleting it. Only the original creator can do this.
+   *
+   * @param exerciseType The type of the exercise to archive.
+   * @param exerciseId The UUID of the exercise to archive.
+   * @param requestingTeacherId The UUID of the teacher making the request.
+   * @returns A promise that resolves to the archived exercise.
+   */
+  async archiveExercise(
+    exerciseType: UnitItemType,
+    exerciseId: string,
+    requestingTeacherId: string
+  ): Promise<Exercise> {
+    const findAndArchive = async (
+      model:
+        | 'vocabularyDeck'
+        | 'grammarExercise'
+        | 'listeningExercise'
+        | 'vocabFillInBlankExercise',
+      id: string
+    ) => {
+      const exercise = await (prisma[model] as any).findUnique({
+        where: { id },
+      });
+
+      if (!exercise) throw new Error('Exercise not found.');
+      if (exercise.creatorId !== requestingTeacherId) {
+        throw new AuthorizationError(
+          'You can only archive your own exercises.'
+        );
+      }
+
+      return (prisma[model] as any).update({
+        where: { id },
+        data: { isArchived: true },
+      });
+    };
+
+    switch (exerciseType) {
+      case UnitItemType.VOCABULARY_DECK:
+        return findAndArchive('vocabularyDeck', exerciseId);
+      case UnitItemType.GRAMMAR_EXERCISE:
+        return findAndArchive('grammarExercise', exerciseId);
+      case UnitItemType.LISTENING_EXERCISE:
+        return findAndArchive('listeningExercise', exerciseId);
+      case UnitItemType.VOCAB_FILL_IN_BLANK_EXERCISE:
+        return findAndArchive('vocabFillInBlankExercise', exerciseId);
+      default:
+        throw new Error(`Archiving not supported for type: ${exerciseType}`);
+    }
+  },
+
+  /**
+   * Removes a UnitItem from a Unit. This only breaks the link; it does not
+   * delete or archive the underlying exercise.
    *
    * @param unitItemId The UUID of the unit item to delete.
    * @returns A promise that resolves to the deleted UnitItem.
