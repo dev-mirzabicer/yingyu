@@ -9,7 +9,7 @@ import {
   Payment,
   StudentDeck,
   ClassSchedule,
-  Lesson,
+  Session,
 } from '@prisma/client';
 
 export type PopulatedUnitItem = UnitItem & {
@@ -22,6 +22,26 @@ export type PopulatedUnitItem = UnitItem & {
 export type FullUnit = Unit & {
   items: PopulatedUnitItem[];
 };
+
+export type PopulatedStudentDeck = StudentDeck & {
+  deck: VocabularyDeck;
+};
+
+export type FullStudentProfile = Student & {
+  classesRemaining: number;
+  payments: Payment[];
+  studentDecks: PopulatedStudentDeck[];
+  upcomingClasses: ClassSchedule[];
+};
+
+// RENAMED and UPDATED: The complete state of a session, giving the frontend everything it needs.
+export type FullSessionState = Session & {
+  student: Student;
+  unit: FullUnit;
+  currentUnitItem: PopulatedUnitItem | null;
+};
+
+// --- Input/Data Transfer Object Types ---
 
 export type NewUnitItemData =
   | {
@@ -53,20 +73,7 @@ export type NewUnitItemData =
       >;
     };
 
-// The shape of a student's assigned deck, including the deck's details.
-export type PopulatedStudentDeck = StudentDeck & {
-  deck: VocabularyDeck;
-};
-
-export type FullStudentProfile = Student & {
-  classesRemaining: number;
-  payments: Payment[];
-  studentDecks: PopulatedStudentDeck[];
-  upcomingClasses: ClassSchedule[];
-};
-
-export type FullLessonState = Lesson & {
-  student: Student;
-  unit: FullUnit;
-  currentUnitItem: PopulatedUnitItem | null;
+// A generic type for answer submissions, to be handled by the dispatcher.
+export type AnswerPayload = {
+  [key: string]: any; // This will be validated by the specific exercise handler.
 };
