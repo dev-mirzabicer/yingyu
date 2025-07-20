@@ -3,6 +3,7 @@ import { authorizeTeacherForStudent, AuthorizationError } from '@/lib/auth';
 import { FullSessionState, AnswerPayload } from '@/lib/types';
 import { ContentService } from './content';
 import { SessionStatus } from '@prisma/client';
+import { getHandler } from '../exercises/dispatcher';
 
 /**
  * Service responsible for orchestrating a live teaching session.
@@ -123,18 +124,11 @@ export const SessionService = {
       throw new Error('This session is not active.');
     }
 
-    // TODO: PHASE 3 IMPLEMENTATION
-    // 1. Create Handler Dispatcher (`lib/exercises/dispatcher.ts`)
-    // 2. The dispatcher will look at `sessionState.currentUnitItem.type`.
-    // 3. It will call the `submitAnswer` method of the corresponding handler
-    //    (e.g., `VocabularyDeckHandler.submitAnswer(sessionState, payload)`).
-    // 4. The handler will perform the specific logic (e.g., call FSRSService) and return a boolean for correctness.
-    console.log(
-      `Dispatching answer for item type: ${sessionState.currentUnitItem.type}`
-    );
-    console.log(`Payload:`, payload);
+    // 1. Dispatch to the correct handler.
+    const handler = getHandler(sessionState.currentUnitItem.type);
+    await handler.submitAnswer(sessionState, payload);
 
-    // --- State Transition Logic ---
+    // 2. Perform state transition (this logic remains the same).
     const currentItemIndex = sessionState.unit.items.findIndex(
       (item) => item.id === sessionState.currentUnitItemId
     );

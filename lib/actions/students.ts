@@ -8,12 +8,39 @@ import {
   Student,
   StudentDeck,
 } from '@prisma/client';
+import { CreateStudentSchema, RecordPaymentSchema } from '../schemas';
+import { z } from 'zod';
+
+type CreateStudentInput = z.infer<typeof CreateStudentSchema>;
+type RecordPaymentInput = z.infer<typeof RecordPaymentSchema>;
 
 /**
  * Service responsible for managing student profiles, their assignments,
  * and other student-related business logic.
  */
 export const StudentService = {
+  /**
+   * Creates a new student record associated with a teacher.
+   *
+   * @param teacherId The UUID of the owning teacher.
+   * @param studentData The validated data for the new student.
+   * @returns A promise that resolves to the newly created Student object.
+   */
+  async createStudent(
+    teacherId: string,
+    studentData: CreateStudentInput
+  ): Promise<Student> {
+    // 1. Meticulous Validation
+    CreateStudentSchema.parse(studentData);
+
+    // 2. Create Operation
+    return prisma.student.create({
+      data: {
+        ...studentData,
+        teacherId: teacherId,
+      },
+    });
+  },
   /**
    * Retrieves a complete, rich profile for a single student.
    * This includes calculated fields like classes remaining and detailed relational data.
@@ -103,16 +130,21 @@ export const StudentService = {
    *
    * @param studentId The UUID of the student.
    * @param teacherId The UUID of the teacher performing the action.
-   * @param paymentData The details of the payment.
+   * @param paymentData The validated details of the payment.
    * @returns A promise that resolves to the newly created Payment record.
    */
   async recordPayment(
     studentId: string,
     teacherId: string,
-    paymentData: Omit<Payment, 'id' | 'studentId' | 'createdAt'>
+    paymentData: RecordPaymentInput
   ): Promise<Payment> {
+    // 1. Authorization
     await authorizeTeacherForStudent(teacherId, studentId);
 
+    // 2. Validation
+    RecordPaymentSchema.parse(paymentData);
+
+    // 3. Create Operation
     return prisma.payment.create({
       data: {
         ...paymentData,

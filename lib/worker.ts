@@ -31,7 +31,7 @@ export async function processPendingJobs() {
   // 3. Execute each job sequentially.
   for (const job of pendingJobs) {
     try {
-      let resultPayload: any;
+      let resultPayload;
 
       // 4. Dispatch the job to the appropriate handler based on its type.
       switch (job.type) {
@@ -54,20 +54,20 @@ export async function processPendingJobs() {
         data: { status: JobStatus.COMPLETED, result: resultPayload },
       });
       jobResults.push({ jobId: job.id, status: 'COMPLETED' });
-    } catch (error: any) {
+    } catch (error) {
       // 6. Meticulous Error Handling: If a job fails, record the error and mark it as FAILED.
       // This ensures a single failed job does not halt the entire worker.
       await prisma.job.update({
         where: { id: job.id },
         data: {
           status: JobStatus.FAILED,
-          error: error.message || 'An unknown error occurred.',
+          error: (error as Error)?.message || 'An unknown error occurred.',
         },
       });
       jobResults.push({
         jobId: job.id,
         status: 'FAILED',
-        error: error.message,
+        error: (error as Error)?.message,
       });
     }
   }

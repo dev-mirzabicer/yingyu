@@ -75,5 +75,5 @@ export type NewUnitItemData =
 
 // A generic type for answer submissions, to be handled by the dispatcher.
 export type AnswerPayload = {
-  [key: string]: any; // This will be validated by the specific exercise handler.
+  [key: string]: unknown; // This will be validated by the specific exercise handler.
 };
