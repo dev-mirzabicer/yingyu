@@ -1,7 +1,3 @@
-// This schema is the single source of truth for your database.
-// It's used by Prisma to generate the database client and migrations.
-// We are using the PostgreSQL provider, as planned in the architecture.
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
