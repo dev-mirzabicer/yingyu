@@ -8,6 +8,7 @@ import {
   GrammarExercise,
   ListeningExercise,
   VocabFillInBlankExercise,
+  Prisma,
 } from '@prisma/client';
 import { AuthorizationError } from '../auth';
 
@@ -150,6 +151,7 @@ export const ContentService = {
         | 'vocabFillInBlankExercise',
       id: string
     ) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const original = await (prisma[model] as any).findUnique({
         where: { id, isArchived: false },
       });
@@ -169,6 +171,7 @@ export const ContentService = {
         ...dataToCopy
       } = original;
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return (prisma[model] as any).create({
         data: {
           ...dataToCopy,
@@ -214,6 +217,7 @@ export const ContentService = {
         | 'vocabFillInBlankExercise',
       id: string
     ) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const exercise = await (prisma[model] as any).findUnique({
         where: { id },
       });
@@ -225,6 +229,7 @@ export const ContentService = {
         );
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return (prisma[model] as any).update({
         where: { id },
         data: { isArchived: true },

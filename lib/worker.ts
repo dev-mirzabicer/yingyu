@@ -28,7 +28,7 @@ export async function processPendingJobs() {
     // Step 2: Immediately update the status of these locked jobs to RUNNING.
     // Since this happens inside the same transaction, it's an atomic part of the lock.
     await tx.job.updateMany({
-      where: { id: { in: jobsToProcess.map((job) => job.id) } },
+      where: { id: { in: jobsToProcess.map((job: Job) => job.id) } },
       data: { status: JobStatus.RUNNING },
     });
     // Step 3: Return the jobs that we have successfully locked.

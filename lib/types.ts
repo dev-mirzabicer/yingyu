@@ -10,6 +10,7 @@ import {
   StudentDeck,
   ClassSchedule,
   Session,
+  Prisma,
 } from '@prisma/client';
 
 export type PopulatedUnitItem = UnitItem & {
@@ -46,31 +47,46 @@ export type FullSessionState = Session & {
 export type NewUnitItemData =
   | {
       type: 'VOCABULARY_DECK';
-      data: Omit<
-        VocabularyDeck,
-        'id' | 'creatorId' | 'createdAt' | 'updatedAt'
-      >;
+      data: {
+        name: string;
+        description?: string;
+        isPublic?: boolean;
+      };
     }
   | {
       type: 'GRAMMAR_EXERCISE';
-      data: Omit<
-        GrammarExercise,
-        'id' | 'creatorId' | 'createdAt' | 'updatedAt'
-      >;
+      data: {
+        title: string;
+        grammarTopic: string;
+        difficultyLevel?: number;
+        exerciseData: Prisma.InputJsonValue; // Use the correct input type
+        explanation?: string;
+        tags?: string[];
+        isPublic?: boolean;
+      };
     }
   | {
       type: 'LISTENING_EXERCISE';
-      data: Omit<
-        ListeningExercise,
-        'id' | 'creatorId' | 'createdAt' | 'updatedAt'
-      >;
+      data: {
+        title: string;
+        difficultyLevel?: number;
+        audioUrl: string;
+        correctSpelling: string;
+        explanation?: string;
+        tags?: string[];
+        isPublic?: boolean;
+      };
     }
   | {
       type: 'VOCAB_FILL_IN_BLANK_EXERCISE';
-      data: Omit<
-        VocabFillInBlankExercise,
-        'id' | 'creatorId' | 'createdAt' | 'updatedAt'
-      >;
+      data: {
+        title: string;
+        difficultyLevel?: number;
+        exerciseData: Prisma.InputJsonValue; // Use the correct input type
+        explanation?: string;
+        tags?: string[];
+        isPublic?: boolean;
+      };
     };
 
 // A generic type for answer submissions, to be handled by the dispatcher.

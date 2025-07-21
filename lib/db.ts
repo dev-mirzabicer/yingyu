@@ -1,12 +1,7 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 
-// Declare a global variable to hold the Prisma Client instance.
-declare global {
-  var prisma: PrismaClient | undefined;
-}
-
 // The list of models that support our soft-delete/archiving pattern.
-const ARCHIVABLE_MODELS = [
+const ARCHIVABLE_MODELS: Prisma.ModelName[] = [
   'Student',
   'VocabularyDeck',
   'GrammarExercise',
@@ -29,24 +24,18 @@ function createPrismaClient() {
   return basePrisma.$extends({
     query: {
       $allModels: {
-        // This middleware intercepts all find, update, and delete operations.
         async $allOperations({ model, operation, args, query }) {
-          // Only apply the logic to models that are archivable.
-          if (ARCHIVABLE_MODELS.includes(model as string)) {
-            // For any operation that finds or modifies records...
+          if (model && ARCHIVABLE_MODELS.includes(model)) {
+            // Check if the operation is one that supports a 'where' clause.
             if (
-              [
-                'findUnique',
-                'findFirst',
-                'findMany',
-                'update',
-                'updateMany',
-                'count',
-              ].includes(operation)
+              operation === 'findUnique' ||
+              operation === 'findFirst' ||
+              operation === 'findMany' ||
+              operation === 'update' ||
+              operation === 'updateMany' ||
+              operation === 'count'
             ) {
-              // ...we automatically add `isArchived: false` to the `where` clause.
-              // This ensures that from the application's perspective, archived records
-              // are treated as if they do not exist.
+              // Now it's safe to modify args.where
               args.where = { ...(args.where as object), isArchived: false };
             }
           }
@@ -57,8 +46,15 @@ function createPrismaClient() {
   });
 }
 
-// Instantiate the Prisma Client using our factory.
-// In development, we reuse the instance across hot reloads.
+// Infer the type of the extended client.
+type ExtendedPrismaClient = ReturnType<typeof createPrismaClient>;
+
+// Augment the global scope to declare our prisma instance.
+declare global {
+  var prisma: ExtendedPrismaClient | undefined;
+}
+
+// Instantiate the Prisma Client.
 export const prisma = globalThis.prisma || createPrismaClient();
 
 if (process.env.NODE_ENV !== 'production') {

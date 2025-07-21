@@ -11,7 +11,9 @@ import {
 } from '@prisma/client';
 import { CreateStudentSchema, RecordPaymentSchema } from '../schemas';
 import { z } from 'zod';
-import { JobService } from './jobs';
+
+// This import is no longer needed as the service is self-contained.
+// import { JobService } from './jobs';
 
 type CreateStudentInput = z.infer<typeof CreateStudentSchema>;
 type RecordPaymentInput = z.infer<typeof RecordPaymentSchema>;
@@ -43,7 +45,6 @@ export const StudentService = {
 
   /**
    * Archives a student, effectively soft-deleting them from the system.
-   * The student's data is preserved but will no longer appear in any standard queries.
    *
    * @param studentId The UUID of the student to archive.
    * @param teacherId The UUID of the teacher for authorization.
@@ -59,7 +60,6 @@ export const StudentService = {
 
   /**
    * Retrieves a complete, rich profile for a single student.
-   * The global Prisma extension automatically ensures we don't fetch archived students.
    *
    * @param studentId The UUID of the student to retrieve.
    * @param teacherId The UUID of the teacher requesting the profile (for authorization).
@@ -104,9 +104,8 @@ export const StudentService = {
   },
 
   /**
-   * Assigns a vocabulary deck to a student. If the deck is already assigned, it updates
-   * the settings. If it's a new assignment, it atomically creates a background job
-   * to initialize the FSRS card states.
+   * Assigns a vocabulary deck to a student. If it's a new assignment, it atomically
+   * creates a background job to initialize the FSRS card states within the same transaction.
    *
    * @param studentId The UUID of the student.
    * @param teacherId The UUID of the teacher performing the action.
@@ -121,36 +120,35 @@ export const StudentService = {
     deckId: string,
     settings: { dailyNewCards?: number; dailyReviewLimit?: number }
   ): Promise<{ studentDeck: StudentDeck; job: Job | null }> {
-    // An active student is required to assign new learning material.
     await authorizeTeacherForStudent(teacherId, studentId, {
       checkIsActive: true,
     });
 
+    // The transaction is now fully managed within this service.
     return prisma.$transaction(async (tx) => {
       const existingAssignment = await tx.studentDeck.findUnique({
         where: { studentId_deckId: { studentId, deckId } },
       });
 
       if (existingAssignment) {
-        // This is an update to an existing assignment. No job needed.
         const updatedAssignment = await tx.studentDeck.update({
           where: { id: existingAssignment.id },
           data: { ...settings, isActive: true },
         });
         return { studentDeck: updatedAssignment, job: null };
       } else {
-        // This is a new assignment. We must create the link AND the job.
         const newAssignment = await tx.studentDeck.create({
           data: { studentId, deckId, ...settings },
         });
 
-        // Call the now transaction-aware JobService, passing the transaction client.
-        const newJob = await JobService.createJob(
-          teacherId,
-          'INITIALIZE_CARD_STATES',
-          { studentId, deckId },
-          tx
-        );
+        // The job creation is now a direct database operation within the transaction.
+        const newJob = await tx.job.create({
+          data: {
+            ownerId: teacherId,
+            type: 'INITIALIZE_CARD_STATES',
+            payload: { studentId, deckId },
+          },
+        });
 
         return { studentDeck: newAssignment, job: newJob };
       }
