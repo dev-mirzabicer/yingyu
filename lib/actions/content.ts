@@ -8,7 +8,6 @@ import {
   GrammarExercise,
   ListeningExercise,
   VocabFillInBlankExercise,
-  Prisma,
 } from '@prisma/client';
 import { AuthorizationError } from '../auth';
 
@@ -75,17 +74,27 @@ export const ContentService = {
    *
    * @param unitId The UUID of the unit to add the item to.
    * @param creatorId The ID of the teacher creating this content.
-   * @param order The position of this item in the lesson sequence.
    * @param itemData An object containing the type of exercise and its data.
    * @returns A promise that resolves to the newly created UnitItem.
    */
   async addExerciseToUnit(
     unitId: string,
     creatorId: string,
-    order: number,
     itemData: NewUnitItemData
   ): Promise<UnitItem> {
     return prisma.$transaction(async (tx) => {
+      // 1. Atomically determine the correct order for the new item.
+      // This logic is now owned by the service, not the client.
+      const lastItem = await tx.unitItem.findFirst({
+        where: { unitId: unitId },
+        orderBy: { order: 'desc' },
+        select: { order: true },
+      });
+
+      // If lastItem is null (unit is empty), order starts at 0. Otherwise, increment.
+      const newOrder = (lastItem?.order ?? -1) + 1;
+
+      // 2. Create the exercise and the UnitItem link.
       let newUnitItem: UnitItem;
       let exerciseType: UnitItemType;
 
@@ -98,7 +107,7 @@ export const ContentService = {
           newUnitItem = await tx.unitItem.create({
             data: {
               unitId,
-              order,
+              order: newOrder,
               type: exerciseType,
               vocabularyDeckId: deck.id,
             },
@@ -113,7 +122,7 @@ export const ContentService = {
           newUnitItem = await tx.unitItem.create({
             data: {
               unitId,
-              order,
+              order: newOrder,
               type: exerciseType,
               grammarExerciseId: exercise.id,
             },

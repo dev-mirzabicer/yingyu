@@ -1,5 +1,4 @@
 import { StudentService } from '../actions/students';
-import { JobService } from '../actions/jobs';
 import { CreateStudentSchema } from '../schemas';
 import { z } from 'zod';
 
@@ -38,30 +37,21 @@ export const OnboardingWorkflow = {
       studentData
     );
 
-    // 3. Assign the Initial Deck:
-    await StudentService.assignDeckToStudent(
+    // 3. Assign the Initial Deck & Capture the Job:
+    // The call to `assignDeckToStudent` now reliably returns the job it creates.
+    // We capture this result directly, eliminating the redundant call.
+    const { job: initializationJob } = await StudentService.assignDeckToStudent(
       newStudent.id,
       teacherId,
       initialDeckId,
-      {}
+      {} // Pass empty settings for a default assignment.
     );
 
-    // 4. Create the Asynchronous Job:
-    // Instead of blocking the API, we queue the heavy lifting.
-    const job = await JobService.createJob(
-      teacherId,
-      'INITIALIZE_CARD_STATES',
-      {
-        studentId: newStudent.id,
-        deckId: initialDeckId,
-      }
-    );
-
-    // 5. Return a Comprehensive Result:
+    // 4. Return a Comprehensive Result:
     // The frontend receives everything it needs to update the UI and monitor the background job.
     return {
       student: newStudent,
-      initializationJob: job,
+      initializationJob,
     };
   },
 };
