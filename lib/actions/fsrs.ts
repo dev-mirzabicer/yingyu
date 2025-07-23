@@ -14,7 +14,11 @@ import {
   VocabularyCard,
   CardState,
   ReviewType,
+  Job,
+  Prisma,
 } from '@prisma/client';
+import { authorizeTeacherForStudent } from '../auth';
+import { JobService } from './jobs';
 
 /**
  * A constant representing the minimum retrievability for a card to be considered
@@ -270,5 +274,128 @@ export const FSRSService = {
       }
       return new FSRSReview(review.rating, delta_t);
     });
+  },
+  async createRebuildCacheJob(
+    studentId: string,
+    teacherId: string
+  ): Promise<Job> {
+    await authorizeTeacherForStudent(teacherId, studentId);
+    return JobService.createJob(teacherId, 'REBUILD_FSRS_CACHE', {
+      studentId,
+    });
+  },
+
+  /**
+   * REFINEMENT: The new, bulletproof internal method for rebuilding the FSRS cache.
+   */
+  async _rebuildCacheForStudent(
+    payload: Prisma.JsonValue
+  ): Promise<{ cardsRebuilt: number }> {
+    const { studentId } = payload as { studentId: string };
+    if (!studentId) {
+      throw new Error('Invalid payload: studentId is required.');
+    }
+
+    // 1. Get ALL assigned card IDs for the student. This is the master list.
+    const studentDecks = await prisma.studentDeck.findMany({
+      where: { studentId, isActive: true },
+      include: { deck: { select: { cards: { select: { id: true } } } } },
+    });
+    const allAssignedCardIds = new Set(
+      studentDecks.flatMap((sd) => sd.deck.cards.map((c) => c.id))
+    );
+
+    // 2. Fetch and process history as planned.
+    const allHistory = await prisma.reviewHistory.findMany({
+      where: { studentId },
+      orderBy: { reviewedAt: 'asc' },
+    });
+    const historyByCard = allHistory.reduce((acc, review) => {
+      if (!acc[review.cardId]) acc[review.cardId] = [];
+      acc[review.cardId].push(review);
+      return acc;
+    }, {} as Record<string, ReviewHistory[]>);
+
+    const engine = new FSRS(FSRS_DEFAULT_PARAMETERS);
+    const statesFromHistory: Prisma.StudentCardStateCreateManyInput[] = [];
+    const reviewedCardIds = new Set<string>();
+
+    // 3. For states from history, calculate a more accurate due date.
+    for (const cardId in historyByCard) {
+      reviewedCardIds.add(cardId);
+      const cardHistory = historyByCard[cardId];
+      const fsrsReviews = this._mapHistoryToFsrsReviews(cardHistory);
+      const fsrsItem = new FSRSItem(fsrsReviews);
+      const finalMemoryState = engine.memoryState(fsrsItem);
+      const lastReview = cardHistory[cardHistory.length - 1];
+
+      // Simulate the next step to get the correct interval.
+      const nextStates = engine.nextStates(
+        finalMemoryState,
+        DEFAULT_DESIRED_RETENTION,
+        0
+      );
+      let nextState;
+      switch (lastReview.rating as FsrsRating) {
+        case 1:
+          nextState = nextStates.again;
+          break;
+        case 2:
+          nextState = nextStates.hard;
+          break;
+        case 3:
+          nextState = nextStates.good;
+          break;
+        case 4:
+          nextState = nextStates.easy;
+          break;
+        default:
+          throw new Error('Invalid rating in history');
+      }
+
+      const accurateDueDate = new Date(
+        lastReview.reviewedAt.getTime() +
+          nextState.interval * 24 * 60 * 60 * 1000
+      );
+
+      statesFromHistory.push({
+        studentId,
+        cardId,
+        stability: finalMemoryState.stability,
+        difficulty: finalMemoryState.difficulty,
+        due: accurateDueDate,
+        lastReview: lastReview.reviewedAt,
+        reps: cardHistory.length,
+        lapses: cardHistory.filter((h) => h.rating === 1).length,
+        state: lastReview.rating === 1 ? 'RELEARNING' : 'REVIEW',
+      });
+    }
+
+    // 4. The crucial addition: Identify and create states for 'NEW' cards.
+    const newCardIds = [...allAssignedCardIds].filter(
+      (id) => !reviewedCardIds.has(id)
+    );
+    const newCardStates: Prisma.StudentCardStateCreateManyInput[] =
+      newCardIds.map((cardId) => ({
+        studentId,
+        cardId,
+        state: 'NEW',
+        due: new Date(),
+        stability: 1.0, // Default initial values
+        difficulty: 5.0, // Default initial values
+        reps: 0,
+        lapses: 0,
+      }));
+
+    // 5. Combine the two lists.
+    const allStatesToCreate = [...statesFromHistory, ...newCardStates];
+
+    // 6. Perform the atomic delete and createMany as planned.
+    await prisma.$transaction([
+      prisma.studentCardState.deleteMany({ where: { studentId } }),
+      prisma.studentCardState.createMany({ data: allStatesToCreate }),
+    ]);
+
+    return { cardsRebuilt: allStatesToCreate.length };
   },
 };

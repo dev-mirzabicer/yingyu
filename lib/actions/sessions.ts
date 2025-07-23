@@ -1,8 +1,14 @@
 import { prisma } from '@/lib/db';
 import { authorizeTeacherForStudent, AuthorizationError } from '@/lib/auth';
-import { FullSessionState, AnswerPayload, SubmissionResult } from '@/lib/types';
+import {
+  FullSessionState,
+  AnswerPayload,
+  SubmissionResult,
+  SessionProgress,
+} from '@/lib/types';
 import { Prisma, SessionStatus } from '@prisma/client';
 import { getHandler } from '../exercises/dispatcher';
+import { fullSessionStateInclude } from '../prisma-includes';
 
 /**
  * The definitive service for orchestrating a live teaching session (v6.0).
@@ -139,75 +145,77 @@ export const SessionService = {
     newState: FullSessionState;
     submissionResult: SubmissionResult;
   }> {
-    let sessionState = await this.getFullState(sessionId, teacherId);
-    if (!sessionState || !sessionState.currentUnitItem) {
-      throw new AuthorizationError(
-        'Session not found or you are not authorized.'
-      );
-    }
-    if (sessionState.status !== SessionStatus.IN_PROGRESS) {
-      throw new Error('This session is not active.');
-    }
-
-    // 1. Get the handler for the *current* item.
-    const handler = getHandler(sessionState.currentUnitItem.type);
-
-    // 2. Delegate the answer submission to the handler.
-    // The handler will execute the correct operator and update the session's progress field.
-    const submissionResult = await handler.submitAnswer(sessionState, payload);
-
-    // 3. Re-fetch the state to get the updated progress from the handler's transaction.
-    sessionState = await this.getFullState(sessionId, teacherId);
-    if (!sessionState) {
-      throw new Error('Failed to retrieve state after submission.');
-    }
-
-    // 4. Check if the current UnitItem is now complete.
-    const isItemComplete = await handler.isComplete(sessionState);
-
-    if (isItemComplete) {
-      // 5. If complete, transition to the next item.
-      const currentItemIndex = sessionState.unit.items.findIndex(
-        (item) => item.id === sessionState.currentUnitItemId
-      );
-      const nextItem = sessionState.unit.items[currentItemIndex + 1];
-
-      if (nextItem) {
-        // There is a next item: update the session to point to it and clear progress.
-        await prisma.session.update({
-          where: { id: sessionId },
-          data: {
-            currentUnitItemId: nextItem.id,
-            progress: Prisma.AnyNull, // Clear progress for the new item.
-          },
-        });
-
-        // Re-fetch state one last time to pass to the new item's initializer.
-        let nextState = await this.getFullState(sessionId, teacherId);
-        if (!nextState) throw new Error('Failed to transition state.');
-
-        // Initialize the *new* current item.
-        const nextHandler = getHandler(nextItem.type);
-        nextState = await nextHandler.initialize(nextState);
-        return { newState: nextState, submissionResult };
-      } else {
-        // No next item: the session is complete.
-        const finalState = await this.endSession(sessionId, teacherId);
-        return { newState: finalState, submissionResult };
+    // REFINEMENT: The entire operation is now wrapped in a transaction for perfect atomicity.
+    return prisma.$transaction(async (tx) => {
+      // 1. Fetch initial state using the main prisma client before the transaction.
+      const sessionState = await this.getFullState(sessionId, teacherId);
+      if (!sessionState || !sessionState.currentUnitItem) {
+        throw new AuthorizationError(
+          'Session not found or you are not authorized.'
+        );
       }
-    } else {
-      // 6. If not complete, simply return the updated state.
-      return { newState: sessionState, submissionResult };
-    }
+      if (sessionState.status !== SessionStatus.IN_PROGRESS) {
+        throw new Error('This session is not active.');
+      }
+
+      // 2. Get handler and perform in-memory state change.
+      const handler = getHandler(sessionState.currentUnitItem.type);
+      const [submissionResult, newProgress] = await handler.submitAnswer(
+        sessionState,
+        payload
+      );
+
+      // 3. Update state in-memory for the completion check.
+      sessionState.progress = newProgress as SessionProgress;
+
+      // 4. Check completion.
+      const isItemComplete = await handler.isComplete(sessionState);
+
+      // 5. Prepare the final update payload.
+      const updateData: Prisma.SessionUpdateInput = { progress: newProgress };
+      let nextItem = null;
+
+      if (isItemComplete) {
+        const currentItemIndex = sessionState.unit.items.findIndex(
+          (item) => item.id === sessionState.currentUnitItemId
+        );
+        nextItem = sessionState.unit.items[currentItemIndex + 1];
+
+        if (nextItem) {
+          // ROBUST FIX: Use `connect` on the relation field.
+          updateData.currentUnitItem = { connect: { id: nextItem.id } };
+          // ROBUST FIX: Use standard `null` to clear a JSON field.
+          updateData.progress = Prisma.JsonNull;
+        } else {
+          // No next item: the session is complete.
+          updateData.status = SessionStatus.COMPLETED;
+          updateData.endTime = new Date();
+          // ROBUST FIX: Use `disconnect` on the relation field.
+          updateData.currentUnitItem = { disconnect: true };
+          // ROBUST FIX: Use standard `null` to clear a JSON field.
+          updateData.progress = Prisma.JsonNull;
+        }
+      }
+
+      // 6. Perform the single, definitive update using the transactional client.
+      const updatedSession = await tx.session.update({
+        where: { id: sessionId },
+        data: updateData,
+        include: fullSessionStateInclude,
+      });
+
+      let finalState = updatedSession as unknown as FullSessionState;
+
+      // 7. If we transitioned, initialize the new item *within the same transaction*.
+      if (isItemComplete && nextItem) {
+        const nextHandler = getHandler(nextItem.type);
+        finalState = await nextHandler.initialize(finalState, tx);
+      }
+
+      return { newState: finalState, submissionResult };
+    });
   },
 
-  /**
-   * Finalizes a session, setting its status to COMPLETED.
-   *
-   * @param sessionId The UUID of the session to end.
-   * @param teacherId The UUID of the teacher for authorization.
-   * @returns A promise that resolves to the final, completed FullSessionState.
-   */
   async endSession(
     sessionId: string,
     teacherId: string
@@ -221,20 +229,17 @@ export const SessionService = {
       );
     }
 
-    await prisma.session.update({
+    const updatedSession = await prisma.session.update({
       where: { id: sessionId },
       data: {
         status: SessionStatus.COMPLETED,
         endTime: new Date(),
         currentUnitItemId: null,
-        progress: Prisma.AnyNull, // Ensure progress is cleared on session end.
+        progress: Prisma.AnyNull,
       },
+      include: fullSessionStateInclude,
     });
 
-    const finalState = await this.getFullState(sessionId, teacherId);
-    if (!finalState) {
-      throw new Error('Failed to retrieve final session state.');
-    }
-    return finalState;
+    return updatedSession as unknown as FullSessionState;
   },
 };

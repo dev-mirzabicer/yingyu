@@ -8,6 +8,7 @@ import {
   GrammarExercise,
   ListeningExercise,
   VocabFillInBlankExercise,
+  Prisma,
 } from '@prisma/client';
 import { AuthorizationError } from '../auth';
 
@@ -77,38 +78,85 @@ export const ContentService = {
    * @param itemData An object containing the type of exercise and its data.
    * @returns A promise that resolves to the newly created UnitItem.
    */
+  async updateUnit(
+    unitId: string,
+    creatorId: string,
+    updateData: Prisma.UnitUpdateInput
+  ): Promise<Unit> {
+    const unit = await prisma.unit.findUnique({ where: { id: unitId } });
+    if (!unit || unit.creatorId !== creatorId) {
+      throw new AuthorizationError('Unit not found or you cannot edit it.');
+    }
+
+    // REFINEMENT: Secure the "update vector".
+    if (updateData.isPublic === true) {
+      const items = await prisma.unitItem.findMany({
+        where: { unitId },
+        include: {
+          vocabularyDeck: { select: { isPublic: true } },
+          grammarExercise: { select: { isPublic: true } },
+          listeningExercise: { select: { isPublic: true } },
+          vocabFillInBlankExercise: { select: { isPublic: true } },
+        },
+      });
+
+      for (const item of items) {
+        const exercise =
+          item.vocabularyDeck ||
+          item.grammarExercise ||
+          item.listeningExercise ||
+          item.vocabFillInBlankExercise;
+        if (exercise && !exercise.isPublic) {
+          throw new AuthorizationError(
+            `Cannot make unit public. It contains a private exercise of type '${item.type}'.`
+          );
+        }
+      }
+    }
+
+    return prisma.unit.update({ where: { id: unitId }, data: updateData });
+  },
+
   async addExerciseToUnit(
     unitId: string,
     creatorId: string,
     itemData: NewUnitItemData
   ): Promise<UnitItem> {
+    // REFINEMENT: Pre-flight validation to prevent public unit contamination.
+    const targetUnit = await prisma.unit.findUnique({
+      where: { id: unitId },
+      select: { isPublic: true },
+    });
+
+    if (!targetUnit) {
+      throw new Error(`Unit with ID ${unitId} not found.`);
+    }
+
+    if (targetUnit.isPublic && !itemData.data.isPublic) {
+      throw new AuthorizationError(
+        'Cannot add a private exercise to a public unit. Please make the exercise public first.'
+      );
+    }
+
     return prisma.$transaction(async (tx) => {
-      // 1. Atomically determine the correct order for the new item.
-      // This logic is now owned by the service, not the client.
       const lastItem = await tx.unitItem.findFirst({
         where: { unitId: unitId },
         orderBy: { order: 'desc' },
         select: { order: true },
       });
-
-      // If lastItem is null (unit is empty), order starts at 0. Otherwise, increment.
       const newOrder = (lastItem?.order ?? -1) + 1;
 
-      // 2. Create the exercise and the UnitItem link.
       let newUnitItem: UnitItem;
-      let exerciseType: UnitItemType;
-
       switch (itemData.type) {
         case 'VOCABULARY_DECK': {
           const deck = await tx.vocabularyDeck.create({
             data: { ...itemData.data, creatorId },
           });
-          exerciseType = UnitItemType.VOCABULARY_DECK;
           newUnitItem = await tx.unitItem.create({
             data: {
               unitId,
               order: newOrder,
-              type: exerciseType,
+              type: 'VOCABULARY_DECK',
               vocabularyDeckId: deck.id,
             },
           });
@@ -118,22 +166,19 @@ export const ContentService = {
           const exercise = await tx.grammarExercise.create({
             data: { ...itemData.data, creatorId },
           });
-          exerciseType = UnitItemType.GRAMMAR_EXERCISE;
           newUnitItem = await tx.unitItem.create({
             data: {
               unitId,
               order: newOrder,
-              type: exerciseType,
+              type: 'GRAMMAR_EXERCISE',
               grammarExerciseId: exercise.id,
             },
           });
           break;
         }
-        // ... other cases would follow the same pattern
         default:
           throw new Error('Invalid exercise type provided.');
       }
-
       return newUnitItem;
     });
   },

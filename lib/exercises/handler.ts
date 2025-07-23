@@ -1,4 +1,10 @@
-import { FullSessionState, AnswerPayload, SubmissionResult } from '@/lib/types';
+import {
+  FullSessionState,
+  AnswerPayload,
+  SubmissionResult,
+  SessionProgress,
+} from '@/lib/types';
+import { TransactionClient } from './operators/base';
 
 /**
  * The definitive ExerciseHandler interface (v6.0).
@@ -12,24 +18,30 @@ export interface ExerciseHandler {
    * SessionService when it first encounters a new item in the lesson flow.
    *
    * @param sessionState The complete current state of the session.
+   * @param tx REFINEMENT: An optional Prisma transaction client. If provided, all
+   *           database operations within initialize MUST use this client to ensure
+   *           the entire session state transition is atomic.
    * @returns A promise that resolves to the updated FullSessionState, which now
    *          contains the newly created 'progress' object for this UnitItem.
    */
-  initialize(sessionState: FullSessionState): Promise<FullSessionState>;
+  initialize(
+    sessionState: FullSessionState,
+    tx?: TransactionClient
+  ): Promise<FullSessionState>;
 
   /**
    * Processes a user's answer by dispatching to the correct ProgressOperator.
-   * This method is responsible for wrapping the operator execution in a database
-   * transaction to ensure atomicity.
+   * This method is now a pure state-transition function. It does NOT write to the
+   * database; instead, it returns the new progress state to the SessionService.
    *
    * @param sessionState The complete current state of the session.
    * @param payload The complete AnswerPayload from the user, including the 'action'.
-   * @returns A promise that resolves to a SubmissionResult.
+   * @returns A promise that resolves to a tuple: [SubmissionResult, SessionProgress].
    */
   submitAnswer(
     sessionState: FullSessionState,
     payload: AnswerPayload
-  ): Promise<SubmissionResult>;
+  ): Promise<[SubmissionResult, SessionProgress]>;
 
   /**
    * Checks if the work for the current UnitItem is complete, based on its

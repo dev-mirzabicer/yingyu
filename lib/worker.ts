@@ -1,6 +1,7 @@
 import { prisma } from './db';
 import { Job, JobStatus, JobType, StudentStatus } from '@prisma/client';
 import { StudentService } from './actions/students';
+import { FSRSService } from './actions/fsrs';
 
 /**
  * Processes all currently pending jobs in the queue.
@@ -84,6 +85,11 @@ export async function processPendingJobs() {
         // case JobType.GENERATE_PRACTICE_PDF:
         //   resultPayload = await PDFService._generate(job.payload);
         //   break;
+        case JobType.REBUILD_FSRS_CACHE:
+          resultPayload = await FSRSService._rebuildCacheForStudent(
+            job.payload
+          );
+          break;
         default:
           throw new Error(`Unknown or unimplemented job type: ${job.type}`);
       }

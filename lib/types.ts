@@ -118,7 +118,7 @@ export type SessionProgress = VocabularyDeckProgress | FsrsReviewProgress;
  * The complete state of a session, now including the typed progress object.
  * This gives the frontend everything it needs to render the current state of the application.
  */
-export type FullSessionState = Session & {
+export type FullSessionState = Omit<Session, 'progress'> & {
   student: Student;
   unit: FullUnit;
   currentUnitItem: PopulatedUnitItem | null;
