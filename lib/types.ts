@@ -124,3 +124,50 @@ export type FullSessionState = Session & {
   currentUnitItem: PopulatedUnitItem | null;
   progress: SessionProgress | null; // The progress field is now strongly typed.
 };
+
+// --- Input/Data Transfer Object Types ---
+
+export type NewUnitItemData =
+  | {
+      type: 'VOCABULARY_DECK';
+      data: {
+        name: string;
+        description?: string;
+        isPublic?: boolean;
+      };
+    }
+  | {
+      type: 'GRAMMAR_EXERCISE';
+      data: {
+        title: string;
+        grammarTopic: string;
+        difficultyLevel?: number;
+        exerciseData: Prisma.InputJsonValue; // Use the correct input type
+        explanation?: string;
+        tags?: string[];
+        isPublic?: boolean;
+      };
+    }
+  | {
+      type: 'LISTENING_EXERCISE';
+      data: {
+        title: string;
+        difficultyLevel?: number;
+        audioUrl: string;
+        correctSpelling: string;
+        explanation?: string;
+        tags?: string[];
+        isPublic?: boolean;
+      };
+    }
+  | {
+      type: 'VOCAB_FILL_IN_BLANK_EXERCISE';
+      data: {
+        title: string;
+        difficultyLevel?: number;
+        exerciseData: Prisma.InputJsonValue; // Use the correct input type
+        explanation?: string;
+        tags?: string[];
+        isPublic?: boolean;
+      };
+    };
