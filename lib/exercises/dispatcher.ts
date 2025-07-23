@@ -1,6 +1,6 @@
 import { UnitItemType } from '@prisma/client';
 import { ExerciseHandler } from './handler';
-import { fsrsReviewHandler } from './fsrsReviewHandler';
+// import { fsrsReviewHandler } from './fsrsReviewHandler';
 import { vocabularyDeckHandler } from './vocabularyDeckHandler';
 // Import other handlers here as they are created.
 // import { grammarExerciseHandler } from './grammarExerciseHandler';
@@ -8,7 +8,7 @@ import { vocabularyDeckHandler } from './vocabularyDeckHandler';
 // A map that associates each UnitItemType with its corresponding handler instance.
 // This is the heart of the dispatcher pattern.
 const handlerMap: Partial<Record<UnitItemType, ExerciseHandler>> = {
-  [UnitItemType.FSRS_REVIEW_SESSION]: fsrsReviewHandler,
+  //   [UnitItemType.FSRS_REVIEW_SESSION]: fsrsReviewHandler,
   [UnitItemType.VOCABULARY_DECK]: vocabularyDeckHandler,
 
   // Unimplemented handlers are now simply omitted from the map.

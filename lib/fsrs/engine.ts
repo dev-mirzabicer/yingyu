@@ -1,43 +1,35 @@
-import { FSRS, Card, ReviewLog, State, Rating } from 'fsrs.js';
-import { StudentFsrsParams } from '@prisma/client';
+/**
+ * This file serves as the definitive, type-safe bridge to the `fsrs-rs-nodejs` library.
+ * It re-exports the core classes and types we will use throughout our application,
+ * providing a single, centralized point of access to the FSRS engine.
+ */
 
-// Define a simplified, library-agnostic representation of a card's FSRS state.
-// the service will work with this type, not the direct type from the library.
-export type FsrsCard = Card;
-export type FsrsReviewLog = ReviewLog;
-export type FsrsRating = Rating;
+import {
+  FSRS,
+  FSRSItem,
+  FSRSReview,
+  MemoryState,
+  NextStates,
+  DEFAULT_PARAMETERS,
+} from 'fsrs-rs-nodejs';
 
-// Define the structure of the scheduling result that the application expects.
-// This mirrors the structure from fsrs.js but is defined by us as the internal standard.
-export type SchedulingResult = {
-  [key in State]: FsrsCard;
-};
+// Re-export the core FSRS classes for use in our services.
+export { FSRS, FSRSItem, FSRSReview, MemoryState, NextStates };
 
-// This is the core abstraction: the interface for any FSRS engine.
-// It has a single method, `repeat`, which is all the service needs to know about.
-export interface FSRS_Engine {
-  repeat(card: FsrsCard, now: Date): SchedulingResult;
-}
+// Re-export the default parameters for use when a student has no custom params.
+export const FSRS_DEFAULT_PARAMETERS = DEFAULT_PARAMETERS;
 
 /**
- * Factory function to create an instance of the FSRS engine.
- * THIS IS THE ONLY PLACE IN THE APP THAT IS COUPLED TO A SPECIFIC FSRS LIBRARY.
- *
- * @param studentParams The student-specific FSRS parameters from the database.
- * @returns An object that conforms to FSRS_Engine interface.
+ * A type alias for the FSRS rating. The library accepts numbers, but our application
+ * logic will be typed to this specific union for clarity and safety.
+ * 1 = Again, 2 = Hard, 3 = Good, 4 = Easy.
  */
-export function createFsrsEngine(
-  studentParams?: StudentFsrsParams | null
-): FSRS_Engine {
-  // Use the student's custom parameters, or fall back to the library's default.
-  // The `w` parameter is stored as JSON in the DB, so we parse it here.
-  const params = studentParams?.w ? (studentParams.w as number[]) : undefined;
-  const fsrs = new FSRS({ w: params });
+export type FsrsRating = 1 | 2 | 3 | 4;
 
-  // Return an adapter object that matches the interface.
-  return {
-    repeat: (card: FsrsCard, now: Date): SchedulingResult => {
-      return fsrs.repeat(card, now);
-    },
-  };
-}
+/**
+ * A constant representing the desired retention rate for scheduling.
+ * This is a key parameter for the FSRS algorithm. A value of 0.9 means the system
+ * will schedule reviews such that the user has a 90% probability of recalling the item.
+ * In a future version, this could be a configurable setting per teacher or student.
+ */
+export const DEFAULT_DESIRED_RETENTION = 0.9;

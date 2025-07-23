@@ -1,117 +1,153 @@
 import { prisma } from '@/lib/db';
-import { createFsrsEngine, FsrsRating } from '@/lib/fsrs/engine';
 import {
+  FSRS,
+  FSRSItem,
+  FSRSReview,
+  FsrsRating,
+  FSRS_DEFAULT_PARAMETERS,
+  DEFAULT_DESIRED_RETENTION,
+} from '@/lib/fsrs/engine';
+import {
+  ReviewHistory,
   StudentCardState,
-  VocabularyCard,
   StudentStatus,
+  VocabularyCard,
+  CardState,
+  ReviewType,
 } from '@prisma/client';
 
 /**
- * A constant representing the minimum retrievability (a value from 0 to 1)
- * for a card to be considered "known" enough for listening practice.
- * Retrievability is estimated as exp(-t/S), where t is time and S is stability.
- * When t=S, R is ~0.36. This threshold selects cards with a stability
- * greater than their current interval, making them good candidates for recall practice.
+ * A constant representing the minimum retrievability for a card to be considered
+ * for listening practice. A value of 0.36 corresponds to the point where the
+ * review interval equals the card's stability (t=S), indicating a reasonably
+ * well-known card.
  */
 const LISTENING_CANDIDATE_RETRIEVABILITY_THRESHOLD = 0.36;
 
 /**
- * The scientific core of the application. This service encapsulates all FSRS calculations
- * and interactions with a student's spaced repetition schedule. It is completely agnostic
- * of the underlying FSRS library implementation thanks to an abstraction layer.
+ * The definitive, re-engineered FSRS Service. This service is the scientific core
+ * of the application, leveraging the full power of the `fsrs-rs-nodejs` engine
+ * and our "History as Source of Truth" architectural principle.
  */
 export const FSRSService = {
   /**
-   * Retrieves all vocabulary cards that are due for a student's review session.
-   * This operation is now status-aware and will return nothing for inactive students.
-   *
-   * @param studentId The UUID of the student.
-   * @returns A promise that resolves to an array of due StudentCardState objects, with their cards populated.
-   */
-  async getDueCardsForStudent(
-    studentId: string
-  ): Promise<(StudentCardState & { card: VocabularyCard })[]> {
-    // 1. Meticulous Status Check: Before performing any query, verify the student is active.
-    const student = await prisma.student.findUnique({
-      where: { id: studentId },
-      select: { status: true },
-    });
-
-    // If the student is not active, there are no due cards by definition.
-    if (!student || student.status !== StudentStatus.ACTIVE) {
-      return [];
-    }
-
-    // 2. Proceed with the query only for active students.
-    return prisma.studentCardState.findMany({
-      where: {
-        studentId: studentId,
-        due: { lte: new Date() },
-      },
-      include: {
-        card: true,
-      },
-      orderBy: {
-        due: 'asc',
-      },
-    });
-  },
-
-  /**
-   * Records a student's review of a single card and calculates the next review date.
-   * This is the most critical FSRS operation and is performed as an atomic database transaction.
-   * Note: We do not check for student status here, as a review should be recorded
-   * regardless. The initiation of the session itself is blocked by the SessionService.
+   * Records a student's review of a single card. This is the most critical function
+   * in the service. It recalculates the card's entire FSRS state from its history,
+   * determines the next state, updates the cache (`StudentCardState`), and appends
+   * the new review to the immutable history log, all within a single atomic transaction.
    *
    * @param studentId The UUID of the student.
    * @param cardId The UUID of the card being reviewed.
    * @param rating The student's performance rating (1-4).
+   * @param reviewType The context of the review (e.g., VOCABULARY, LISTENING).
    * @returns A promise that resolves to the updated StudentCardState.
    */
   async recordReview(
     studentId: string,
     cardId: string,
-    rating: FsrsRating
+    rating: FsrsRating,
+    reviewType: ReviewType // The new, required parameter.
   ): Promise<StudentCardState> {
     return prisma.$transaction(async (tx) => {
-      const currentState = await tx.studentCardState.findUnique({
-        where: { studentId_cardId: { studentId, cardId } },
-      });
+      // 1. Fetch all necessary data in parallel for maximum efficiency.
+      const [studentParams, reviewHistory, previousCardState] =
+        await Promise.all([
+          tx.studentFsrsParams.findFirst({
+            where: { studentId, isActive: true },
+          }),
+          tx.reviewHistory.findMany({
+            where: { studentId, cardId },
+            orderBy: { reviewedAt: 'asc' },
+          }),
+          tx.studentCardState.findUnique({
+            where: { studentId_cardId: { studentId, cardId } },
+          }),
+        ]);
 
-      if (!currentState) {
+      // 2. Meticulous Validation.
+      if (!previousCardState) {
         throw new Error(
-          `Card state not found for student ${studentId} and card ${cardId}.`
+          `FSRSService Integrity Error: Cannot record review for a card that has no initial state. StudentId: ${studentId}, CardId: ${cardId}`
         );
       }
 
-      const studentParams = await tx.studentFsrsParams.findFirst({
-        where: { studentId, isActive: true },
-      });
+      // 3. Instantiate the FSRS engine.
+      const engine = new FSRS(
+        (studentParams?.w as number[]) ?? FSRS_DEFAULT_PARAMETERS
+      );
 
-      const engine = createFsrsEngine(studentParams);
+      // 4. Transform history into FSRSItem.
+      const fsrsReviews = this._mapHistoryToFsrsReviews(reviewHistory);
+      const fsrsItem = new FSRSItem(fsrsReviews);
+
+      // 5. Calculate the card's state from its complete history.
+      const stateBeforeReview = engine.memoryState(fsrsItem);
+
+      // 6. Calculate days elapsed and the next possible states.
       const now = new Date();
+      const daysSinceLastReview = previousCardState.lastReview
+        ? Math.round(
+            (now.getTime() - previousCardState.lastReview.getTime()) /
+              (1000 * 60 * 60 * 24)
+          )
+        : 0;
+      const nextStates = engine.nextStates(
+        stateBeforeReview,
+        DEFAULT_DESIRED_RETENTION,
+        daysSinceLastReview
+      );
 
-      const schedulingResult = engine.repeat(currentState, now);
-      const newCardState = schedulingResult[rating];
+      // 7. Select the new state based on the user's rating.
+      let newState;
+      switch (rating) {
+        case 1:
+          newState = nextStates.again;
+          break;
+        case 2:
+          newState = nextStates.hard;
+          break;
+        case 3:
+          newState = nextStates.good;
+          break;
+        case 4:
+          newState = nextStates.easy;
+          break;
+        default:
+          throw new Error(`Invalid FSRS rating: ${rating}`);
+      }
 
+      // 8. Determine the new due date and the correct FSRS state machine value.
+      const newDueDate = new Date(
+        now.getTime() + newState.interval * 24 * 60 * 60 * 1000
+      );
+      const newCardStateValue: CardState =
+        rating === 1 ? 'RELEARNING' : 'REVIEW';
+
+      // 9. Update the cache table (`StudentCardState`).
       const updatedState = await tx.studentCardState.update({
-        where: { id: currentState.id },
+        where: { studentId_cardId: { studentId, cardId } },
         data: {
-          ...newCardState,
+          stability: newState.memory.stability,
+          difficulty: newState.memory.difficulty,
+          due: newDueDate,
           lastReview: now,
+          reps: { increment: 1 },
+          state: newCardStateValue,
         },
       });
 
+      // 10. Append the new review to the immutable history log with the correct type.
       await tx.reviewHistory.create({
         data: {
           studentId,
           cardId,
           rating,
+          reviewType, // The fix is applied here.
           reviewedAt: now,
-          previousState: currentState.state,
-          previousDifficulty: currentState.difficulty,
-          previousStability: currentState.stability,
-          previousDue: currentState.due,
+          previousState: previousCardState.state,
+          previousDifficulty: stateBeforeReview.difficulty,
+          previousStability: stateBeforeReview.stability,
+          previousDue: previousCardState.due,
         },
       });
 
@@ -120,25 +156,89 @@ export const FSRSService = {
   },
 
   /**
-   * Finds cards suitable for listening practice based on high confidence (retrievability)
-   * or long review intervals. This operation is also status-aware.
+   * [INTERNAL] Asynchronously computes and saves optimal FSRS parameters for a student.
+   * This is designed to be called by a background worker.
    *
-   * @param studentId The UUID of the student.
-   * @returns A promise that resolves to an array of suitable VocabularyCard objects.
+   * @param studentId The UUID of the student to optimize.
+   * @returns A promise that resolves to the newly created StudentFsrsParams record.
    */
-  async getListeningCandidates(studentId: string): Promise<VocabularyCard[]> {
-    // 1. Meticulous Status Check: Ensure the student is active before searching.
+  async _optimizeParameters(studentId: string) {
+    const allHistory = await prisma.reviewHistory.findMany({
+      where: { studentId },
+      orderBy: { reviewedAt: 'asc' },
+    });
+
+    if (allHistory.length < 100) {
+      console.log(
+        `Skipping optimization for student ${studentId}: insufficient review history.`
+      );
+      return null;
+    }
+
+    const reviewsByCard = allHistory.reduce((acc, review) => {
+      if (!acc[review.cardId]) {
+        acc[review.cardId] = [];
+      }
+      acc[review.cardId].push(review);
+      return acc;
+    }, {} as Record<string, ReviewHistory[]>);
+
+    const trainingSet = Object.values(reviewsByCard).map((history) => {
+      const fsrsReviews = this._mapHistoryToFsrsReviews(history);
+      return new FSRSItem(fsrsReviews);
+    });
+
+    const engine = new FSRS();
+    const newWeights = await engine.computeParameters(trainingSet, true);
+
+    return prisma.$transaction(async (tx) => {
+      await tx.studentFsrsParams.updateMany({
+        where: { studentId },
+        data: { isActive: false },
+      });
+      const newParams = await tx.studentFsrsParams.create({
+        data: {
+          studentId,
+          w: newWeights,
+          isActive: true,
+          trainingDataSize: allHistory.length,
+        },
+      });
+      return newParams;
+    });
+  },
+
+  /**
+   * Retrieves all vocabulary cards that are due for a student's review session.
+   * This operation is status-aware.
+   */
+  async getDueCardsForStudent(
+    studentId: string
+  ): Promise<(StudentCardState & { card: VocabularyCard })[]> {
     const student = await prisma.student.findUnique({
       where: { id: studentId },
       select: { status: true },
     });
+    if (!student || student.status !== StudentStatus.ACTIVE) return [];
 
-    if (!student || student.status !== StudentStatus.ACTIVE) {
-      return [];
-    }
+    return prisma.studentCardState.findMany({
+      where: { studentId, due: { lte: new Date() } },
+      include: { card: true },
+      orderBy: { due: 'asc' },
+    });
+  },
 
-    // 2. Proceed with the query, now using a named constant for clarity.
-    const candidates = await prisma.$queryRaw<VocabularyCard[]>`
+  /**
+   * Finds cards suitable for listening practice. This operation is status-aware.
+   */
+  async getListeningCandidates(studentId: string): Promise<VocabularyCard[]> {
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { status: true },
+    });
+    if (!student || student.status !== StudentStatus.ACTIVE) return [];
+
+    return prisma.$queryRaw<VocabularyCard[]>`
       SELECT vc.*
       FROM "VocabularyCard" vc
       JOIN "StudentCardState" scs ON vc.id = scs."cardId"
@@ -152,19 +252,23 @@ export const FSRSService = {
       ORDER BY random()
       LIMIT 20;
     `;
-    return candidates;
   },
 
   /**
-   * Placeholder for triggering the asynchronous FSRS parameter optimization job.
-   *
-   * @param studentId The UUID of the student whose parameters should be optimized.
+   * [PRIVATE] A helper function to transform our database ReviewHistory into the
+   * FSRSReview[] format required by the FSRS engine.
    */
-  async triggerParameterOptimization(studentId: string): Promise<void> {
-    console.log(
-      `[FSRSService] Job requested: Optimize FSRS parameters for student ${studentId}.`
-    );
-    // TODO: Fully implement this, ... JobService.createJob(...)
-    // The FSRS service is still largely a placeholder.
+  _mapHistoryToFsrsReviews(history: ReviewHistory[]): FSRSReview[] {
+    return history.map((review, index) => {
+      let delta_t = 0;
+      if (index > 0) {
+        const previousReview = history[index - 1];
+        delta_t = Math.round(
+          (review.reviewedAt.getTime() - previousReview.reviewedAt.getTime()) /
+            (1000 * 60 * 60 * 24)
+        );
+      }
+      return new FSRSReview(review.rating, delta_t);
+    });
   },
 };

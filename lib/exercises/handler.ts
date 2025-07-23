@@ -1,49 +1,43 @@
-import { FullSessionState, AnswerPayload } from '@/lib/types';
+import { FullSessionState, AnswerPayload, SubmissionResult } from '@/lib/types';
 
 /**
- * Defines the result of an answer submission.
- * This provides a structured way to give feedback to the frontend.
- */
-export interface SubmissionResult {
-  isCorrect: boolean;
-  correctAnswer?: unknown; // e.g., the correct spelling or the full sentence
-  feedback?: string; // e.g., "Good job!" or an explanation of the rule
-}
-
-/**
- * Defines the data required to render an exercise on the frontend.
- * This is prepared by the handler and passed along with the session state.
- */
-export interface DisplayData {
-  type: 'FSRS_REVIEW' | 'VOCABULARY_CARD' | 'GRAMMAR_FILL_IN_BLANK';
-  payload: unknown; // e.g., an array of due cards, a single vocabulary card, or a sentence template
-}
-
-/**
- * The ExerciseHandler interface.
- * Every module that manages a specific exercise type (UnitItemType) MUST implement this interface.
- * This contract is the key to our modular and scalable session architecture.
+ * The definitive ExerciseHandler interface (v6.0).
+ * A handler is a high-level orchestrator for a specific UnitItemType. It does not
+ * contain complex business logic itself. Instead, it initializes the progress state
+ * and dispatches user actions to the appropriate, granular ProgressOperators.
  */
 export interface ExerciseHandler {
   /**
-   * Prepares the initial data needed for the frontend to display the current exercise.
-   * This is called when the session transitions to a new UnitItem.
+   * Initializes the progress state for a new UnitItem. This is called by the
+   * SessionService when it first encounters a new item in the lesson flow.
    *
    * @param sessionState The complete current state of the session.
-   * @returns A promise that resolves to the DisplayData for the exercise.
+   * @returns A promise that resolves to the updated FullSessionState, which now
+   *          contains the newly created 'progress' object for this UnitItem.
    */
-  getDisplayData(sessionState: FullSessionState): Promise<DisplayData>;
+  initialize(sessionState: FullSessionState): Promise<FullSessionState>;
 
   /**
-   * Processes a user's answer for the exercise.
-   * This method contains the core logic for grading and handling a submission.
+   * Processes a user's answer by dispatching to the correct ProgressOperator.
+   * This method is responsible for wrapping the operator execution in a database
+   * transaction to ensure atomicity.
    *
    * @param sessionState The complete current state of the session.
-   * @param payload The answer data submitted from the frontend.
+   * @param payload The complete AnswerPayload from the user, including the 'action'.
    * @returns A promise that resolves to a SubmissionResult.
    */
   submitAnswer(
     sessionState: FullSessionState,
     payload: AnswerPayload
   ): Promise<SubmissionResult>;
+
+  /**
+   * Checks if the work for the current UnitItem is complete, based on its
+   * internal progress state. This is called by the SessionService after each
+   * action to determine if it should transition to the next UnitItem.
+   *
+   * @param sessionState The complete current state of the session.
+   * @returns A promise that resolves to a boolean indicating completion.
+   */
+  isComplete(sessionState: FullSessionState): Promise<boolean>;
 }

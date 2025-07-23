@@ -1,58 +1,148 @@
-import { ExerciseHandler, SubmissionResult, DisplayData } from './handler';
-import { FullSessionState, AnswerPayload } from '@/lib/types';
-import { FSRSService } from '../actions/fsrs';
-import { FsrsRating } from '../fsrs/engine';
-import { z } from 'zod';
+import { prisma } from '@/lib/db';
+import { FSRSService } from '@/lib/actions/fsrs';
+import { ExerciseHandler } from '@/lib/exercises/handler';
+import {
+  ProgressOperator,
+  OperatorServices,
+} from '@/lib/exercises/operators/base';
+import {
+  revealAnswerOperator,
+  submitRatingOperator,
+} from '@/lib/exercises/operators/vocabularyDeckOperators';
+import {
+  FullSessionState,
+  AnswerPayload,
+  VocabularyDeckProgress,
+  SubmissionResult,
+  SessionProgress,
+} from '@/lib/types';
+import { fullSessionStateInclude } from '@/lib/prisma-includes';
 
-// This handler uses the exact same payload structure as the FSRS review.
-const VocabSubmissionSchema = z.object({
-  cardId: z.string().uuid(),
-  rating: z.number().min(1).max(4),
-});
-
+/**
+ * The definitive handler for `VOCABULARY_DECK` unit items.
+ */
 class VocabularyDeckHandler implements ExerciseHandler {
-  async getDisplayData(sessionState: FullSessionState): Promise<DisplayData> {
-    // For a vocabulary deck unit item, the display data is simply the first card.
-    // A more advanced implementation could track progress within the deck.
+  private operators: Partial<Record<AnswerPayload['action'], ProgressOperator>>;
+
+  constructor() {
+    this.operators = {
+      REVEAL_ANSWER: revealAnswerOperator,
+      SUBMIT_RATING: submitRatingOperator,
+    };
+  }
+
+  async initialize(sessionState: FullSessionState): Promise<FullSessionState> {
     const deck = sessionState.currentUnitItem?.vocabularyDeck;
-    if (!deck || deck.cards.length === 0) {
+    if (!deck) {
       throw new Error(
-        'Vocabulary deck is empty or not found for this unit item.'
+        'Data integrity error: VOCABULARY_DECK unit item is missing its deck.'
       );
     }
 
-    // In a real scenario, we'd fetch the full card details here.
-    const firstCard = deck.cards[0];
+    const cards = await prisma.vocabularyCard.findMany({
+      where: { deckId: deck.id },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    });
 
-    return {
-      type: 'VOCABULARY_CARD',
-      payload: firstCard, // This would be the full card object
+    if (cards.length === 0) {
+      const initialProgress: VocabularyDeckProgress = {
+        type: 'VOCABULARY_DECK',
+        stage: 'PRESENTING_WORD',
+        payload: {
+          cardIds: [],
+          currentCardIndex: 0,
+        },
+      };
+
+      const updatedSession = await prisma.session.update({
+        where: { id: sessionState.id },
+        data: { progress: initialProgress },
+        include: fullSessionStateInclude,
+      });
+      // This cast is now safe because fullSessionStateInclude is complete.
+      return updatedSession as unknown as FullSessionState;
+    }
+
+    const firstCardData = await prisma.vocabularyCard.findUnique({
+      where: { id: cards[0].id },
+    });
+    if (!firstCardData) {
+      throw new Error(
+        `Data integrity error: Could not find first card with id ${cards[0].id}`
+      );
+    }
+
+    const initialProgress: VocabularyDeckProgress = {
+      type: 'VOCABULARY_DECK',
+      stage: 'PRESENTING_WORD',
+      payload: {
+        cardIds: cards.map((c) => c.id),
+        currentCardIndex: 0,
+        currentCardData: firstCardData,
+      },
     };
+
+    const updatedSession = await prisma.session.update({
+      where: { id: sessionState.id },
+      data: { progress: initialProgress },
+      include: fullSessionStateInclude,
+    });
+
+    // This cast is now safe because fullSessionStateInclude is complete.
+    return updatedSession as unknown as FullSessionState;
   }
 
   async submitAnswer(
     sessionState: FullSessionState,
     payload: AnswerPayload
   ): Promise<SubmissionResult> {
-    const validationResult = VocabSubmissionSchema.safeParse(payload);
-    if (!validationResult.success) {
+    const operator = this.operators[payload.action];
+    if (!operator) {
       throw new Error(
-        `Invalid payload for vocabulary submission: ${validationResult.error.message}`
+        `Unsupported action '${payload.action}' for VocabularyDeckHandler.`
       );
     }
-    const { cardId, rating } = validationResult.data;
 
-    // Delegate to the same core service. This demonstrates high reusability.
-    await FSRSService.recordReview(
-      sessionState.studentId,
-      cardId,
-      rating as FsrsRating
-    );
+    if (sessionState.progress?.type !== 'VOCABULARY_DECK') {
+      throw new Error(
+        'Logic error: submitAnswer called with mismatched progress type.'
+      );
+    }
 
-    return {
-      isCorrect: true,
-      feedback: 'Card review recorded.',
-    };
+    return prisma.$transaction(async (tx) => {
+      const services: OperatorServices = {
+        tx,
+        fsrsService: FSRSService,
+        studentId: sessionState.studentId,
+      };
+
+      const [newProgress, result] = await operator.execute(
+        sessionState.progress as SessionProgress,
+        payload.data,
+        services
+      );
+
+      await tx.session.update({
+        where: { id: sessionState.id },
+        data: { progress: newProgress },
+      });
+
+      return result;
+    });
+  }
+
+  async isComplete(sessionState: FullSessionState): Promise<boolean> {
+    const progress = sessionState.progress;
+
+    if (progress?.type !== 'VOCABULARY_DECK') {
+      console.error(
+        'isComplete check failed: progress is null or of the wrong type.'
+      );
+      return true;
+    }
+
+    return progress.payload.currentCardIndex >= progress.payload.cardIds.length;
   }
 }
 

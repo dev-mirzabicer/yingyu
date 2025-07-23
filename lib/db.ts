@@ -27,24 +27,16 @@ function createPrismaClient() {
       $allModels: {
         async $allOperations({ model, operation, args, query }) {
           if (model && ARCHIVABLE_MODELS.includes(model)) {
-            // --- Intercept DELETE Operations ---
             if (operation === 'delete') {
-              if ('where' in args) {
-                operation = 'update';
-                (args as Prisma.StudentUpdateArgs).data = { isArchived: true };
-              }
+              operation = 'update';
+              (args as Prisma.StudentUpdateArgs).data = { isArchived: true };
             }
-
             if (operation === 'deleteMany') {
-              if ('where' in args) {
-                operation = 'updateMany';
-                (args as Prisma.StudentUpdateManyArgs).data = {
-                  isArchived: true,
-                };
-              }
+              operation = 'updateMany';
+              (args as Prisma.StudentUpdateManyArgs).data = {
+                isArchived: true,
+              };
             }
-
-            // --- Intercept READ/UPDATE Operations ---
             if (
               (operation === 'findUnique' ||
                 operation === 'findFirst' ||
@@ -55,11 +47,9 @@ function createPrismaClient() {
               'where' in args
             ) {
               const where = args.where as Prisma.StudentWhereInput;
-
               if (where) {
                 where.isArchived = false;
               } else {
-                // If `where` is null or undefined, we create it.
                 (
                   args as
                     | Prisma.StudentFindManyArgs
@@ -68,8 +58,6 @@ function createPrismaClient() {
               }
             }
           }
-
-          // Finally, we execute the original query with our potentially modified arguments.
           return query(args);
         },
       },
@@ -80,13 +68,14 @@ function createPrismaClient() {
 // Infer the type of our extended, more powerful client.
 type ExtendedPrismaClient = ReturnType<typeof createPrismaClient>;
 
-// Augment the global scope to declare our singleton prisma instance.
 declare global {
   var prisma: ExtendedPrismaClient | undefined;
 }
 
-// Instantiate the Prisma Client using our factory function.
 export const prisma = globalThis.prisma || createPrismaClient();
+
+// Export the extended client type for use in other parts of the application.
+export type AppPrismaClient = typeof prisma;
 
 if (process.env.NODE_ENV !== 'production') {
   globalThis.prisma = prisma;
