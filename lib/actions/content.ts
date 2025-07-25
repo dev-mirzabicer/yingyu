@@ -1,5 +1,9 @@
 import { prisma } from '@/lib/db';
-import { FullUnit, NewUnitItemData } from '@/lib/types';
+import {
+  FullUnit,
+  NewUnitItemData,
+  VocabularyExerciseConfig,
+} from '@/lib/types';
 import {
   Unit,
   UnitItem,
@@ -11,6 +15,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { AuthorizationError } from '../auth';
+import { VocabularyExerciseConfigSchema } from '../schemas';
 
 type Exercise =
   | VocabularyDeck
@@ -314,6 +319,42 @@ export const ContentService = {
   async removeUnitItem(unitItemId: string): Promise<UnitItem> {
     return prisma.unitItem.delete({
       where: { id: unitItemId },
+    });
+  },
+
+  /**
+   * Updates the configuration for a specific UnitItem.
+   * This allows teachers to dynamically adjust session parameters like the number of new cards.
+   *
+   * @param unitItemId The UUID of the UnitItem to update.
+   * @param teacherId The UUID of the teacher making the request for authorization.
+   * @param config The new configuration object to apply.
+   * @returns A promise that resolves to the updated UnitItem.
+   */
+  async updateUnitItemConfig(
+    unitItemId: string,
+    teacherId: string,
+    config: VocabularyExerciseConfig
+  ): Promise<UnitItem> {
+    // 1. Meticulous Authorization: Ensure the teacher owns the parent unit.
+    const unitItem = await prisma.unitItem.findUnique({
+      where: { id: unitItemId },
+      include: { unit: { select: { creatorId: true } } },
+    });
+
+    if (!unitItem || unitItem.unit.creatorId !== teacherId) {
+      throw new AuthorizationError(
+        'Unit item not found or you are not authorized to edit it.'
+      );
+    }
+
+    // 2. Robust Validation: Parse the incoming config against the Zod schema.
+    const validatedConfig = VocabularyExerciseConfigSchema.parse(config);
+
+    // 3. Perform the update.
+    return prisma.unitItem.update({
+      where: { id: unitItemId },
+      data: { exerciseConfig: validatedConfig ?? Prisma.JsonNull },
     });
   },
 };

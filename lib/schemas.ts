@@ -30,3 +30,29 @@ export const CreateUnitSchema = z.object({
   description: z.string().optional(),
   isPublic: z.boolean().optional(),
 });
+
+/**
+ * Validates the payload for the job that initializes FSRS states for a new deck assignment.
+ */
+export const InitializeCardStatesPayloadSchema = z.object({
+  studentId: z.string().uuid({ message: 'Invalid student UUID.' }),
+  deckId: z.string().uuid({ message: 'Invalid deck UUID.' }),
+});
+
+/**
+ * Validates the payload for the job that rebuilds the FSRS cache for a student.
+ */
+export const RebuildCachePayloadSchema = z.object({
+  studentId: z.string().uuid({ message: 'Invalid student UUID.' }),
+});
+
+/**
+ * Validates the configuration object for a vocabulary exercise unit item.
+ */
+export const VocabularyExerciseConfigSchema = z
+  .object({
+    newCards: z.number().int().min(0).optional(),
+    maxDue: z.number().int().min(0).optional(),
+    minDue: z.number().int().min(0).optional(),
+  })
+  .optional();

@@ -8,6 +8,7 @@ import {
   SubmissionResult,
   VocabularyDeckProgress,
   SessionProgress,
+  VocabularyQueueItem,
 } from '@/lib/types';
 import { FsrsRating } from '@/lib/fsrs/engine';
 import { ReviewType } from '@prisma/client';
@@ -68,7 +69,9 @@ class SubmitRatingOperator implements ProgressOperator {
     if (currentProgress.stage !== 'AWAITING_RATING')
       throw new Error('Cannot submit rating now.');
 
-    const validation = SubmitRatingPayloadSchema.safeParse(payload);
+    const validation = z
+      .object({ rating: z.number().min(1).max(4) })
+      .safeParse(payload);
     if (!validation.success)
       throw new Error(`Invalid payload: ${validation.error.message}`);
     const { rating } = validation.data;
@@ -77,35 +80,33 @@ class SubmitRatingOperator implements ProgressOperator {
     if (!currentQueueItem)
       throw new Error('Cannot submit rating for an empty queue.');
 
-    // 1. Record the review. This is the primary side-effect.
+    // 1. Record the review. This is the primary side-effect that changes the due dates.
     await services.fsrsService.recordReview(
       services.studentId,
       currentQueueItem.cardId,
       rating as FsrsRating,
-      ReviewType.VOCABULARY // This is now the unified review type
+      ReviewType.VOCABULARY
     );
 
-    // 2. Begin queue management: remove the reviewed card from the front.
-    const newQueue = currentProgress.payload.queue.slice(1);
-
-    // 3. Check for "lapse" (card is still due immediately after review).
-    const updatedState = await services.tx.studentCardState.findUnique({
+    // 2. REFINEMENT: Rebuild the entire queue dynamically based on the session's initial scope.
+    // This is the core of the "truly dynamic" logic.
+    const allSessionStates = await services.tx.studentCardState.findMany({
       where: {
-        studentId_cardId: {
-          studentId: services.studentId,
-          cardId: currentQueueItem.cardId,
-        },
+        studentId: services.studentId,
+        cardId: { in: currentProgress.payload.initialCardIds },
       },
-      select: { due: true },
+      select: { cardId: true, due: true, state: true },
     });
 
-    if (updatedState && updatedState.due <= new Date()) {
-      // The card lapsed and needs to be re-inserted into the queue.
-      insertIntoSortedQueue(newQueue, {
-        ...currentQueueItem,
-        due: updatedState.due,
-      });
-    }
+    // 3. Filter for all cards that are now due and sort them.
+    const newQueue: VocabularyQueueItem[] = allSessionStates
+      .filter((state) => state.due <= new Date())
+      .map((state) => ({
+        cardId: state.cardId,
+        due: state.due,
+        isNew: state.state === 'NEW',
+      }))
+      .sort((a, b) => a.due.getTime() - b.due.getTime());
 
     // 4. Prepare the next state.
     let nextCardData = undefined;
