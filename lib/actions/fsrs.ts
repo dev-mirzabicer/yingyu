@@ -19,6 +19,7 @@ import {
 } from '@prisma/client';
 import { authorizeTeacherForStudent } from '../auth';
 import { JobService } from './jobs';
+import { VocabularyExerciseConfig, VocabularyQueueItem } from '../types';
 
 /**
  * A constant representing the minimum retrievability for a card to be considered
@@ -210,6 +211,74 @@ export const FSRSService = {
       });
       return newParams;
     });
+  },
+
+  /**
+   * Assembles the initial review queue for a unified vocabulary session based on student
+   * status and session configuration.
+   * @param studentId The ID of the student.
+   * @param config The configuration for this specific session.
+   * @returns An object containing separate arrays for due and new card queue items.
+   */
+  async getInitialReviewQueue(
+    studentId: string,
+    config: VocabularyExerciseConfig
+  ): Promise<{
+    dueItems: VocabularyQueueItem[];
+    newItems: VocabularyQueueItem[];
+  }> {
+    const now = new Date();
+    // Define system defaults for the session configuration.
+    const defaults = { newCards: 10, maxDue: 50, minDue: 10 };
+    const finalConfig = { ...defaults, ...config };
+
+    // 1. Fetch Due Cards (up to max_due)
+    let dueCards = await prisma.studentCardState.findMany({
+      where: { studentId, due: { lte: now }, state: { not: 'NEW' } },
+      take: finalConfig.maxDue,
+      orderBy: { due: 'asc' },
+      select: { cardId: true, due: true },
+    });
+
+    // 2. Handle min_due supplementation if necessary.
+    if (dueCards.length < finalConfig.minDue) {
+      const needed = finalConfig.minDue - dueCards.length;
+      const endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const supplementalCards = await prisma.studentCardState.findMany({
+        where: {
+          studentId,
+          due: { gt: now, lte: endOfDay }, // Cards due later today
+          state: { not: 'NEW' },
+          cardId: { notIn: dueCards.map((c) => c.cardId) }, // Exclude already fetched
+        },
+        take: needed,
+        orderBy: { due: 'asc' },
+        select: { cardId: true, due: true },
+      });
+      dueCards = [...dueCards, ...supplementalCards];
+    }
+
+    // 3. Fetch New Cards
+    const newCards = await prisma.studentCardState.findMany({
+      where: { studentId, state: 'NEW' },
+      take: finalConfig.newCards,
+      orderBy: { card: { createdAt: 'asc' } }, // Order by original card creation date
+      select: { cardId: true, due: true },
+    });
+
+    // 4. Map to the queue item contract
+    const dueItems: VocabularyQueueItem[] = dueCards.map((c) => ({
+      ...c,
+      isNew: false,
+    }));
+    const newItems: VocabularyQueueItem[] = newCards.map((c) => ({
+      ...c,
+      isNew: true,
+    }));
+
+    return { dueItems, newItems };
   },
 
   /**

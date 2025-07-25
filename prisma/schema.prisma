@@ -51,7 +51,7 @@ enum ReviewType {
 }
 
 enum UnitItemType {
-  FSRS_REVIEW_SESSION
+//   FSRS_REVIEW_SESSION | DEPRECATED
   VOCABULARY_DECK
   GRAMMAR_EXERCISE
   LISTENING_EXERCISE
@@ -160,6 +160,7 @@ model UnitItem {
   unitId                     String       @db.Uuid
   order                      Int
   type                       UnitItemType
+  exerciseConfig             Json?
   vocabularyDeckId           String?      @unique @db.Uuid
   grammarExerciseId          String?      @unique @db.Uuid
   listeningExerciseId        String?      @unique @db.Uuid

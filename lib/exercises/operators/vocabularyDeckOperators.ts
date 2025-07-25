@@ -1,119 +1,131 @@
+// NEW FILE: /lib/exercises/operators/unifiedVocabularyOperators.ts
+
 import {
   ProgressOperator,
   OperatorServices,
 } from '@/lib/exercises/operators/base';
 import {
-  SessionProgress,
   SubmissionResult,
   VocabularyDeckProgress,
+  SessionProgress,
 } from '@/lib/types';
 import { FsrsRating } from '@/lib/fsrs/engine';
 import { ReviewType } from '@prisma/client';
 import { z } from 'zod';
 
-// --- Validation Schemas for Operator Payloads ---
-
+// --- Validation Schemas ---
 const SubmitRatingPayloadSchema = z.object({
-  cardId: z.string().uuid(),
   rating: z.number().min(1).max(4),
 });
 
+// --- Helper Functions ---
+/**
+ * A helper to re-insert a lapsed card back into the queue while maintaining sort order.
+ */
+const insertIntoSortedQueue = (
+  queue: VocabularyDeckProgress['payload']['queue'],
+  item: VocabularyDeckProgress['payload']['queue'][0]
+) => {
+  const index = queue.findIndex((i) => i.due > item.due);
+  if (index === -1) {
+    queue.push(item); // Add to end if it's the latest due date
+  } else {
+    queue.splice(index, 0, item); // Insert at correct sorted position
+  }
+};
+
 // --- Progress Operators ---
 
-/**
- * Operator responsible for transitioning the exercise state from presenting a word
- * to awaiting a user's rating. It's a simple state transition.
- */
 class RevealAnswerOperator implements ProgressOperator {
   async execute(
     currentProgress: SessionProgress
   ): Promise<[SessionProgress, SubmissionResult]> {
-    // Type guard to ensure we are working with the correct progress type.
-    if (currentProgress.type !== 'VOCABULARY_DECK') {
-      throw new Error('Invalid progress type for RevealAnswerOperator.');
-    }
+    if (currentProgress.type !== 'VOCABULARY_DECK')
+      throw new Error('Invalid progress type.');
+    if (currentProgress.stage !== 'PRESENTING_CARD')
+      throw new Error('Invalid stage for revealing answer.');
 
-    // Ensure the current stage is correct for this action.
-    if (currentProgress.stage !== 'PRESENTING_WORD') {
-      throw new Error('Cannot reveal answer if not in PRESENTING_WORD stage.');
-    }
-
-    // Create a new progress object with the updated stage.
     const newProgress: VocabularyDeckProgress = {
       ...currentProgress,
       stage: 'AWAITING_RATING',
     };
-
     const result: SubmissionResult = {
-      isCorrect: true, // This action is always "successful".
+      isCorrect: true,
       feedback: 'Answer revealed.',
     };
-
     return [newProgress, result];
   }
 }
 
-/**
- * Operator responsible for recording an FSRS review and advancing to the next card.
- * This is the most complex operator for this exercise type.
- */
 class SubmitRatingOperator implements ProgressOperator {
   async execute(
     currentProgress: SessionProgress,
     payload: unknown,
     services: OperatorServices
   ): Promise<[SessionProgress, SubmissionResult]> {
-    // 1. Type guard and stage validation.
-    if (currentProgress.type !== 'VOCABULARY_DECK') {
-      throw new Error('Invalid progress type for SubmitRatingOperator.');
-    }
-    if (currentProgress.stage !== 'AWAITING_RATING') {
-      throw new Error('Cannot submit rating if not in AWAITING_RATING stage.');
-    }
+    if (currentProgress.type !== 'VOCABULARY_DECK')
+      throw new Error('Invalid progress type.');
+    if (currentProgress.stage !== 'AWAITING_RATING')
+      throw new Error('Cannot submit rating now.');
 
-    // 2. Meticulous payload validation.
-    const validationResult = SubmitRatingPayloadSchema.safeParse(payload);
-    if (!validationResult.success) {
-      throw new Error(
-        `Invalid payload for rating submission: ${validationResult.error.message}`
-      );
-    }
-    const { cardId, rating } = validationResult.data;
+    const validation = SubmitRatingPayloadSchema.safeParse(payload);
+    if (!validation.success)
+      throw new Error(`Invalid payload: ${validation.error.message}`);
+    const { rating } = validation.data;
 
-    // 3. Delegate to the FSRS Service within the provided transaction.
-    // We pass the correct ReviewType to enrich our historical data.
+    const currentQueueItem = currentProgress.payload.queue[0];
+    if (!currentQueueItem)
+      throw new Error('Cannot submit rating for an empty queue.');
+
+    // 1. Record the review. This is the primary side-effect.
     await services.fsrsService.recordReview(
       services.studentId,
-      cardId,
+      currentQueueItem.cardId,
       rating as FsrsRating,
-      ReviewType.VOCABULARY
+      ReviewType.VOCABULARY // This is now the unified review type
     );
 
-    // 4. Calculate the next state.
-    const newIndex = currentProgress.payload.currentCardIndex + 1;
-    const isDeckComplete = newIndex >= currentProgress.payload.cardIds.length;
+    // 2. Begin queue management: remove the reviewed card from the front.
+    const newQueue = currentProgress.payload.queue.slice(1);
 
-    let nextCardData = undefined;
-    // If the deck is not finished, pre-fetch the next card's data.
-    if (!isDeckComplete) {
-      nextCardData = await services.tx.vocabularyCard.findUnique({
-        where: { id: currentProgress.payload.cardIds[newIndex] },
+    // 3. Check for "lapse" (card is still due immediately after review).
+    const updatedState = await services.tx.studentCardState.findUnique({
+      where: {
+        studentId_cardId: {
+          studentId: services.studentId,
+          cardId: currentQueueItem.cardId,
+        },
+      },
+      select: { due: true },
+    });
+
+    if (updatedState && updatedState.due <= new Date()) {
+      // The card lapsed and needs to be re-inserted into the queue.
+      insertIntoSortedQueue(newQueue, {
+        ...currentQueueItem,
+        due: updatedState.due,
       });
-      if (!nextCardData) {
+    }
+
+    // 4. Prepare the next state.
+    let nextCardData = undefined;
+    if (newQueue.length > 0) {
+      nextCardData = await services.tx.vocabularyCard.findUnique({
+        where: { id: newQueue[0].cardId },
+      });
+      if (!nextCardData)
         throw new Error(
-          `Data integrity error: Could not find next card with id ${currentProgress.payload.cardIds[newIndex]}`
+          `Data integrity error: Card ${newQueue[0].cardId} not found.`
         );
-      }
     }
 
     // 5. Construct the new progress object.
     const newProgress: VocabularyDeckProgress = {
       ...currentProgress,
-      // Reset the stage for the next card, or leave it if the deck is done.
-      stage: isDeckComplete ? 'AWAITING_RATING' : 'PRESENTING_WORD',
+      stage: 'PRESENTING_CARD', // Reset stage for the next card
       payload: {
         ...currentProgress.payload,
-        currentCardIndex: newIndex,
+        queue: newQueue,
         currentCardData: nextCardData,
       },
     };
@@ -122,12 +134,9 @@ class SubmitRatingOperator implements ProgressOperator {
       isCorrect: true,
       feedback: 'Review recorded.',
     };
-
     return [newProgress, result];
   }
 }
-
-// --- Export Singleton Instances ---
 
 export const revealAnswerOperator = new RevealAnswerOperator();
 export const submitRatingOperator = new SubmitRatingOperator();

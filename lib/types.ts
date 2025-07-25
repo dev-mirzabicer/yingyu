@@ -38,8 +38,29 @@ export type FullStudentProfile = Student & {
 };
 
 // ================================================================= //
-// DEFINITIVE STATE & DTO CONTRACTS (v5.0)
+// DEFINITIVE STATE & DTO CONTRACTS (v6.0 - Unified Vocabulary Engine)
 // ================================================================= //
+
+/**
+ * Defines the configuration for a unified vocabulary session, stored in UnitItem.exerciseConfig.
+ * All properties are optional, allowing the handler to use teacher-defined defaults.
+ */
+export type VocabularyExerciseConfig = {
+  newCards?: number;
+  maxDue?: number;
+  minDue?: number;
+};
+
+/**
+ * Represents a single item in the live review queue.
+ */
+export type VocabularyQueueItem = {
+  cardId: string;
+  /** The timestamp when the card is due. Used for sorting. */
+  due: Date;
+  /** A flag to differentiate new cards from review cards for potential UI differences. */
+  isNew: boolean;
+};
 
 /**
  * The definitive structure for all answer submissions from the frontend.
@@ -60,40 +81,23 @@ export type AnswerPayload = {
 // --- Session Progress State Machine Types ---
 
 /**
- * The state for a vocabulary deck exercise. It tracks the current stage (presenting a word
- * or awaiting a rating) and the user's progress through the deck.
+ * The new, definitive progress state for the unified vocabulary handler.
  */
 export type VocabularyDeckProgress = {
   type: 'VOCABULARY_DECK';
-  stage: 'PRESENTING_WORD' | 'AWAITING_RATING';
-  payload: {
-    cardIds: string[];
-    currentCardIndex: number;
-    /**
-     * The full data for the current card. This is populated by the 'REVEAL_ANSWER'
-     * operator and used by the UI to display the card details.
-     */
-    currentCardData?: VocabularyCard;
-  };
-};
-
-/**
- * The state for a comprehensive FSRS review session. It tracks the queue of due cards
- * and the user's progress through them.
- */
-export type FsrsReviewProgress = {
-  type: 'FSRS_REVIEW_SESSION';
   stage: 'PRESENTING_CARD' | 'AWAITING_RATING';
   payload: {
+    /** The dynamic, sorted queue of cards to be reviewed. The card at index 0 is the current card. */
+    queue: VocabularyQueueItem[];
+    /** The full data for the current card (queue[0]). Pre-fetched for the UI. */
+    currentCardData?: VocabularyCard;
+    /** The original configuration for this session, kept for reference. */
+    config: VocabularyExerciseConfig;
     /**
-     * The full list of card states being reviewed in this session.
-     * This is populated once by the initialize method.
+     * REFINEMENT: A static list of all card IDs included at the start of the session.
+     * This is used to efficiently scope the dynamic re-evaluation of the queue.
      */
-    cardStates: (StudentCardState & { card: VocabularyCard })[];
-    /**
-     * The index of the card currently being displayed to the user.
-     */
-    currentCardIndex: number;
+    initialCardIds: string[];
   };
 };
 
@@ -111,7 +115,7 @@ export interface SubmissionResult {
  * A union type representing all possible progress states for any exercise.
  * The `Session.progress` field will always conform to one of these shapes.
  */
-export type SessionProgress = VocabularyDeckProgress | FsrsReviewProgress;
+export type SessionProgress = VocabularyDeckProgress;
 // | GrammarExerciseProgress etc. will be added here.
 
 /**

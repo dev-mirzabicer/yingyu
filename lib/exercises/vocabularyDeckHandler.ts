@@ -2,84 +2,106 @@ import { prisma } from '@/lib/db';
 import { FSRSService } from '@/lib/actions/fsrs';
 import { ExerciseHandler } from '@/lib/exercises/handler';
 import {
-  ProgressOperator,
-  OperatorServices,
-  TransactionClient,
-} from '@/lib/exercises/operators/base';
-import {
   revealAnswerOperator,
   submitRatingOperator,
 } from '@/lib/exercises/operators/vocabularyDeckOperators';
 import {
   FullSessionState,
   AnswerPayload,
-  VocabularyDeckProgress,
   SubmissionResult,
   SessionProgress,
+  VocabularyDeckProgress,
+  VocabularyExerciseConfig,
+  VocabularyQueueItem,
 } from '@/lib/types';
 import { fullSessionStateInclude } from '@/lib/prisma-includes';
+import { z } from 'zod';
+import { TransactionClient } from './operators/base';
+
+// Zod schema for validating the exercise config from the database.
+const exerciseConfigSchema = z
+  .object({
+    newCards: z.number().int().min(0).optional(),
+    maxDue: z.number().int().min(0).optional(),
+    minDue: z.number().int().min(0).optional(),
+  })
+  .optional();
 
 class VocabularyDeckHandler implements ExerciseHandler {
-  private operators: Partial<Record<AnswerPayload['action'], ProgressOperator>>;
+  private operators = {
+    REVEAL_ANSWER: revealAnswerOperator,
+    SUBMIT_RATING: submitRatingOperator,
+  };
 
-  constructor() {
-    this.operators = {
-      REVEAL_ANSWER: revealAnswerOperator,
-      SUBMIT_RATING: submitRatingOperator,
-    };
+  /**
+   * Interleaves new cards evenly into a sorted list of due cards.
+   */
+  private interleave(
+    dueItems: VocabularyQueueItem[],
+    newItems: VocabularyQueueItem[]
+  ): VocabularyQueueItem[] {
+    if (newItems.length === 0) return dueItems;
+    if (dueItems.length === 0) return newItems;
+
+    const combined = [...dueItems];
+    const interval = Math.floor(combined.length / (newItems.length + 1));
+
+    newItems.forEach((newItem, i) => {
+      const insertionIndex = Math.min(combined.length, (i + 1) * interval + i);
+      combined.splice(insertionIndex, 0, newItem);
+    });
+
+    return combined;
   }
 
   async initialize(
     sessionState: FullSessionState,
     tx?: TransactionClient
   ): Promise<FullSessionState> {
-    // REFINEMENT: Use the provided transactional client `tx` if available,
-    // otherwise fall back to the global `prisma` client.
     const db = tx || prisma;
+    const config =
+      exerciseConfigSchema.parse(
+        sessionState.currentUnitItem?.exerciseConfig ?? {}
+      ) ?? {};
 
-    const deck = sessionState.currentUnitItem?.vocabularyDeck;
-    if (!deck) {
-      throw new Error(
-        'Data integrity error: VOCABULARY_DECK unit item is missing its deck.'
-      );
-    }
+    const { dueItems, newItems } = await FSRSService.getInitialReviewQueue(
+      sessionState.studentId,
+      config
+    );
 
-    const cards = await db.vocabularyCard.findMany({
-      where: { deckId: deck.id },
-      select: { id: true },
-      orderBy: { createdAt: 'asc' },
-    });
+    const initialQueue = this.interleave(dueItems, newItems);
+    const initialCardIds = initialQueue.map((item) => item.cardId);
 
-    if (cards.length === 0) {
-      const initialProgress: VocabularyDeckProgress = {
+    if (initialQueue.length === 0) {
+      const emptyProgress: VocabularyDeckProgress = {
         type: 'VOCABULARY_DECK',
-        stage: 'PRESENTING_WORD',
-        payload: { cardIds: [], currentCardIndex: 0 },
+        stage: 'PRESENTING_CARD',
+        payload: { queue: [], config, initialCardIds },
       };
       const updatedSession = await db.session.update({
         where: { id: sessionState.id },
-        data: { progress: initialProgress },
+        data: { progress: emptyProgress },
         include: fullSessionStateInclude,
       });
       return updatedSession as unknown as FullSessionState;
     }
 
     const firstCardData = await db.vocabularyCard.findUnique({
-      where: { id: cards[0].id },
+      where: { id: initialQueue[0].cardId },
     });
-    if (!firstCardData) {
+    if (!firstCardData)
       throw new Error(
-        `Data integrity error: Could not find first card with id ${cards[0].id}`
+        `Data integrity error: Card ${initialQueue[0].cardId} not found.`
       );
-    }
 
     const initialProgress: VocabularyDeckProgress = {
       type: 'VOCABULARY_DECK',
-      stage: 'PRESENTING_WORD',
+      stage: 'PRESENTING_CARD',
       payload: {
-        cardIds: cards.map((c) => c.id),
-        currentCardIndex: 0,
+        queue: initialQueue,
         currentCardData: firstCardData,
+        config,
+        initialCardIds,
       },
     };
 
@@ -96,36 +118,26 @@ class VocabularyDeckHandler implements ExerciseHandler {
     sessionState: FullSessionState,
     payload: AnswerPayload
   ): Promise<[SubmissionResult, SessionProgress]> {
-    const operator = this.operators[payload.action];
-    if (!operator) {
+    const operator =
+      this.operators[payload.action as keyof typeof this.operators];
+    if (!operator)
       throw new Error(
-        `Unsupported action '${payload.action}' for VocabularyDeckHandler.`
+        `Unsupported action '${payload.action}' for this handler.`
       );
-    }
+    if (sessionState.progress?.type !== 'VOCABULARY_DECK')
+      throw new Error('Mismatched progress type.');
 
-    if (sessionState.progress?.type !== 'VOCABULARY_DECK') {
-      throw new Error(
-        'Logic error: submitAnswer called with mismatched progress type.'
-      );
-    }
-
-    // REFINEMENT: This method is now a pure state transition function.
-    // It does NOT interact with the database. It returns the new progress state.
-    // The transaction will be managed by the SessionService.
     return prisma.$transaction(async (tx) => {
-      const services: OperatorServices = {
+      const services = {
         tx,
         fsrsService: FSRSService,
         studentId: sessionState.studentId,
       };
-
       const [newProgress, result] = await operator.execute(
         sessionState.progress as SessionProgress,
         payload.data,
         services
       );
-
-      // The handler no longer updates the session. It returns the result.
       return [result, newProgress];
     });
   }
@@ -136,9 +148,9 @@ class VocabularyDeckHandler implements ExerciseHandler {
       console.error(
         'isComplete check failed: progress is null or of the wrong type.'
       );
-      return true;
+      return true; // Fail safe
     }
-    return progress.payload.currentCardIndex >= progress.payload.cardIds.length;
+    return progress.payload.queue.length === 0;
   }
 }
 
