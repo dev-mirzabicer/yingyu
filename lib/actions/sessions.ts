@@ -35,32 +35,7 @@ export const SessionService = {
   ): Promise<FullSessionState | null> {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      include: {
-        student: true,
-        unit: {
-          include: {
-            items: {
-              orderBy: { order: 'asc' },
-              include: {
-                vocabularyDeck: {
-                  include: { cards: { select: { id: true } } },
-                },
-                grammarExercise: true,
-                listeningExercise: true,
-                vocabFillInBlankExercise: true,
-              },
-            },
-          },
-        },
-        currentUnitItem: {
-          include: {
-            vocabularyDeck: { include: { cards: { select: { id: true } } } },
-            grammarExercise: true,
-            listeningExercise: true,
-            vocabFillInBlankExercise: true,
-          },
-        },
-      },
+      include: fullSessionStateInclude,
     });
 
     if (!session || session.teacherId !== teacherId) {
@@ -235,7 +210,7 @@ export const SessionService = {
         status: SessionStatus.COMPLETED,
         endTime: new Date(),
         currentUnitItemId: null,
-        progress: Prisma.AnyNull,
+        progress: Prisma.JsonNull,
       },
       include: fullSessionStateInclude,
     });

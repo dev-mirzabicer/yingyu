@@ -12,7 +12,7 @@ import {
   Session,
   Prisma,
   VocabularyCard,
-  StudentCardState,
+  Teacher,
 } from '@prisma/client';
 
 export type PopulatedUnitItem = UnitItem & {
@@ -123,6 +123,7 @@ export type SessionProgress = VocabularyDeckProgress;
  * This gives the frontend everything it needs to render the current state of the application.
  */
 export type FullSessionState = Omit<Session, 'progress'> & {
+  teacher: Teacher;
   student: Student;
   unit: FullUnit;
   currentUnitItem: PopulatedUnitItem | null;
@@ -133,45 +134,45 @@ export type FullSessionState = Omit<Session, 'progress'> & {
 
 export type NewUnitItemData =
   | {
-      type: 'VOCABULARY_DECK';
-      data: {
-        name: string;
-        description?: string;
-        isPublic?: boolean;
-      };
-    }
-  | {
-      type: 'GRAMMAR_EXERCISE';
-      data: {
-        title: string;
-        grammarTopic: string;
-        difficultyLevel?: number;
-        exerciseData: Prisma.InputJsonValue; // Use the correct input type
-        explanation?: string;
-        tags?: string[];
-        isPublic?: boolean;
-      };
-    }
-  | {
-      type: 'LISTENING_EXERCISE';
-      data: {
-        title: string;
-        difficultyLevel?: number;
-        audioUrl: string;
-        correctSpelling: string;
-        explanation?: string;
-        tags?: string[];
-        isPublic?: boolean;
-      };
-    }
-  | {
-      type: 'VOCAB_FILL_IN_BLANK_EXERCISE';
-      data: {
-        title: string;
-        difficultyLevel?: number;
-        exerciseData: Prisma.InputJsonValue; // Use the correct input type
-        explanation?: string;
-        tags?: string[];
-        isPublic?: boolean;
-      };
+    type: 'VOCABULARY_DECK';
+    data: {
+      name: string;
+      description?: string;
+      isPublic?: boolean;
     };
+  }
+  | {
+    type: 'GRAMMAR_EXERCISE';
+    data: {
+      title: string;
+      grammarTopic: string;
+      difficultyLevel?: number;
+      exerciseData: Prisma.InputJsonValue; // Use the correct input type
+      explanation?: string;
+      tags?: string[];
+      isPublic?: boolean;
+    };
+  }
+  | {
+    type: 'LISTENING_EXERCISE';
+    data: {
+      title: string;
+      difficultyLevel?: number;
+      audioUrl: string;
+      correctSpelling: string;
+      explanation?: string;
+      tags?: string[];
+      isPublic?: boolean;
+    };
+  }
+  | {
+    type: 'VOCAB_FILL_IN_BLANK_EXERCISE';
+    data: {
+      title: string;
+      difficultyLevel?: number;
+      exerciseData: Prisma.InputJsonValue; // Use the correct input type
+      explanation?: string;
+      tags?: string[];
+      isPublic?: boolean;
+    };
+  };
