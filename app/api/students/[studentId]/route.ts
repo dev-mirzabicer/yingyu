@@ -23,3 +23,26 @@ export async function GET(
     return handleApiError(error);
   }
 }
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { studentId: string } }
+) {
+  try {
+    const teacherId = req.headers.get('X-Teacher-ID');
+    if (!teacherId) {
+      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
+    }
+
+    const { studentId } = params;
+    const archivedStudent = await StudentService.archiveStudent(
+      studentId,
+      teacherId
+    );
+
+    return apiResponse(200, { message: 'Student archived successfully.', student: archivedStudent }, null);
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+

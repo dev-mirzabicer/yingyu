@@ -6,6 +6,7 @@ import {
   FsrsRating,
   FSRS_DEFAULT_PARAMETERS,
   DEFAULT_DESIRED_RETENTION,
+  MemoryState, // The new import is added here.
 } from '@/lib/fsrs/engine';
 import {
   ReviewHistory,
@@ -52,22 +53,18 @@ export const FSRSService = {
     cardId: string,
     rating: FsrsRating,
     reviewType: ReviewType,
-    sessionId?: string // The new, optional parameter.
+    sessionId?: string
   ): Promise<StudentCardState> {
+    // This is the new, corrected implementation from the assistant.
     return prisma.$transaction(async (tx) => {
-      const [studentParams, reviewHistory, previousCardState] =
-        await Promise.all([
-          tx.studentFsrsParams.findFirst({
-            where: { studentId, isActive: true },
-          }),
-          tx.reviewHistory.findMany({
-            where: { studentId, cardId },
-            orderBy: { reviewedAt: 'asc' },
-          }),
-          tx.studentCardState.findUnique({
-            where: { studentId_cardId: { studentId, cardId } },
-          }),
-        ]);
+      const [studentParams, previousCardState] = await Promise.all([
+        tx.studentFsrsParams.findFirst({
+          where: { studentId, isActive: true },
+        }),
+        tx.studentCardState.findUnique({
+          where: { studentId_cardId: { studentId, cardId } },
+        }),
+      ]);
 
       if (!previousCardState) {
         throw new Error(
@@ -75,50 +72,79 @@ export const FSRSService = {
         );
       }
 
-      const engine = new FSRS(
-        (studentParams?.w as number[]) ?? FSRS_DEFAULT_PARAMETERS
-      );
-
-      const fsrsReviews = this._mapHistoryToFsrsReviews(reviewHistory);
-      const fsrsItem = new FSRSItem(fsrsReviews);
-      const stateBeforeReview = engine.memoryState(fsrsItem);
-
+      const w = (studentParams?.w as number[]) ?? FSRS_DEFAULT_PARAMETERS;
+      const engine = new FSRS(w);
       const now = new Date();
-      const daysSinceLastReview = previousCardState.lastReview
-        ? Math.round(
-          (now.getTime() - previousCardState.lastReview.getTime()) /
-          (1000 * 60 * 60 * 24)
-        )
-        : 0;
-      const nextStates = engine.nextStates(
-        stateBeforeReview,
-        DEFAULT_DESIRED_RETENTION,
-        daysSinceLastReview
-      );
+      let newDueDate: Date;
+      let newStability: number;
+      let newDifficulty: number;
 
-      let newState;
-      switch (rating) {
-        case 1: newState = nextStates.again; break;
-        case 2: newState = nextStates.hard; break;
-        case 3: newState = nextStates.good; break;
-        case 4: newState = nextStates.easy; break;
-        default: throw new Error(`Invalid FSRS rating: ${rating}`);
+      // =======================================================================
+      // THE CRITICAL FIX: Implement the correct logic path for NEW cards.
+      // =======================================================================
+      if (previousCardState.state === CardState.NEW) {
+        // This is the first-ever review of this card.
+        // The stability is determined directly by the initial rating.
+        // This logic is based on the core FSRS algorithm.
+        newStability = w[rating - 1];
+        newDifficulty = w[4]; // Initial difficulty
+        newDueDate = new Date(
+          now.getTime() + newStability * 24 * 60 * 60 * 1000
+        );
+      } else {
+        // This is a subsequent review. Use the history-based calculation.
+        const reviewHistory = await tx.reviewHistory.findMany({
+          where: { studentId, cardId },
+          orderBy: { reviewedAt: 'asc' },
+        });
+
+        const fsrsReviews = this._mapHistoryToFsrsReviews(reviewHistory);
+        const fsrsItem = new FSRSItem(fsrsReviews);
+
+        // We must create a MemoryState object from the card's current S and D.
+        const currentMemory = new MemoryState(previousCardState.stability, previousCardState.difficulty);
+
+        const daysSinceLastReview = previousCardState.lastReview
+          ? Math.round(
+            (now.getTime() - previousCardState.lastReview.getTime()) /
+            (1000 * 60 * 60 * 24)
+          )
+          : 0;
+
+        // nextStates requires the current memory state, not one recalculated from history.
+        const nextStates = engine.nextStates(
+          currentMemory,
+          DEFAULT_DESIRED_RETENTION,
+          daysSinceLastReview
+        );
+
+        let newState;
+        switch (rating) {
+          case 1: newState = nextStates.again; break;
+          case 2: newState = nextStates.hard; break;
+          case 3: newState = nextStates.good; break;
+          case 4: newState = nextStates.easy; break;
+          default: throw new Error(`Invalid FSRS rating: ${rating}`);
+        }
+        newStability = newState.memory.stability;
+        newDifficulty = newState.memory.difficulty;
+        newDueDate = new Date(
+          now.getTime() + newState.interval * 24 * 60 * 60 * 1000
+        );
       }
 
-      const newDueDate = new Date(
-        now.getTime() + newState.interval * 24 * 60 * 60 * 1000
-      );
       const newCardStateValue: CardState =
         rating === 1 ? 'RELEARNING' : 'REVIEW';
 
       const updatedState = await tx.studentCardState.update({
         where: { studentId_cardId: { studentId, cardId } },
         data: {
-          stability: newState.memory.stability,
-          difficulty: newState.memory.difficulty,
+          stability: newStability,
+          difficulty: newDifficulty,
           due: newDueDate,
           lastReview: now,
           reps: { increment: 1 },
+          lapses: rating === 1 ? { increment: 1 } : undefined,
           state: newCardStateValue,
         },
       });
@@ -129,11 +155,11 @@ export const FSRSService = {
           cardId,
           rating,
           reviewType,
-          sessionId, // The fix is applied here.
+          sessionId,
           reviewedAt: now,
           previousState: previousCardState.state,
-          previousDifficulty: stateBeforeReview.difficulty,
-          previousStability: stateBeforeReview.stability,
+          previousDifficulty: previousCardState.difficulty,
+          previousStability: previousCardState.stability,
           previousDue: previousCardState.due,
         },
       });
@@ -427,4 +453,3 @@ export const FSRSService = {
     return { cardsRebuilt: allStatesToCreate.length };
   },
 };
-

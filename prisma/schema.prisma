@@ -51,7 +51,6 @@ enum ReviewType {
 }
 
 enum UnitItemType {
-//   FSRS_REVIEW_SESSION | DEPRECATED
   VOCABULARY_DECK
   GRAMMAR_EXERCISE
   LISTENING_EXERCISE
@@ -76,7 +75,7 @@ enum JobStatus {
   RUNNING
   COMPLETED
   FAILED
-  SKIPPED // ADDED: For jobs that are intentionally not run.
+  SKIPPED
 }
 
 // ================================================================= //
@@ -188,10 +187,11 @@ model Session {
   endTime           DateTime?
   progress          Json?
 
-  student         Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  teacher         Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  unit            Unit      @relation(fields: [unitId], references: [id], onDelete: Restrict)
-  currentUnitItem UnitItem? @relation(fields: [currentUnitItemId], references: [id], onDelete: SetNull)
+  student         Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher         Teacher         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  unit            Unit            @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  currentUnitItem UnitItem?       @relation(fields: [currentUnitItemId], references: [id], onDelete: SetNull)
+  reviewHistory   ReviewHistory[]
 }
 
 // ================================================================= //
@@ -355,7 +355,7 @@ model ReviewHistory {
   id                 BigInt     @id @default(autoincrement())
   studentId          String     @db.Uuid
   cardId             String     @db.Uuid
-  lessonId           String?    @db.Uuid
+  sessionId          String?    @db.Uuid
   reviewType         ReviewType
   rating             Int
   responseTimeMs     Int?
@@ -365,14 +365,17 @@ model ReviewHistory {
   previousState      CardState?
   reviewedAt         DateTime   @default(now())
 
-  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  session Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
   @@index([studentId, cardId])
   @@index([reviewedAt])
+  @@index([sessionId])
 }
 
 model StudentFsrsParams {
   id                String   @id @default(uuid()) @db.Uuid
-  studentId         String   @unique @db.Uuid
+  studentId         String   @db.Uuid
   w                 Json
   version           Int      @default(1)
   optimizationScore Float?
@@ -381,6 +384,8 @@ model StudentFsrsParams {
   isActive          Boolean  @default(true)
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, isActive])
 }
 
 model Payment {
@@ -402,3 +407,4 @@ model ClassSchedule {
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
+
