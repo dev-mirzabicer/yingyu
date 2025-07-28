@@ -31,6 +31,7 @@ export interface OperatorServices {
    * The ID of the student for whom the operation is being performed.
    */
   studentId: string;
+  sessionId: string; // Add sessionId
 }
 
 /**
@@ -57,3 +58,4 @@ export interface ProgressOperator {
     services: OperatorServices
   ): Promise<[SessionProgress, SubmissionResult]>;
 }
+

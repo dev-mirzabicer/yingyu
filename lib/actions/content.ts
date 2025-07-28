@@ -13,6 +13,7 @@ import {
   ListeningExercise,
   VocabFillInBlankExercise,
   Prisma,
+  VocabularyCard,
 } from '@prisma/client';
 import { AuthorizationError } from '../auth';
 import { VocabularyExerciseConfigSchema } from '../schemas';
@@ -93,7 +94,6 @@ export const ContentService = {
       throw new AuthorizationError('Unit not found or you cannot edit it.');
     }
 
-    // REFINEMENT: Secure the "update vector".
     if (updateData.isPublic === true) {
       const items = await prisma.unitItem.findMany({
         where: { unitId },
@@ -127,7 +127,6 @@ export const ContentService = {
     creatorId: string,
     itemData: NewUnitItemData
   ): Promise<UnitItem> {
-    // REFINEMENT: Pre-flight validation to prevent public unit contamination.
     const targetUnit = await prisma.unit.findUnique({
       where: { id: unitId },
       select: { isPublic: true },
@@ -197,6 +196,36 @@ export const ContentService = {
    * @param newCreatorId The UUID of the teacher who is forking the exercise.
    * @returns A promise that resolves to the newly created private exercise.
    */
+  async addCardToDeck(
+    deckId: string,
+    teacherId: string,
+    cardData: Omit<Prisma.VocabularyCardCreateInput, 'deck'>
+  ): Promise<VocabularyCard> {
+    const deck = await prisma.vocabularyDeck.findUnique({
+      where: { id: deckId },
+      select: { creatorId: true },
+    });
+
+    if (!deck) {
+      throw new Error(`Deck with ID ${deckId} not found.`);
+    }
+
+    if (deck.creatorId !== teacherId) {
+      throw new AuthorizationError(
+        'You are not authorized to add cards to this deck.'
+      );
+    }
+
+    return prisma.vocabularyCard.create({
+      data: {
+        ...cardData,
+        deck: {
+          connect: { id: deckId },
+        },
+      },
+    });
+  },
+
   async forkExercise(
     exerciseType: UnitItemType,
     exerciseId: string,
@@ -210,7 +239,6 @@ export const ContentService = {
         | 'vocabFillInBlankExercise',
       id: string
     ) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const original = await (prisma[model] as any).findUnique({
         where: { id, isArchived: false },
       });
@@ -230,13 +258,12 @@ export const ContentService = {
         ...dataToCopy
       } = original;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return (prisma[model] as any).create({
         data: {
           ...dataToCopy,
           creatorId: newCreatorId,
-          isPublic: false, // The fork is always private.
-          originExerciseId: original.id, // Link back to the original.
+          isPublic: false,
+          originExerciseId: original.id,
         },
       });
     };
@@ -276,7 +303,6 @@ export const ContentService = {
         | 'vocabFillInBlankExercise',
       id: string
     ) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const exercise = await (prisma[model] as any).findUnique({
         where: { id },
       });
@@ -288,7 +314,6 @@ export const ContentService = {
         );
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return (prisma[model] as any).update({
         where: { id },
         data: { isArchived: true },
@@ -336,7 +361,6 @@ export const ContentService = {
     teacherId: string,
     config: VocabularyExerciseConfig
   ): Promise<UnitItem> {
-    // 1. Meticulous Authorization: Ensure the teacher owns the parent unit.
     const unitItem = await prisma.unitItem.findUnique({
       where: { id: unitItemId },
       include: { unit: { select: { creatorId: true } } },
@@ -348,13 +372,12 @@ export const ContentService = {
       );
     }
 
-    // 2. Robust Validation: Parse the incoming config against the Zod schema.
     const validatedConfig = VocabularyExerciseConfigSchema.parse(config);
 
-    // 3. Perform the update.
     return prisma.unitItem.update({
       where: { id: unitItemId },
       data: { exerciseConfig: validatedConfig ?? Prisma.JsonNull },
     });
   },
 };
+

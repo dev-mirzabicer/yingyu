@@ -40,7 +40,8 @@ export interface ExerciseHandler {
    */
   submitAnswer(
     sessionState: FullSessionState,
-    payload: AnswerPayload
+    payload: AnswerPayload,
+    tx: TransactionClient // Now required
   ): Promise<[SubmissionResult, SessionProgress]>;
 
   /**
@@ -53,3 +54,4 @@ export interface ExerciseHandler {
    */
   isComplete(sessionState: FullSessionState): Promise<boolean>;
 }
+

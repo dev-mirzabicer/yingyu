@@ -51,10 +51,10 @@ export const FSRSService = {
     studentId: string,
     cardId: string,
     rating: FsrsRating,
-    reviewType: ReviewType // The new, required parameter.
+    reviewType: ReviewType,
+    sessionId?: string // The new, optional parameter.
   ): Promise<StudentCardState> {
     return prisma.$transaction(async (tx) => {
-      // 1. Fetch all necessary data in parallel for maximum efficiency.
       const [studentParams, reviewHistory, previousCardState] =
         await Promise.all([
           tx.studentFsrsParams.findFirst({
@@ -69,32 +69,26 @@ export const FSRSService = {
           }),
         ]);
 
-      // 2. Meticulous Validation.
       if (!previousCardState) {
         throw new Error(
           `FSRSService Integrity Error: Cannot record review for a card that has no initial state. StudentId: ${studentId}, CardId: ${cardId}`
         );
       }
 
-      // 3. Instantiate the FSRS engine.
       const engine = new FSRS(
         (studentParams?.w as number[]) ?? FSRS_DEFAULT_PARAMETERS
       );
 
-      // 4. Transform history into FSRSItem.
       const fsrsReviews = this._mapHistoryToFsrsReviews(reviewHistory);
       const fsrsItem = new FSRSItem(fsrsReviews);
-
-      // 5. Calculate the card's state from its complete history.
       const stateBeforeReview = engine.memoryState(fsrsItem);
 
-      // 6. Calculate days elapsed and the next possible states.
       const now = new Date();
       const daysSinceLastReview = previousCardState.lastReview
         ? Math.round(
-            (now.getTime() - previousCardState.lastReview.getTime()) /
-              (1000 * 60 * 60 * 24)
-          )
+          (now.getTime() - previousCardState.lastReview.getTime()) /
+          (1000 * 60 * 60 * 24)
+        )
         : 0;
       const nextStates = engine.nextStates(
         stateBeforeReview,
@@ -102,33 +96,21 @@ export const FSRSService = {
         daysSinceLastReview
       );
 
-      // 7. Select the new state based on the user's rating.
       let newState;
       switch (rating) {
-        case 1:
-          newState = nextStates.again;
-          break;
-        case 2:
-          newState = nextStates.hard;
-          break;
-        case 3:
-          newState = nextStates.good;
-          break;
-        case 4:
-          newState = nextStates.easy;
-          break;
-        default:
-          throw new Error(`Invalid FSRS rating: ${rating}`);
+        case 1: newState = nextStates.again; break;
+        case 2: newState = nextStates.hard; break;
+        case 3: newState = nextStates.good; break;
+        case 4: newState = nextStates.easy; break;
+        default: throw new Error(`Invalid FSRS rating: ${rating}`);
       }
 
-      // 8. Determine the new due date and the correct FSRS state machine value.
       const newDueDate = new Date(
         now.getTime() + newState.interval * 24 * 60 * 60 * 1000
       );
       const newCardStateValue: CardState =
         rating === 1 ? 'RELEARNING' : 'REVIEW';
 
-      // 9. Update the cache table (`StudentCardState`).
       const updatedState = await tx.studentCardState.update({
         where: { studentId_cardId: { studentId, cardId } },
         data: {
@@ -141,13 +123,13 @@ export const FSRSService = {
         },
       });
 
-      // 10. Append the new review to the immutable history log with the correct type.
       await tx.reviewHistory.create({
         data: {
           studentId,
           cardId,
           rating,
-          reviewType, // The fix is applied here.
+          reviewType,
+          sessionId, // The fix is applied here.
           reviewedAt: now,
           previousState: previousCardState.state,
           previousDifficulty: stateBeforeReview.difficulty,
@@ -181,9 +163,7 @@ export const FSRSService = {
     }
 
     const reviewsByCard = allHistory.reduce((acc, review) => {
-      if (!acc[review.cardId]) {
-        acc[review.cardId] = [];
-      }
+      if (!acc[review.cardId]) acc[review.cardId] = [];
       acc[review.cardId].push(review);
       return acc;
     }, {} as Record<string, ReviewHistory[]>);
@@ -228,11 +208,9 @@ export const FSRSService = {
     newItems: VocabularyQueueItem[];
   }> {
     const now = new Date();
-    // Define system defaults for the session configuration.
     const defaults = { newCards: 10, maxDue: 50, minDue: 10 };
     const finalConfig = { ...defaults, ...config };
 
-    // 1. Fetch Due Cards (up to max_due)
     let dueCards = await prisma.studentCardState.findMany({
       where: { studentId, due: { lte: now }, state: { not: 'NEW' } },
       take: finalConfig.maxDue,
@@ -240,7 +218,6 @@ export const FSRSService = {
       select: { cardId: true, due: true },
     });
 
-    // 2. Handle min_due supplementation if necessary.
     if (dueCards.length < finalConfig.minDue) {
       const needed = finalConfig.minDue - dueCards.length;
       const endOfDay = new Date();
@@ -249,9 +226,9 @@ export const FSRSService = {
       const supplementalCards = await prisma.studentCardState.findMany({
         where: {
           studentId,
-          due: { gt: now, lte: endOfDay }, // Cards due later today
+          due: { gt: now, lte: endOfDay },
           state: { not: 'NEW' },
-          cardId: { notIn: dueCards.map((c) => c.cardId) }, // Exclude already fetched
+          cardId: { notIn: dueCards.map((c) => c.cardId) },
         },
         take: needed,
         orderBy: { due: 'asc' },
@@ -260,15 +237,13 @@ export const FSRSService = {
       dueCards = [...dueCards, ...supplementalCards];
     }
 
-    // 3. Fetch New Cards
     const newCards = await prisma.studentCardState.findMany({
       where: { studentId, state: 'NEW' },
       take: finalConfig.newCards,
-      orderBy: { card: { createdAt: 'asc' } }, // Order by original card creation date
+      orderBy: { card: { createdAt: 'asc' } },
       select: { cardId: true, due: true },
     });
 
-    // 4. Map to the queue item contract
     const dueItems: VocabularyQueueItem[] = dueCards.map((c) => ({
       ...c,
       isNew: false,
@@ -338,7 +313,7 @@ export const FSRSService = {
         const previousReview = history[index - 1];
         delta_t = Math.round(
           (review.reviewedAt.getTime() - previousReview.reviewedAt.getTime()) /
-            (1000 * 60 * 60 * 24)
+          (1000 * 60 * 60 * 24)
         );
       }
       return new FSRSReview(review.rating, delta_t);
@@ -365,7 +340,6 @@ export const FSRSService = {
       throw new Error('Invalid payload: studentId is required.');
     }
 
-    // 1. Get ALL assigned card IDs for the student. This is the master list.
     const studentDecks = await prisma.studentDeck.findMany({
       where: { studentId, isActive: true },
       include: { deck: { select: { cards: { select: { id: true } } } } },
@@ -374,7 +348,6 @@ export const FSRSService = {
       studentDecks.flatMap((sd) => sd.deck.cards.map((c) => c.id))
     );
 
-    // 2. Fetch and process history as planned.
     const allHistory = await prisma.reviewHistory.findMany({
       where: { studentId },
       orderBy: { reviewedAt: 'asc' },
@@ -389,7 +362,6 @@ export const FSRSService = {
     const statesFromHistory: Prisma.StudentCardStateCreateManyInput[] = [];
     const reviewedCardIds = new Set<string>();
 
-    // 3. For states from history, calculate a more accurate due date.
     for (const cardId in historyByCard) {
       reviewedCardIds.add(cardId);
       const cardHistory = historyByCard[cardId];
@@ -398,7 +370,6 @@ export const FSRSService = {
       const finalMemoryState = engine.memoryState(fsrsItem);
       const lastReview = cardHistory[cardHistory.length - 1];
 
-      // Simulate the next step to get the correct interval.
       const nextStates = engine.nextStates(
         finalMemoryState,
         DEFAULT_DESIRED_RETENTION,
@@ -406,25 +377,16 @@ export const FSRSService = {
       );
       let nextState;
       switch (lastReview.rating as FsrsRating) {
-        case 1:
-          nextState = nextStates.again;
-          break;
-        case 2:
-          nextState = nextStates.hard;
-          break;
-        case 3:
-          nextState = nextStates.good;
-          break;
-        case 4:
-          nextState = nextStates.easy;
-          break;
-        default:
-          throw new Error('Invalid rating in history');
+        case 1: nextState = nextStates.again; break;
+        case 2: nextState = nextStates.hard; break;
+        case 3: nextState = nextStates.good; break;
+        case 4: nextState = nextStates.easy; break;
+        default: throw new Error('Invalid rating in history');
       }
 
       const accurateDueDate = new Date(
         lastReview.reviewedAt.getTime() +
-          nextState.interval * 24 * 60 * 60 * 1000
+        nextState.interval * 24 * 60 * 60 * 1000
       );
 
       statesFromHistory.push({
@@ -440,7 +402,6 @@ export const FSRSService = {
       });
     }
 
-    // 4. The crucial addition: Identify and create states for 'NEW' cards.
     const newCardIds = [...allAssignedCardIds].filter(
       (id) => !reviewedCardIds.has(id)
     );
@@ -450,16 +411,14 @@ export const FSRSService = {
         cardId,
         state: 'NEW',
         due: new Date(),
-        stability: 1.0, // Default initial values
-        difficulty: 5.0, // Default initial values
+        stability: 1.0,
+        difficulty: 5.0,
         reps: 0,
         lapses: 0,
       }));
 
-    // 5. Combine the two lists.
     const allStatesToCreate = [...statesFromHistory, ...newCardStates];
 
-    // 6. Perform the atomic delete and createMany as planned.
     await prisma.$transaction([
       prisma.studentCardState.deleteMany({ where: { studentId } }),
       prisma.studentCardState.createMany({ data: allStatesToCreate }),
@@ -468,3 +427,4 @@ export const FSRSService = {
     return { cardsRebuilt: allStatesToCreate.length };
   },
 };
+

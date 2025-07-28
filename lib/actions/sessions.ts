@@ -42,7 +42,6 @@ export const SessionService = {
       return null;
     }
 
-    // The `progress` field from the DB is JSON, so we cast it to our strong type.
     return session as FullSessionState;
   },
 
@@ -78,7 +77,6 @@ export const SessionService = {
 
     const firstItem = unit.items[0];
 
-    // Create the session record with the first item active.
     const newSession = await prisma.session.create({
       data: {
         teacherId,
@@ -89,13 +87,11 @@ export const SessionService = {
       },
     });
 
-    // Immediately fetch the full state to pass to the initializer.
     let sessionState = await this.getFullState(newSession.id, teacherId);
     if (!sessionState) {
       throw new Error('Failed to create and retrieve session state.');
     }
 
-    // Delegate to the handler to initialize the first item's progress.
     const handler = getHandler(firstItem.type);
     sessionState = await handler.initialize(sessionState);
 
@@ -120,10 +116,12 @@ export const SessionService = {
     newState: FullSessionState;
     submissionResult: SubmissionResult;
   }> {
-    // REFINEMENT: The entire operation is now wrapped in a transaction for perfect atomicity.
     return prisma.$transaction(async (tx) => {
-      // 1. Fetch initial state using the main prisma client before the transaction.
-      const sessionState = await this.getFullState(sessionId, teacherId);
+      const sessionState = (await tx.session.findFirst({
+        where: { id: sessionId, teacherId },
+        include: fullSessionStateInclude,
+      })) as FullSessionState | null;
+
       if (!sessionState || !sessionState.currentUnitItem) {
         throw new AuthorizationError(
           'Session not found or you are not authorized.'
@@ -133,20 +131,17 @@ export const SessionService = {
         throw new Error('This session is not active.');
       }
 
-      // 2. Get handler and perform in-memory state change.
       const handler = getHandler(sessionState.currentUnitItem.type);
       const [submissionResult, newProgress] = await handler.submitAnswer(
         sessionState,
-        payload
+        payload,
+        tx
       );
 
-      // 3. Update state in-memory for the completion check.
       sessionState.progress = newProgress as SessionProgress;
 
-      // 4. Check completion.
       const isItemComplete = await handler.isComplete(sessionState);
 
-      // 5. Prepare the final update payload.
       const updateData: Prisma.SessionUpdateInput = { progress: newProgress };
       let nextItem = null;
 
@@ -157,22 +152,16 @@ export const SessionService = {
         nextItem = sessionState.unit.items[currentItemIndex + 1];
 
         if (nextItem) {
-          // ROBUST FIX: Use `connect` on the relation field.
           updateData.currentUnitItem = { connect: { id: nextItem.id } };
-          // ROBUST FIX: Use standard `null` to clear a JSON field.
           updateData.progress = Prisma.JsonNull;
         } else {
-          // No next item: the session is complete.
           updateData.status = SessionStatus.COMPLETED;
           updateData.endTime = new Date();
-          // ROBUST FIX: Use `disconnect` on the relation field.
           updateData.currentUnitItem = { disconnect: true };
-          // ROBUST FIX: Use standard `null` to clear a JSON field.
           updateData.progress = Prisma.JsonNull;
         }
       }
 
-      // 6. Perform the single, definitive update using the transactional client.
       const updatedSession = await tx.session.update({
         where: { id: sessionId },
         data: updateData,
@@ -181,7 +170,6 @@ export const SessionService = {
 
       let finalState = updatedSession as unknown as FullSessionState;
 
-      // 7. If we transitioned, initialize the new item *within the same transaction*.
       if (isItemComplete && nextItem) {
         const nextHandler = getHandler(nextItem.type);
         finalState = await nextHandler.initialize(finalState, tx);
@@ -218,3 +206,4 @@ export const SessionService = {
     return updatedSession as unknown as FullSessionState;
   },
 };
+

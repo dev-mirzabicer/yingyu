@@ -18,7 +18,6 @@ import { fullSessionStateInclude } from '@/lib/prisma-includes';
 import { z } from 'zod';
 import { TransactionClient } from './operators/base';
 
-// Zod schema for validating the exercise config from the database.
 const exerciseConfigSchema = z
   .object({
     newCards: z.number().int().min(0).optional(),
@@ -116,7 +115,8 @@ class VocabularyDeckHandler implements ExerciseHandler {
 
   async submitAnswer(
     sessionState: FullSessionState,
-    payload: AnswerPayload
+    payload: AnswerPayload,
+    tx: TransactionClient // Now receives the transaction client from SessionService
   ): Promise<[SubmissionResult, SessionProgress]> {
     const operator =
       this.operators[payload.action as keyof typeof this.operators];
@@ -127,19 +127,20 @@ class VocabularyDeckHandler implements ExerciseHandler {
     if (sessionState.progress?.type !== 'VOCABULARY_DECK')
       throw new Error('Mismatched progress type.');
 
-    return prisma.$transaction(async (tx) => {
-      const services = {
-        tx,
-        fsrsService: FSRSService,
-        studentId: sessionState.studentId,
-      };
-      const [newProgress, result] = await operator.execute(
-        sessionState.progress as SessionProgress,
-        payload.data,
-        services
-      );
-      return [result, newProgress];
-    });
+    // The transaction is now managed by the caller (SessionService).
+    // We just pass the transactional client down to the operator.
+    const services = {
+      tx,
+      fsrsService: FSRSService,
+      studentId: sessionState.studentId,
+      sessionId: sessionState.id, // Pass the session ID
+    };
+    const [newProgress, result] = await operator.execute(
+      sessionState.progress as SessionProgress,
+      payload.data,
+      services
+    );
+    return [result, newProgress];
   }
 
   async isComplete(sessionState: FullSessionState): Promise<boolean> {
@@ -148,10 +149,11 @@ class VocabularyDeckHandler implements ExerciseHandler {
       console.error(
         'isComplete check failed: progress is null or of the wrong type.'
       );
-      return true; // Fail safe
+      return true;
     }
     return progress.payload.queue.length === 0;
   }
 }
 
 export const vocabularyDeckHandler = new VocabularyDeckHandler();
+
