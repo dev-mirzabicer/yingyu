@@ -75,7 +75,7 @@ export type AnswerPayload = {
   /**
    * The data associated with the action, to be validated by the specific operator.
    */
-  data: { [key: string]: unknown };
+  data?: { [key: string]: unknown };
 };
 
 // --- Session Progress State Machine Types ---
