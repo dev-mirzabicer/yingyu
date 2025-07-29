@@ -176,3 +176,21 @@ export type NewUnitItemData =
       isPublic?: boolean;
     };
   };
+
+// ================================================================= //
+// SESSION STARTING WORKFLOW TYPES
+// ================================================================= //
+
+/**
+ * Extended unit type with availability information for session starting
+ */
+export type AvailableUnit = Unit & {
+  items: PopulatedUnitItem[];
+  isAvailable: boolean;
+  missingPrerequisites: string[];
+  cardStats: {
+    total: number;
+    ready: number;
+  };
+  exerciseCount: number;
+};

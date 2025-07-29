@@ -58,6 +58,38 @@ export const ContentService = {
   },
 
   /**
+   * Retrieves all units for a given teacher.
+   * 
+   * @param teacherId The UUID of the teacher.
+   * @returns A promise that resolves to an array of units created by the teacher.
+   */
+  async getUnitsForTeacher(teacherId: string): Promise<Unit[]> {
+    return prisma.unit.findMany({
+      where: { 
+        creatorId: teacherId,
+        isArchived: false 
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  /**
+   * Retrieves all vocabulary decks for a given teacher.
+   * 
+   * @param teacherId The UUID of the teacher.
+   * @returns A promise that resolves to an array of vocabulary decks created by the teacher.
+   */
+  async getDecksForTeacher(teacherId: string): Promise<VocabularyDeck[]> {
+    return prisma.vocabularyDeck.findMany({
+      where: { 
+        creatorId: teacherId,
+        isArchived: false 
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  /**
    * Creates a new, empty Unit (a lesson plan).
    *
    * @param data An object containing the necessary data to create the unit.

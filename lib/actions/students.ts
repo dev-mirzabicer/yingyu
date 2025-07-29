@@ -199,6 +199,52 @@ export const StudentService = {
   },
 
   /**
+   * Retrieves all students for a given teacher with their basic profile information.
+   * 
+   * @param teacherId The UUID of the teacher.
+   * @returns A promise that resolves to an array of students with calculated classes remaining.
+   */
+  async getStudentsForTeacher(teacherId: string): Promise<FullStudentProfile[]> {
+    const students = await prisma.student.findMany({
+      where: { 
+        teacherId: teacherId,
+        isArchived: false 
+      },
+      include: {
+        payments: { orderBy: { paymentDate: 'desc' } },
+        studentDecks: {
+          where: { deck: { isArchived: false } },
+          include: { deck: true },
+          orderBy: { assignedAt: 'desc' },
+        },
+        classSchedules: {
+          where: { scheduledTime: { gte: new Date() } },
+          orderBy: { scheduledTime: 'asc' },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return students.map(student => {
+      const totalPurchased = student.payments.reduce(
+        (sum, p) => sum + p.classesPurchased,
+        0
+      );
+      const totalUsed = student.payments.reduce(
+        (sum, p) => sum + p.classesUsed,
+        0
+      );
+      const classesRemaining = totalPurchased - totalUsed;
+      
+      return {
+        ...student,
+        classesRemaining,
+        upcomingClasses: student.classSchedules,
+      };
+    });
+  },
+
+  /**
    * [INTERNAL METHOD] Initializes the FSRS state for every card in a given deck for a specific student.
    * This method is designed to be called by a trusted background worker, not directly from the API.
    * It performs a high-volume, efficient bulk insertion.
