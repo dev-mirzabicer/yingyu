@@ -9,6 +9,7 @@ export const CreateStudentSchema = z.object({
   proficiencyLevel: z
     .enum(['BEGINNER', 'ELEMENTARY', 'INTERMEDIATE', 'ADVANCED'])
     .optional(),
+  notes: z.string().optional(),
 });
 
 // Schema for recording a payment.

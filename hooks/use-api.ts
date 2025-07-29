@@ -49,14 +49,14 @@ export function useStudent(studentId: string) {
 }
 
 // Helper function to create a student
-export async function createStudent(studentData: { name: string; email: string; notes?: string }) {
+export async function createStudent(studentData: { name: string; email: string; notes?: string }, initialDeckId: string) {
   const response = await fetch('/api/workflows/onboard-student', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Teacher-ID': MOCK_TEACHER_ID,
     },
-    body: JSON.stringify(studentData),
+    body: JSON.stringify({ studentData, initialDeckId }),
   })
 
   if (!response.ok) {
@@ -256,3 +256,22 @@ export function useAvailableUnits(studentId: string) {
     mutate,
   }
 }
+
+export async function assignDeck(studentId: string, deckId: string) {
+  const response = await fetch(`/api/students/${studentId}/decks`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Teacher-ID': MOCK_TEACHER_ID,
+    },
+    body: JSON.stringify({ deckId }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to assign deck');
+  }
+
+  return response.json();
+}
+

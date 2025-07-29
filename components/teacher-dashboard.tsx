@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Calendar, Clock, User, AlertTriangle, TrendingUp, Play } from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { useStudents, createStudent } from "@/hooks/use-api"
+import { useStudents, createStudent, useDecks } from "@/hooks/use-api"
 import { format } from "date-fns"
 import { SessionStartDialog } from "@/components/session-start-dialog"
 
@@ -25,6 +25,7 @@ export function TeacherDashboard() {
   const [sessionStudent, setSessionStudent] = useState<{ id: string; name: string } | null>(null)
   const { toast } = useToast()
   const { students, isLoading, isError, mutate } = useStudents()
+  const { decks } = useDecks()
 
   const handleAddStudent = async () => {
     if (!newStudent.name || !newStudent.email) {
@@ -36,9 +37,19 @@ export function TeacherDashboard() {
       return
     }
 
+    const defaultDeck = decks.find(d => d.name === 'Default Seed Deck') || decks[0];
+    if (!defaultDeck) {
+      toast({
+        title: "Cannot Add Student",
+        description: "There are no vocabulary decks in the system. Please create a deck first before adding a student.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSubmitting(true)
     try {
-      await createStudent(newStudent)
+      await createStudent(newStudent, defaultDeck.id)
       toast({
         title: "Student added successfully",
         description: `${newStudent.name} has been added to your class.`,
@@ -62,7 +73,7 @@ export function TeacherDashboard() {
   const activeStudents = students.filter(s => s.status === 'ACTIVE')
   const lowBalanceStudents = students.filter(s => s.classesRemaining <= 2)
   const totalUpcomingClasses = students.reduce((sum, s) => sum + s.upcomingClasses.length, 0)
-  
+
   const formatNextClass = (student: any) => {
     if (student.upcomingClasses.length === 0) {
       return "No upcoming classes"
@@ -222,9 +233,8 @@ export function TeacherDashboard() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-slate-600">Classes Remaining</span>
                       <span
-                        className={`text-lg font-bold ${
-                          student.classesRemaining <= 2 ? "text-red-600" : "text-slate-900"
-                        }`}
+                        className={`text-lg font-bold ${student.classesRemaining <= 2 ? "text-red-600" : "text-slate-900"
+                          }`}
                       >
                         {student.classesRemaining}
                       </span>
@@ -241,7 +251,7 @@ export function TeacherDashboard() {
                           View Profile
                         </Button>
                       </Link>
-                      <Button 
+                      <Button
                         className="bg-blue-600 hover:bg-blue-700 px-3"
                         onClick={() => setSessionStudent({ id: student.id, name: student.name })}
                         title="Quick Start Session"
@@ -292,15 +302,15 @@ export function TeacherDashboard() {
                 />
               </div>
               <div className="flex justify-end space-x-2">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setIsAddStudentOpen(false)}
                   disabled={isSubmitting}
                 >
                   Cancel
                 </Button>
-                <Button 
-                  onClick={handleAddStudent} 
+                <Button
+                  onClick={handleAddStudent}
                   disabled={isSubmitting}
                   className="bg-blue-600 hover:bg-blue-700"
                 >

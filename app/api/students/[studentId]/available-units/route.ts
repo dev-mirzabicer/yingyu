@@ -88,7 +88,7 @@ export async function GET(
         for (const item of unit.items) {
           if (item.type === 'VOCABULARY_DECK' && item.vocabularyDeck) {
             const deckId = item.vocabularyDeck.id;
-            
+
             // Check if student has this deck assigned
             const studentDeck = await prisma.studentDeck.findFirst({
               where: {
@@ -146,3 +146,4 @@ export async function GET(
     return handleApiError(error);
   }
 }
+

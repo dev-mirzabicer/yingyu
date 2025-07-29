@@ -11,14 +11,15 @@ import { Textarea } from "@/components/ui/textarea"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DataTable } from "@/components/data-table"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { MoreHorizontal, Play, DollarSign, Edit, Archive, BookOpen, Calendar, TrendingUp, Clock } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useStudent } from "@/hooks/use-api"
+import { useStudent, useDecks, assignDeck } from "@/hooks/use-api"
 import { format } from "date-fns"
 import { SessionStartDialog } from "@/components/session-start-dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface StudentProfileProps {
   studentId: string
@@ -26,14 +27,18 @@ interface StudentProfileProps {
 
 export function StudentProfile({ studentId }: StudentProfileProps) {
   const { student, isLoading, isError, mutate } = useStudent(studentId)
+  const { decks, isLoading: decksLoading } = useDecks()
+
   const [notes, setNotes] = useState("")
   const [isEditingNotes, setIsEditingNotes] = useState(false)
   const [isSessionDialogOpen, setIsSessionDialogOpen] = useState(false)
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
+  const [isAssignDeckOpen, setIsAssignDeckOpen] = useState(false)
+  const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null)
+  const [isAssigning, setIsAssigning] = useState(false)
   const [isSavingNotes, setIsSavingNotes] = useState(false)
   const { toast } = useToast()
 
-  // Initialize notes when student data loads
   React.useEffect(() => {
     if (student?.notes) {
       setNotes(student.notes)
@@ -42,25 +47,23 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
 
   const handleSaveNotes = async () => {
     if (!student) return
-    
+
     setIsSavingNotes(true)
     try {
-      // Update student notes via API
       await fetch(`/api/students/${student.id}/notes`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'X-Teacher-ID': 'teacher_123', // Mock teacher ID
+          'X-Teacher-ID': 'ef430bd0-5278-4b0d-a0d3-aecf91ba5cd8',
         },
         body: JSON.stringify({ notes }),
       })
-      
+
       toast({
         title: "Notes updated",
         description: "Student notes have been saved successfully.",
       })
       setIsEditingNotes(false)
-      // Refresh student data
       mutate()
     } catch (error) {
       toast({
@@ -73,6 +76,24 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
     }
   }
 
+  const handleAssignDeck = async () => {
+    if (!selectedDeckId || !student) return;
+    setIsAssigning(true);
+    try {
+      await assignDeck(student.id, selectedDeckId);
+      toast({ title: "Deck assigned successfully!" });
+      mutate(); // Re-fetch student data
+      setIsAssignDeckOpen(false);
+      setSelectedDeckId(null);
+    } catch (error) {
+      toast({ title: "Error assigning deck", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setIsAssigning(false);
+    }
+  }
+
+  const assignedDeckIds = new Set(student?.studentDecks.map(sd => sd.deckId))
+  const availableDecks = decks.filter(deck => !assignedDeckIds.has(deck.id))
 
   const deckColumns = [
     {
@@ -254,9 +275,8 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
                   <div className="flex items-center space-x-2">
                     <Clock className="h-5 w-5 text-blue-600" />
                     <span
-                      className={`text-2xl font-bold ${
-                        student.classesRemaining <= 2 ? "text-red-600" : "text-slate-900"
-                      }`}
+                      className={`text-2xl font-bold ${student.classesRemaining <= 2 ? "text-red-600" : "text-slate-900"
+                        }`}
                     >
                       {student.classesRemaining}
                     </span>
@@ -314,15 +334,15 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
                       disabled={isSavingNotes}
                     />
                     <div className="flex space-x-2">
-                      <Button 
-                        onClick={handleSaveNotes} 
+                      <Button
+                        onClick={handleSaveNotes}
                         disabled={isSavingNotes}
                         className="bg-blue-600 hover:bg-blue-700"
                       >
                         {isSavingNotes ? "Saving..." : "Save Notes"}
                       </Button>
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         onClick={() => {
                           setIsEditingNotes(false)
                           setNotes(student.notes || "")
@@ -347,7 +367,7 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Assigned Decks</CardTitle>
-                  <Button className="bg-blue-600 hover:bg-blue-700">
+                  <Button onClick={() => setIsAssignDeckOpen(true)} className="bg-blue-600 hover:bg-blue-700">
                     <BookOpen className="h-4 w-4 mr-2" />
                     Assign Deck
                   </Button>
@@ -358,7 +378,7 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
                   <div className="text-center py-8">
                     <BookOpen className="h-12 w-12 text-slate-300 mx-auto mb-4" />
                     <p className="text-slate-500 mb-4">No decks assigned yet</p>
-                    <Button className="bg-blue-600 hover:bg-blue-700">
+                    <Button onClick={() => setIsAssignDeckOpen(true)} className="bg-blue-600 hover:bg-blue-700">
                       Assign First Deck
                     </Button>
                   </div>
@@ -385,7 +405,7 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
                   <div className="text-center py-8">
                     <DollarSign className="h-12 w-12 text-slate-300 mx-auto mb-4" />
                     <p className="text-slate-500 mb-4">No payments recorded yet</p>
-                    <Button 
+                    <Button
                       onClick={() => setIsPaymentDialogOpen(true)}
                       className="bg-blue-600 hover:bg-blue-700"
                     >
@@ -435,6 +455,47 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
           onOpenChange={setIsSessionDialogOpen}
         />
 
+        {/* Assign Deck Dialog */}
+        <Dialog open={isAssignDeckOpen} onOpenChange={setIsAssignDeckOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Assign Deck to {student.name}</DialogTitle>
+              <DialogDescription>
+                Select a deck to assign to this student. They will begin seeing cards from this deck in their sessions.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="deck-select">Available Decks</Label>
+                <Select onValueChange={setSelectedDeckId} value={selectedDeckId || undefined}>
+                  <SelectTrigger id="deck-select">
+                    <SelectValue placeholder="Select a deck..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {decksLoading ? (
+                      <SelectItem value="loading" disabled>Loading...</SelectItem>
+                    ) : availableDecks.length > 0 ? (
+                      availableDecks.map(deck => (
+                        <SelectItem key={deck.id} value={deck.id}>
+                          {deck.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-decks" disabled>No more decks to assign</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setIsAssignDeckOpen(false)}>Cancel</Button>
+              <Button onClick={handleAssignDeck} disabled={!selectedDeckId || isAssigning} className="bg-blue-600 hover:bg-blue-700">
+                {isAssigning ? "Assigning..." : "Assign Deck"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Payment Dialog */}
         <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
           <DialogContent>
@@ -463,3 +524,4 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
     </MainLayout>
   )
 }
+
