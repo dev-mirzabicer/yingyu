@@ -20,6 +20,7 @@ export type PopulatedUnitItem = UnitItem & {
   grammarExercise: GrammarExercise | null;
   listeningExercise: ListeningExercise | null;
   vocabFillInBlankExercise: VocabFillInBlankExercise | null;
+  config?: VocabularyExerciseConfig;
 };
 
 export type FullUnit = Unit & {
@@ -27,7 +28,9 @@ export type FullUnit = Unit & {
 };
 
 export type PopulatedStudentDeck = StudentDeck & {
-  deck: VocabularyDeck;
+  deck: VocabularyDeck & {
+    cards?: { id: string }[];
+  };
 };
 
 export type FullStudentProfile = Student & {
@@ -135,6 +138,8 @@ export type FullSessionState = Omit<Session, 'progress'> & {
 export type NewUnitItemData =
   | {
     type: 'VOCABULARY_DECK';
+    order?: number;
+    config?: VocabularyExerciseConfig;
     data: {
       name: string;
       description?: string;
@@ -143,6 +148,8 @@ export type NewUnitItemData =
   }
   | {
     type: 'GRAMMAR_EXERCISE';
+    order?: number;
+    config?: any;
     data: {
       title: string;
       grammarTopic: string;
@@ -155,6 +162,8 @@ export type NewUnitItemData =
   }
   | {
     type: 'LISTENING_EXERCISE';
+    order?: number;
+    config?: any;
     data: {
       title: string;
       difficultyLevel?: number;
@@ -167,6 +176,8 @@ export type NewUnitItemData =
   }
   | {
     type: 'VOCAB_FILL_IN_BLANK_EXERCISE';
+    order?: number;
+    config?: any;
     data: {
       title: string;
       difficultyLevel?: number;

@@ -21,17 +21,17 @@ interface UnitEditorProps {
 }
 
 const exerciseTypes = [
-  { 
-    type: "VOCABULARY_DECK", 
+  {
+    type: "VOCABULARY_DECK",
     label: "Vocabulary Deck",
-    icon: BookOpen, 
-    color: "bg-blue-100 text-blue-700" 
+    icon: BookOpen,
+    color: "bg-blue-100 text-blue-700"
   },
-  { 
-    type: "GRAMMAR_EXERCISE", 
+  {
+    type: "GRAMMAR_EXERCISE",
     label: "Grammar Exercise",
-    icon: FileText, 
-    color: "bg-green-100 text-green-700" 
+    icon: FileText,
+    color: "bg-green-100 text-green-700"
   },
 ]
 
@@ -56,7 +56,7 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
 
   const handleSave = async () => {
     if (!unit || !unitName) return
-    
+
     setIsSaving(true)
     try {
       await updateUnit(unit.id, {
@@ -119,25 +119,25 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
 
   const getExerciseTypeInfo = (type: UnitItemType) => {
     const typeMap: Record<UnitItemType, { label: string; icon: any; color: string }> = {
-      [UnitItemType.VOCABULARY_DECK]: { 
-        label: "Vocabulary", 
-        icon: BookOpen, 
-        color: "bg-blue-100 text-blue-700" 
+      [UnitItemType.VOCABULARY_DECK]: {
+        label: "Vocabulary",
+        icon: BookOpen,
+        color: "bg-blue-100 text-blue-700"
       },
-      [UnitItemType.GRAMMAR_EXERCISE]: { 
-        label: "Grammar", 
-        icon: FileText, 
-        color: "bg-green-100 text-green-700" 
+      [UnitItemType.GRAMMAR_EXERCISE]: {
+        label: "Grammar",
+        icon: FileText,
+        color: "bg-green-100 text-green-700"
       },
-      [UnitItemType.LISTENING_EXERCISE]: { 
-        label: "Listening", 
-        icon: Mic, 
-        color: "bg-purple-100 text-purple-700" 
+      [UnitItemType.LISTENING_EXERCISE]: {
+        label: "Listening",
+        icon: Mic,
+        color: "bg-purple-100 text-purple-700"
       },
-      [UnitItemType.VOCAB_FILL_IN_BLANK_EXERCISE]: { 
-        label: "Fill in Blank", 
-        icon: FileText, 
-        color: "bg-orange-100 text-orange-700" 
+      [UnitItemType.VOCAB_FILL_IN_BLANK_EXERCISE]: {
+        label: "Fill in Blank",
+        icon: FileText,
+        color: "bg-orange-100 text-orange-700"
       },
     }
     return typeMap[type] || { label: "Unknown", icon: FileText, color: "bg-gray-100 text-gray-700" }
@@ -267,11 +267,11 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
                             </div>
                             <div>
                               <h3 className="font-medium text-slate-900">
-                                {item.vocabularyDeck?.name || 
-                                 item.grammarExercise?.name || 
-                                 item.listeningExercise?.name ||
-                                 item.vocabFillInBlankExercise?.name ||
-                                 'Unnamed Exercise'}
+                                {item.vocabularyDeck?.name ||
+                                  item.grammarExercise?.title ||
+                                  item.listeningExercise?.title ||
+                                  item.vocabFillInBlankExercise?.title ||
+                                  'Unnamed Exercise'}
                               </h3>
                               <Badge variant="secondary" className="text-xs">
                                 {typeInfo.label}
@@ -351,14 +351,14 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
                 </div>
               )}
               <div className="flex justify-end space-x-2">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setIsAddExerciseOpen(false)}
                   disabled={isAddingExercise}
                 >
                   Cancel
                 </Button>
-                <Button 
+                <Button
                   onClick={handleAddExercise}
                   disabled={isAddingExercise || !selectedExerciseType || !newExerciseName}
                   className="bg-blue-600 hover:bg-blue-700"

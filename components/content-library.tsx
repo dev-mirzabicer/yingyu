@@ -24,7 +24,7 @@ export function ContentLibrary() {
   const [newUnit, setNewUnit] = useState({ name: "", description: "", isPublic: false })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { toast } = useToast()
-  
+
   const { units, isLoading: unitsLoading, isError: unitsError, mutate: mutateUnits } = useUnits()
   const { decks, isLoading: decksLoading, isError: decksError, mutate: mutateDecks } = useDecks()
 
@@ -96,7 +96,7 @@ export function ContentLibrary() {
       header: "Deck Name",
     },
     {
-      key: "description", 
+      key: "description",
       header: "Description",
       render: (value: string) => value || "No description",
     },
@@ -271,14 +271,14 @@ export function ContentLibrary() {
                 <Label htmlFor="unit-public">Make this unit public</Label>
               </div>
               <div className="flex justify-end space-x-2">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setIsCreateUnitOpen(false)}
                   disabled={isSubmitting}
                 >
                   Cancel
                 </Button>
-                <Button 
+                <Button
                   onClick={handleCreateUnit}
                   disabled={isSubmitting}
                   className="bg-blue-600 hover:bg-blue-700"

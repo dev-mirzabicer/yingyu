@@ -27,7 +27,7 @@ const exerciseTypeInfo = {
     color: "bg-blue-100 text-blue-700",
   },
   [UnitItemType.GRAMMAR_EXERCISE]: {
-    label: "Grammar", 
+    label: "Grammar",
     icon: FileText,
     color: "bg-green-100 text-green-700",
   },
@@ -44,11 +44,11 @@ const exerciseTypeInfo = {
 }
 
 // Component for handling vocabulary deck exercises - modular and focused
-function VocabularyExercise({ 
-  sessionState, 
-  onRevealAnswer, 
-  onSubmitRating, 
-  isLoading 
+function VocabularyExercise({
+  sessionState,
+  onRevealAnswer,
+  onSubmitRating,
+  isLoading
 }: {
   sessionState: FullSessionState
   onRevealAnswer: () => void
@@ -88,8 +88,12 @@ function VocabularyExercise({
                 <p className="text-2xl font-medium text-slate-900 mb-2">
                   {currentCard.chineseTranslation}
                 </p>
-                {currentCard.exampleSentence && (
-                  <p className="text-slate-600">{currentCard.exampleSentence}</p>
+                {currentCard.exampleSentences && (
+                  <p className="text-slate-600">
+                    {typeof currentCard.exampleSentences === 'string' 
+                      ? currentCard.exampleSentences 
+                      : JSON.stringify(currentCard.exampleSentences)}
+                  </p>
                 )}
               </div>
               <Button variant="outline" size="sm">
@@ -215,7 +219,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
 
       await submitAnswer(sessionId, payload)
       await mutate() // Refresh session state
-      
+
       toast({
         title: "Answer revealed",
         description: "Rate how well you knew this card.",
@@ -466,7 +470,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
           <div className="w-full max-w-2xl space-y-6">
             {/* Modular Exercise Rendering - Extensible Architecture */}
             {currentExerciseType === UnitItemType.VOCABULARY_DECK ? (
-              <VocabularyExercise 
+              <VocabularyExercise
                 sessionState={session}
                 onRevealAnswer={handleRevealAnswer}
                 onSubmitRating={handleRating}
