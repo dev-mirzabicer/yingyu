@@ -1,0 +1,128 @@
+services:
+  # PostgreSQL Database
+  database:
+    image: postgres:15-alpine
+    container_name: yingyu-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: english_app
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "5433:5432"
+    networks:
+      - yingyu-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d english_app"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Main Application
+  app:
+    image: node:20-alpine
+    container_name: yingyu-app
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://user:password@database:5432/english_app
+      - CRON_SECRET=KOjijwefewoijKMWOERIFJdl2034fnUGECKWOASW8ycjf
+      - NEXT_TELEMETRY_DISABLED=1
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount source code for development hot reload
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - yingyu-network
+    working_dir: /app
+    command: >
+      sh -c "
+      apk add --no-cache libc6-compat postgresql-client curl &&
+      echo '📦 Installing dependencies...' &&
+      npm ci --legacy-peer-deps --include=dev &&
+      echo '🔧 Setting up Prisma...' &&
+      npx prisma generate &&
+      echo '🗄️  Running database migrations...' &&
+      npx prisma migrate deploy &&
+      echo '🌱 Seeding database...' &&
+      node prisma/seed.js &&
+      echo '🚀 Starting application...' &&
+      npm run dev
+      "
+
+  # Redis for caching and session management (optional but recommended for production)
+  redis:
+    image: redis:7-alpine
+    container_name: yingyu-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - yingyu-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Adminer for database management (development only)
+  adminer:
+    image: adminer:4-standalone
+    container_name: yingyu-adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - ADMINER_DEFAULT_SERVER=database
+      - ADMINER_DESIGN=flat
+    depends_on:
+      - database
+    networks:
+      - yingyu-network
+
+  # Alternative production app using Dockerfile (use: docker-compose --profile production up)
+  app-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: yingyu-app-prod
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://user:password@database:5432/english_app
+      - CRON_SECRET=KOjijwefewoijKMWOERIFJdl2034fnUGECKWOASW8ycjf
+      - NEXT_TELEMETRY_DISABLED=1
+    ports:
+      - "3001:3000"  # Different port to avoid conflict with dev
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - yingyu-network
+    profiles:
+      - production
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  yingyu-network:
+    driver: bridge
