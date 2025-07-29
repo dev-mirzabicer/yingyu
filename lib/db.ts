@@ -3,6 +3,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 // The definitive list of models that are protected by our soft-delete/archiving system.
 const ARCHIVABLE_MODELS: Prisma.ModelName[] = [
   'Student',
+  'Unit',
   'VocabularyDeck',
   'GrammarExercise',
   'ListeningExercise',
@@ -52,8 +53,8 @@ function createPrismaClient() {
               } else {
                 (
                   args as
-                    | Prisma.StudentFindManyArgs
-                    | Prisma.StudentUpdateManyArgs
+                  | Prisma.StudentFindManyArgs
+                  | Prisma.StudentUpdateManyArgs
                 ).where = { isArchived: false };
               }
             }

@@ -3,7 +3,7 @@ import { FullStudentProfile, FullUnit, FullSessionState } from '@/lib/types'
 import { Unit, VocabularyDeck } from '@prisma/client'
 
 // Mock teacher ID for now - in production this would come from auth context
-const MOCK_TEACHER_ID = 'ef430bd0-5278-4b0d-a0d3-aecf91ba5cd8';
+const MOCK_TEACHER_ID = '8326a8fc-91c3-475a-8fc2-68b4896449cd';
 
 // Base fetcher function with teacher auth header
 const fetcher = async (url: string) => {

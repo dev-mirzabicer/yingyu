@@ -146,6 +146,7 @@ model Unit {
   name        String
   description String?
   isPublic    Boolean    @default(false)
+  isArchived  Boolean    @default(false)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
