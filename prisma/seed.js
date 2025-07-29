@@ -97,9 +97,9 @@ async function main() {
         data: {
           unitId: unit.id,
           type: 'VOCABULARY_DECK',
-          relatedId: deck.id,
+          vocabularyDeckId: deck.id,
           order: 0,
-          config: {
+          exerciseConfig: {
             newCardsPerSession: 5,
             maxReviewsPerSession: 20,
           },

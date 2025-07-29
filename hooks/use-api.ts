@@ -3,7 +3,7 @@ import { FullStudentProfile, FullUnit, FullSessionState } from '@/lib/types'
 import { Unit, VocabularyDeck } from '@prisma/client'
 
 // Mock teacher ID for now - in production this would come from auth context
-const MOCK_TEACHER_ID = 'teacher_123'
+const MOCK_TEACHER_ID = 'ef430bd0-5278-4b0d-a0d3-aecf91ba5cd8';
 
 // Base fetcher function with teacher auth header
 const fetcher = async (url: string) => {
@@ -12,11 +12,11 @@ const fetcher = async (url: string) => {
       'X-Teacher-ID': MOCK_TEACHER_ID,
     },
   })
-  
+
   if (!response.ok) {
     throw new Error('Failed to fetch data')
   }
-  
+
   const data = await response.json()
   return data.data // API responses are wrapped in { data, error } format
 }
@@ -24,7 +24,7 @@ const fetcher = async (url: string) => {
 // Hook to fetch all students for the current teacher
 export function useStudents() {
   const { data, error, isLoading, mutate } = useSWR<FullStudentProfile[]>('/api/students', fetcher)
-  
+
   return {
     students: data || [],
     isLoading,
@@ -39,7 +39,7 @@ export function useStudent(studentId: string) {
     studentId ? `/api/students/${studentId}` : null,
     fetcher
   )
-  
+
   return {
     student: data,
     isLoading,
@@ -58,11 +58,11 @@ export async function createStudent(studentData: { name: string; email: string; 
     },
     body: JSON.stringify(studentData),
   })
-  
+
   if (!response.ok) {
     throw new Error('Failed to create student')
   }
-  
+
   return response.json()
 }
 
@@ -74,18 +74,18 @@ export async function archiveStudent(studentId: string) {
       'X-Teacher-ID': MOCK_TEACHER_ID,
     },
   })
-  
+
   if (!response.ok) {
     throw new Error('Failed to archive student')
   }
-  
+
   return response.json()
 }
 
 // Hook to fetch all units for the current teacher
 export function useUnits() {
   const { data, error, isLoading, mutate } = useSWR<Unit[]>('/api/units', fetcher)
-  
+
   return {
     units: data || [],
     isLoading,
@@ -97,7 +97,7 @@ export function useUnits() {
 // Hook to fetch all vocabulary decks for the current teacher  
 export function useDecks() {
   const { data, error, isLoading, mutate } = useSWR<VocabularyDeck[]>('/api/decks', fetcher)
-  
+
   return {
     decks: data || [],
     isLoading,
@@ -112,7 +112,7 @@ export function useUnit(unitId: string) {
     unitId ? `/api/units/${unitId}` : null,
     fetcher
   )
-  
+
   return {
     unit: data,
     isLoading,
@@ -131,11 +131,11 @@ export async function createUnit(unitData: { name: string; description?: string;
     },
     body: JSON.stringify(unitData),
   })
-  
+
   if (!response.ok) {
     throw new Error('Failed to create unit')
   }
-  
+
   return response.json()
 }
 
@@ -149,11 +149,11 @@ export async function updateUnit(unitId: string, unitData: { name?: string; desc
     },
     body: JSON.stringify(unitData),
   })
-  
+
   if (!response.ok) {
     throw new Error('Failed to update unit')
   }
-  
+
   return response.json()
 }
 
@@ -167,11 +167,11 @@ export async function addExerciseToUnit(unitId: string, exerciseData: { type: st
     },
     body: JSON.stringify(exerciseData),
   })
-  
+
   if (!response.ok) {
     throw new Error('Failed to add exercise to unit')
   }
-  
+
   return response.json()
 }
 
@@ -181,7 +181,7 @@ export function useSession(sessionId: string) {
     sessionId ? `/api/sessions/${sessionId}` : null,
     fetcher
   )
-  
+
   return {
     session: data,
     isLoading,
@@ -200,11 +200,11 @@ export async function startSession(studentId: string, unitId: string) {
     },
     body: JSON.stringify({ studentId, unitId }),
   })
-  
+
   if (!response.ok) {
     throw new Error('Failed to start session')
   }
-  
+
   return response.json()
 }
 
@@ -218,11 +218,11 @@ export async function submitAnswer(sessionId: string, payload: { action: string;
     },
     body: JSON.stringify(payload),
   })
-  
+
   if (!response.ok) {
     throw new Error('Failed to submit answer')
   }
-  
+
   return response.json()
 }
 
@@ -234,11 +234,11 @@ export async function endSession(sessionId: string) {
       'X-Teacher-ID': MOCK_TEACHER_ID,
     },
   })
-  
+
   if (!response.ok) {
     throw new Error('Failed to end session')
   }
-  
+
   return response.json()
 }
 
@@ -248,7 +248,7 @@ export function useAvailableUnits(studentId: string) {
     studentId ? `/api/students/${studentId}/available-units` : null,
     fetcher
   )
-  
+
   return {
     units: data || [],
     isLoading,
