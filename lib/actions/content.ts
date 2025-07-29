@@ -65,9 +65,9 @@ export const ContentService = {
    */
   async getUnitsForTeacher(teacherId: string): Promise<Unit[]> {
     return prisma.unit.findMany({
-      where: { 
+      where: {
         creatorId: teacherId,
-        isArchived: false 
+        isArchived: false
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -81,9 +81,9 @@ export const ContentService = {
    */
   async getDecksForTeacher(teacherId: string): Promise<VocabularyDeck[]> {
     return prisma.vocabularyDeck.findMany({
-      where: { 
+      where: {
         creatorId: teacherId,
-        isArchived: false 
+        isArchived: false
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -263,55 +263,78 @@ export const ContentService = {
     exerciseId: string,
     newCreatorId: string
   ): Promise<Exercise> {
-    const findAndCopy = async (
-      model:
-        | 'vocabularyDeck'
-        | 'grammarExercise'
-        | 'listeningExercise'
-        | 'vocabFillInBlankExercise',
-      id: string
-    ) => {
-      const original = await (prisma[model] as any).findUnique({
-        where: { id, isArchived: false },
-      });
+    // The entire forking process must be atomic.
+    return prisma.$transaction(async (tx) => {
+      const findAndCopy = async (
+        model:
+          | 'vocabularyDeck'
+          | 'grammarExercise'
+          | 'listeningExercise'
+          | 'vocabFillInBlankExercise',
+        id: string
+      ) => {
+        const original = await (tx as any)[model].findUnique({
+          where: { id, isArchived: false },
+          include: model === 'vocabularyDeck' ? { cards: true } : undefined,
+        });
 
-      if (!original)
-        throw new Error('Original exercise not found or is archived.');
-      if (!original.isPublic)
-        throw new Error('Only public exercises can be forked.');
+        if (!original)
+          throw new Error('Original exercise not found or is archived.');
+        if (!original.isPublic)
+          throw new Error('Only public exercises can be forked.');
 
-      const {
-        id: _,
-        creatorId,
-        isPublic,
-        originExerciseId,
-        createdAt,
-        updatedAt,
-        ...dataToCopy
-      } = original;
+        const {
+          id: _,
+          creatorId,
+          isPublic,
+          originExerciseId,
+          createdAt,
+          updatedAt,
+          cards, // Exclude cards from the shallow copy
+          ...dataToCopy
+        } = original;
 
-      return (prisma[model] as any).create({
-        data: {
-          ...dataToCopy,
-          creatorId: newCreatorId,
-          isPublic: false,
-          originExerciseId: original.id,
-        },
-      });
-    };
+        // Create the new forked exercise
+        const newExercise = await (tx as any)[model].create({
+          data: {
+            ...dataToCopy,
+            name: `${original.name} (Copy)`, // Append (Copy) to the name
+            creatorId: newCreatorId,
+            isPublic: false, // Forks are always private
+            originExerciseId: original.id,
+          },
+        });
 
-    switch (exerciseType) {
-      case UnitItemType.VOCABULARY_DECK:
-        return findAndCopy('vocabularyDeck', exerciseId);
-      case UnitItemType.GRAMMAR_EXERCISE:
-        return findAndCopy('grammarExercise', exerciseId);
-      case UnitItemType.LISTENING_EXERCISE:
-        return findAndCopy('listeningExercise', exerciseId);
-      case UnitItemType.VOCAB_FILL_IN_BLANK_EXERCISE:
-        return findAndCopy('vocabFillInBlankExercise', exerciseId);
-      default:
-        throw new Error(`Forking not supported for type: ${exerciseType}`);
-    }
+        // **Meticulous Deep Copy for Vocabulary Decks**
+        if (model === 'vocabularyDeck' && cards && cards.length > 0) {
+          const cardsToCreate = cards.map((card: VocabularyCard) => {
+            const { id: _cId, deckId: _dId, ...cardData } = card;
+            return {
+              ...cardData,
+              deckId: newExercise.id, // Link to the new forked deck
+            };
+          });
+          await tx.vocabularyCard.createMany({
+            data: cardsToCreate,
+          });
+        }
+
+        return newExercise;
+      };
+
+      switch (exerciseType) {
+        case UnitItemType.VOCABULARY_DECK:
+          return findAndCopy('vocabularyDeck', exerciseId);
+        case UnitItemType.GRAMMAR_EXERCISE:
+          return findAndCopy('grammarExercise', exerciseId);
+        case UnitItemType.LISTENING_EXERCISE:
+          return findAndCopy('listeningExercise', exerciseId);
+        case UnitItemType.VOCAB_FILL_IN_BLANK_EXERCISE:
+          return findAndCopy('vocabFillInBlankExercise', exerciseId);
+        default:
+          throw new Error(`Forking not supported for type: ${exerciseType}`);
+      }
+    });
   },
 
   /**

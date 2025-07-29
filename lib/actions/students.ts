@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import { authorizeTeacherForStudent } from '@/lib/auth';
+import { authorizeTeacherForStudent, AuthorizationError } from '@/lib/auth';
 import { FullStudentProfile, PopulatedStudentDeck } from '@/lib/types';
 import {
   CardState,
@@ -8,15 +8,21 @@ import {
   Prisma,
   Student,
   StudentDeck,
+  ClassSchedule,
+  ClassStatus,
 } from '@prisma/client';
-import { CreateStudentSchema, RecordPaymentSchema } from '../schemas';
+import {
+  CreateStudentSchema,
+  RecordPaymentSchema,
+  CreateScheduleSchema,
+  UpdateScheduleSchema,
+} from '../schemas';
 import { z } from 'zod';
-
-// This import is no longer needed as the service is self-contained.
-// import { JobService } from './jobs';
 
 type CreateStudentInput = z.infer<typeof CreateStudentSchema>;
 type RecordPaymentInput = z.infer<typeof RecordPaymentSchema>;
+type CreateScheduleInput = z.infer<typeof CreateScheduleSchema>;
+type UpdateScheduleInput = z.infer<typeof UpdateScheduleSchema>;
 
 /**
  * Service responsible for managing student profiles, their assignments,
@@ -80,7 +86,6 @@ export const StudentService = {
           orderBy: { assignedAt: 'desc' },
         },
         classSchedules: {
-          where: { scheduledTime: { gte: new Date() } },
           orderBy: { scheduledTime: 'asc' },
         },
       },
@@ -206,9 +211,9 @@ export const StudentService = {
    */
   async getStudentsForTeacher(teacherId: string): Promise<FullStudentProfile[]> {
     const students = await prisma.student.findMany({
-      where: { 
+      where: {
         teacherId: teacherId,
-        isArchived: false 
+        isArchived: false
       },
       include: {
         payments: { orderBy: { paymentDate: 'desc' } },
@@ -218,7 +223,6 @@ export const StudentService = {
           orderBy: { assignedAt: 'desc' },
         },
         classSchedules: {
-          where: { scheduledTime: { gte: new Date() } },
           orderBy: { scheduledTime: 'asc' },
         },
       },
@@ -235,12 +239,109 @@ export const StudentService = {
         0
       );
       const classesRemaining = totalPurchased - totalUsed;
-      
+
       return {
         ...student,
         classesRemaining,
         upcomingClasses: student.classSchedules,
       };
+    });
+  },
+
+  // --- NEW CLASS SCHEDULING METHODS ---
+
+  /**
+   * Retrieves all class schedules for a specific student.
+   * @param studentId The UUID of the student.
+   * @param teacherId The UUID of the teacher for authorization.
+   * @returns A promise that resolves to an array of ClassSchedule objects.
+   */
+  async getSchedulesForStudent(
+    studentId: string,
+    teacherId: string
+  ): Promise<ClassSchedule[]> {
+    await authorizeTeacherForStudent(teacherId, studentId);
+    return prisma.classSchedule.findMany({
+      where: { studentId },
+      orderBy: { scheduledTime: 'asc' },
+    });
+  },
+
+  /**
+   * Creates a new class schedule for a student.
+   * @param studentId The UUID of the student.
+   * @param teacherId The UUID of the teacher for authorization.
+   * @param scheduleData The data for the new schedule.
+   * @returns A promise that resolves to the newly created ClassSchedule object.
+   */
+  async createSchedule(
+    studentId: string,
+    teacherId: string,
+    scheduleData: CreateScheduleInput
+  ): Promise<ClassSchedule> {
+    await authorizeTeacherForStudent(teacherId, studentId, {
+      checkIsActive: true,
+    });
+    return prisma.classSchedule.create({
+      data: {
+        studentId,
+        ...scheduleData,
+      },
+    });
+  },
+
+  /**
+   * Updates an existing class schedule.
+   * @param scheduleId The UUID of the schedule to update.
+   * @param teacherId The UUID of the teacher for authorization.
+   * @param updateData The data to update on the schedule.
+   * @returns A promise that resolves to the updated ClassSchedule object.
+   */
+  async updateSchedule(
+    scheduleId: string,
+    teacherId: string,
+    updateData: UpdateScheduleInput
+  ): Promise<ClassSchedule> {
+    const schedule = await prisma.classSchedule.findUnique({
+      where: { id: scheduleId },
+      select: { student: { select: { teacherId: true } } },
+    });
+
+    if (!schedule || schedule.student.teacherId !== teacherId) {
+      throw new AuthorizationError(
+        'Schedule not found or you are not authorized to modify it.'
+      );
+    }
+
+    return prisma.classSchedule.update({
+      where: { id: scheduleId },
+      data: updateData,
+    });
+  },
+
+  /**
+   * Deletes a class schedule.
+   * @param scheduleId The UUID of the schedule to delete.
+   * @param teacherId The UUID of the teacher for authorization.
+   * @returns A promise that resolves to the deleted ClassSchedule object.
+   */
+  async deleteSchedule(
+    scheduleId: string,
+    teacherId: string
+  ): Promise<ClassSchedule> {
+    const schedule = await prisma.classSchedule.findUnique({
+      where: { id: scheduleId },
+      select: { student: { select: { teacherId: true } } },
+    });
+
+    if (!schedule || schedule.student.teacherId !== teacherId) {
+      throw new AuthorizationError(
+        'Schedule not found or you are not authorized to delete it.'
+      );
+    }
+
+    return prisma.classSchedule.delete({
+      where: { id: scheduleId },
     });
   },
 
@@ -289,3 +390,4 @@ export const StudentService = {
     return { cardsInitialized: result.count };
   },
 };
+

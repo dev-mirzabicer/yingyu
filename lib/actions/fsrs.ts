@@ -167,20 +167,27 @@ export const FSRSService = {
    * [INTERNAL] Asynchronously computes and saves optimal FSRS parameters for a student.
    * This is designed to be called by a background worker.
    *
-   * @param studentId The UUID of the student to optimize.
-   * @returns A promise that resolves to the newly created StudentFsrsParams record.
+   * @param payload The job payload containing the studentId.
+   * @returns A promise that resolves to the newly created StudentFsrsParams record or a status message.
    */
-  async _optimizeParameters(studentId: string) {
+  async _optimizeParameters(
+    payload: Prisma.JsonValue
+  ): Promise<{ message: string; params?: any }> {
+    const { studentId } = payload as { studentId: string };
+    if (!studentId) {
+      throw new Error('Invalid payload: studentId is required.');
+    }
+
     const allHistory = await prisma.reviewHistory.findMany({
       where: { studentId },
       orderBy: { reviewedAt: 'asc' },
     });
 
-    if (allHistory.length < 100) {
-      console.log(
-        `Skipping optimization for student ${studentId}: insufficient review history.`
-      );
-      return null;
+    // FSRS optimization requires a meaningful amount of data.
+    if (allHistory.length < 50) {
+      const message = `Skipping optimization for student ${studentId}: insufficient review history (${allHistory.length} reviews). At least 50 are recommended.`;
+      console.log(message);
+      return { message };
     }
 
     const reviewsByCard = allHistory.reduce((acc, review) => {
@@ -197,7 +204,7 @@ export const FSRSService = {
     const engine = new FSRS();
     const newWeights = await engine.computeParameters(trainingSet, true);
 
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       await tx.studentFsrsParams.updateMany({
         where: { studentId },
         data: { isActive: false },
@@ -208,10 +215,16 @@ export const FSRSService = {
           w: newWeights,
           isActive: true,
           trainingDataSize: allHistory.length,
+          lastOptimized: new Date(),
         },
       });
       return newParams;
     });
+
+    return {
+      message: `Successfully optimized parameters for student ${studentId}.`,
+      params: result,
+    };
   },
 
   /**
@@ -307,16 +320,16 @@ export const FSRSService = {
     });
     if (!student || student.status !== StudentStatus.ACTIVE) return [];
 
+    // This raw query is highly efficient for calculating retrievability on the fly.
     return prisma.$queryRaw<VocabularyCard[]>`
       SELECT vc.*
       FROM "VocabularyCard" vc
       JOIN "StudentCardState" scs ON vc.id = scs."cardId"
       WHERE scs."studentId" = ${studentId}::uuid
         AND scs.state = 'REVIEW'
+        AND scs.stability > 0 -- Avoid division by zero
         AND (
-          exp(-1.0 / scs.stability) > ${LISTENING_CANDIDATE_RETRIEVABILITY_THRESHOLD}
-          OR
-          scs.due > NOW() + INTERVAL '30 days'
+          exp(-extract(epoch from (now() - scs."lastReview")) / (86400 * scs.stability)) > ${LISTENING_CANDIDATE_RETRIEVABILITY_THRESHOLD}
         )
       ORDER BY random()
       LIMIT 20;
@@ -346,6 +359,25 @@ export const FSRSService = {
   ): Promise<Job> {
     await authorizeTeacherForStudent(teacherId, studentId);
     return JobService.createJob(teacherId, 'REBUILD_FSRS_CACHE', {
+      studentId,
+    });
+  },
+
+  /**
+   * Creates a background job to optimize FSRS parameters for a student.
+   *
+   * @param studentId The UUID of the student.
+   * @param teacherId The UUID of the teacher requesting the optimization.
+   * @returns A promise that resolves to the created Job object.
+   */
+  async createOptimizeParametersJob(
+    studentId: string,
+    teacherId: string
+  ): Promise<Job> {
+    await authorizeTeacherForStudent(teacherId, studentId, {
+      checkIsActive: true,
+    });
+    return JobService.createJob(teacherId, 'OPTIMIZE_FSRS_PARAMS', {
       studentId,
     });
   },

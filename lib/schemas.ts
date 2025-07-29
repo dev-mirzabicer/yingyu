@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ClassStatus } from '@prisma/client';
 
 // Schema for creating a new student.
 // Ensures that essential data is present and correctly formatted.
@@ -35,7 +36,7 @@ export const CreateUnitSchema = z.object({
   isPublic: z.boolean().optional(),
 });
 
-// NEW: Schema for updating an existing Unit. All fields are optional.
+// Schema for updating an existing Unit. All fields are optional.
 export const UpdateUnitSchema = z.object({
   name: z
     .string()
@@ -45,7 +46,7 @@ export const UpdateUnitSchema = z.object({
   isPublic: z.boolean().optional(),
 });
 
-// NEW: Schema for updating a student's notes.
+// Schema for updating a student's notes.
 export const UpdateNotesSchema = z.object({
   notes: z.string().max(5000, 'Notes cannot exceed 5000 characters.').optional(),
 });
@@ -76,3 +77,40 @@ export const VocabularyExerciseConfigSchema = z
   })
   .optional();
 
+// --- NEW SCHEMAS ---
+
+/**
+ * Validates the payload for the job that optimizes FSRS parameters.
+ */
+export const OptimizeParamsPayloadSchema = z.object({
+  studentId: z.string().uuid({ message: 'Invalid student UUID.' }),
+});
+
+/**
+ * Validates the request body for creating a new class schedule.
+ */
+export const CreateScheduleSchema = z.object({
+  scheduledTime: z.coerce.date({
+    errorMap: () => ({ message: 'Invalid scheduled time format.' }),
+  }),
+});
+
+/**
+ * Validates the request body for updating a class schedule.
+ */
+export const UpdateScheduleSchema = z.object({
+  scheduledTime: z.coerce
+    .date({
+      errorMap: () => ({ message: 'Invalid scheduled time format.' }),
+    })
+    .optional(),
+  status: z.nativeEnum(ClassStatus).optional(),
+});
+
+/**
+ * Validates the request body for updating teacher settings.
+ */
+export const UpdateTeacherSettingsSchema = z.object({
+  paymentAlertThreshold: z.number().int().min(0).optional(),
+  preferredLessonDuration: z.number().int().positive().optional(),
+});

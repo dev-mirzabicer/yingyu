@@ -5,6 +5,7 @@ import { FSRSService } from './actions/fsrs';
 import {
   InitializeCardStatesPayloadSchema,
   RebuildCachePayloadSchema,
+  OptimizeParamsPayloadSchema, // New
 } from './schemas';
 
 /**
@@ -77,6 +78,12 @@ export async function processPendingJobs() {
           resultPayload = await FSRSService._rebuildCacheForStudent(payload);
           break;
         }
+        // --- NEW JOB HANDLER ---
+        case JobType.OPTIMIZE_FSRS_PARAMS: {
+          const payload = OptimizeParamsPayloadSchema.parse(job.payload);
+          resultPayload = await FSRSService._optimizeParameters(payload);
+          break;
+        }
         default:
           throw new Error(`Unknown or unimplemented job type: ${job.type}`);
       }
@@ -108,3 +115,4 @@ export async function processPendingJobs() {
 
   return { processedJobs: lockedJobs.length, jobResults };
 }
+
