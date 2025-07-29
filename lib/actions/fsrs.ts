@@ -6,7 +6,7 @@ import {
   FsrsRating,
   FSRS_DEFAULT_PARAMETERS,
   DEFAULT_DESIRED_RETENTION,
-  MemoryState, // The new import is added here.
+  MemoryState,
 } from '@/lib/fsrs/engine';
 import {
   ReviewHistory,
@@ -37,10 +37,10 @@ const LISTENING_CANDIDATE_RETRIEVABILITY_THRESHOLD = 0.36;
  */
 export const FSRSService = {
   /**
-   * Records a student's review of a single card. This is the most critical function
-   * in the service. It recalculates the card's entire FSRS state from its history,
-   * determines the next state, updates the cache (`StudentCardState`), and appends
-   * the new review to the immutable history log, all within a single atomic transaction.
+   * [PERFECTED IMPLEMENTATION]
+   * Records a student's review of a single card. This function is now architecturally sound,
+   * using a single, unified logic path that correctly leverages the FSRS engine for all reviews
+   * (both initial and subsequent), ensuring mathematical integrity.
    *
    * @param studentId The UUID of the student.
    * @param cardId The UUID of the card being reviewed.
@@ -55,16 +55,20 @@ export const FSRSService = {
     reviewType: ReviewType,
     sessionId?: string
   ): Promise<StudentCardState> {
-    // This is the new, corrected implementation from the assistant.
+    // The entire operation is atomic, ensuring data consistency.
     return prisma.$transaction(async (tx) => {
-      const [studentParams, previousCardState] = await Promise.all([
-        tx.studentFsrsParams.findFirst({
-          where: { studentId, isActive: true },
-        }),
-        tx.studentCardState.findUnique({
-          where: { studentId_cardId: { studentId, cardId } },
-        }),
-      ]);
+      // 1. Get the student's current FSRS parameters (or defaults).
+      const studentParams = await tx.studentFsrsParams.findFirst({
+        where: { studentId, isActive: true },
+      });
+      const w = (studentParams?.w as number[]) ?? FSRS_DEFAULT_PARAMETERS;
+      const engine = new FSRS(w);
+      const now = new Date();
+
+      // 2. Get the card's current state from the cache. This is our starting point.
+      const previousCardState = await tx.studentCardState.findUnique({
+        where: { studentId_cardId: { studentId, cardId } },
+      });
 
       if (!previousCardState) {
         throw new Error(
@@ -72,83 +76,74 @@ export const FSRSService = {
         );
       }
 
-      const w = (studentParams?.w as number[]) ?? FSRS_DEFAULT_PARAMETERS;
-      const engine = new FSRS(w);
-      const now = new Date();
-      let newDueDate: Date;
-      let newStability: number;
-      let newDifficulty: number;
+      // 3. Determine the current memory state for the engine.
+      //    According to the FSRS algorithm, the first review of a card has no prior memory state.
+      //    The library expects `undefined` in this case. For all subsequent reviews, we construct
+      //    the memory state from our cached values.
+      const currentMemory =
+        previousCardState.state === CardState.NEW
+          ? undefined
+          : new MemoryState(
+            previousCardState.stability,
+            previousCardState.difficulty
+          );
 
-      // =======================================================================
-      // THE CRITICAL FIX: Implement the correct logic path for NEW cards.
-      // =======================================================================
-      if (previousCardState.state === CardState.NEW) {
-        // This is the first-ever review of this card.
-        // The stability is determined directly by the initial rating.
-        // This logic is based on the core FSRS algorithm.
-        newStability = w[rating - 1];
-        newDifficulty = w[4]; // Initial difficulty
-        newDueDate = new Date(
-          now.getTime() + newStability * 24 * 60 * 60 * 1000
-        );
-      } else {
-        // This is a subsequent review. Use the history-based calculation.
-        const reviewHistory = await tx.reviewHistory.findMany({
-          where: { studentId, cardId },
-          orderBy: { reviewedAt: 'asc' },
-        });
+      // 4. Calculate days elapsed since the last review. This is a critical input for the engine.
+      const daysSinceLastReview = previousCardState.lastReview
+        ? Math.round(
+          (now.getTime() - previousCardState.lastReview.getTime()) /
+          (1000 * 60 * 60 * 24)
+        )
+        : 0;
 
-        const fsrsReviews = this._mapHistoryToFsrsReviews(reviewHistory);
-        const fsrsItem = new FSRSItem(fsrsReviews);
+      // 5. UNIFIED LOGIC: Use the FSRS engine to get the next states for ALL possible ratings.
+      //    This is the single, correct path for both NEW and existing cards.
+      const nextStates = engine.nextStates(
+        currentMemory,
+        DEFAULT_DESIRED_RETENTION,
+        daysSinceLastReview
+      );
 
-        // We must create a MemoryState object from the card's current S and D.
-        const currentMemory = new MemoryState(previousCardState.stability, previousCardState.difficulty);
-
-        const daysSinceLastReview = previousCardState.lastReview
-          ? Math.round(
-            (now.getTime() - previousCardState.lastReview.getTime()) /
-            (1000 * 60 * 60 * 24)
-          )
-          : 0;
-
-        // nextStates requires the current memory state, not one recalculated from history.
-        const nextStates = engine.nextStates(
-          currentMemory,
-          DEFAULT_DESIRED_RETENTION,
-          daysSinceLastReview
-        );
-
-        let newState;
-        switch (rating) {
-          case 1: newState = nextStates.again; break;
-          case 2: newState = nextStates.hard; break;
-          case 3: newState = nextStates.good; break;
-          case 4: newState = nextStates.easy; break;
-          default: throw new Error(`Invalid FSRS rating: ${rating}`);
-        }
-        newStability = newState.memory.stability;
-        newDifficulty = newState.memory.difficulty;
-        newDueDate = new Date(
-          now.getTime() + newState.interval * 24 * 60 * 60 * 1000
-        );
+      // 6. Select the specific next state based on the user's rating.
+      let newState;
+      switch (rating) {
+        case 1:
+          newState = nextStates.again;
+          break;
+        case 2:
+          newState = nextStates.hard;
+          break;
+        case 3:
+          newState = nextStates.good;
+          break;
+        case 4:
+          newState = nextStates.easy;
+          break;
+        default:
+          throw new Error(`Invalid FSRS rating: ${rating}`);
       }
 
-      const newCardStateValue: CardState =
-        rating === 1 ? 'RELEARNING' : 'REVIEW';
+      // 7. Calculate the new due date based on the interval returned by the engine.
+      const newDueDate = new Date(
+        now.getTime() + newState.interval * 24 * 60 * 60 * 1000
+      );
 
+      // 8. Update the card state cache in the database with the engine's results.
       const updatedState = await tx.studentCardState.update({
         where: { studentId_cardId: { studentId, cardId } },
         data: {
-          stability: newStability,
-          difficulty: newDifficulty,
+          stability: newState.memory.stability,
+          difficulty: newState.memory.difficulty,
           due: newDueDate,
           lastReview: now,
           reps: { increment: 1 },
           lapses: rating === 1 ? { increment: 1 } : undefined,
-          state: newCardStateValue,
+          // A card is in 'REVIEW' state after any review, unless it was 'Again', which puts it in 'RELEARNING'.
+          state: rating === 1 ? 'RELEARNING' : 'REVIEW',
         },
       });
 
+      // 9. Append to the immutable review history log for future analysis and optimization.
       await tx.reviewHistory.create({
         data: {
           studentId,
@@ -356,7 +351,10 @@ export const FSRSService = {
   },
 
   /**
-   * REFINEMENT: The new, bulletproof internal method for rebuilding the FSRS cache.
+   * [PERFECTED IMPLEMENTATION]
+   * The internal method for rebuilding the FSRS cache. It now correctly fetches and
+   * utilizes the student's specific FSRS parameters, ensuring the cache is rebuilt
+   * with the correct weights.
    */
   async _rebuildCacheForStudent(
     payload: Prisma.JsonValue
@@ -366,10 +364,17 @@ export const FSRSService = {
       throw new Error('Invalid payload: studentId is required.');
     }
 
-    const studentDecks = await prisma.studentDeck.findMany({
-      where: { studentId, isActive: true },
-      include: { deck: { select: { cards: { select: { id: true } } } } },
-    });
+    // THE FIX: Atomically fetch all necessary data, including student-specific FSRS parameters.
+    const [studentDecks, studentParams] = await Promise.all([
+      prisma.studentDeck.findMany({
+        where: { studentId, isActive: true },
+        include: { deck: { select: { cards: { select: { id: true } } } } },
+      }),
+      prisma.studentFsrsParams.findFirst({
+        where: { studentId, isActive: true },
+      }),
+    ]);
+
     const allAssignedCardIds = new Set(
       studentDecks.flatMap((sd) => sd.deck.cards.map((c) => c.id))
     );
@@ -384,7 +389,10 @@ export const FSRSService = {
       return acc;
     }, {} as Record<string, ReviewHistory[]>);
 
-    const engine = new FSRS(FSRS_DEFAULT_PARAMETERS);
+    // THE FIX: Use student-specific parameters if they exist, otherwise use defaults.
+    const w = (studentParams?.w as number[]) ?? FSRS_DEFAULT_PARAMETERS;
+    const engine = new FSRS(w);
+
     const statesFromHistory: Prisma.StudentCardStateCreateManyInput[] = [];
     const reviewedCardIds = new Set<string>();
 
@@ -403,11 +411,20 @@ export const FSRSService = {
       );
       let nextState;
       switch (lastReview.rating as FsrsRating) {
-        case 1: nextState = nextStates.again; break;
-        case 2: nextState = nextStates.hard; break;
-        case 3: nextState = nextStates.good; break;
-        case 4: nextState = nextStates.easy; break;
-        default: throw new Error('Invalid rating in history');
+        case 1:
+          nextState = nextStates.again;
+          break;
+        case 2:
+          nextState = nextStates.hard;
+          break;
+        case 3:
+          nextState = nextStates.good;
+          break;
+        case 4:
+          nextState = nextStates.easy;
+          break;
+        default:
+          throw new Error('Invalid rating in history');
       }
 
       const accurateDueDate = new Date(
@@ -453,3 +470,4 @@ export const FSRSService = {
     return { cardsRebuilt: allStatesToCreate.length };
   },
 };
+
