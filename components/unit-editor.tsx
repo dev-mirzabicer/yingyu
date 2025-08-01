@@ -1,7 +1,6 @@
 "use client"
 
 import React, { useState } from "react"
-import { MainLayout } from "@/components/main-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,9 +10,9 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { BookOpen, FileText, Mic, Video, GripVertical, MoreHorizontal, Plus, Settings, Trash2, Save } from "lucide-react"
+import { BookOpen, FileText, Mic, GripVertical, MoreHorizontal, Plus, Settings, Trash2, Save } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useUnit, updateUnit, addExerciseToUnit } from "@/hooks/use-api"
+import { useUnit, updateUnit, addExerciseToUnit } from "@/hooks/use-api-enhanced"
 import { UnitItemType } from "@prisma/client"
 
 interface UnitEditorProps {
@@ -40,7 +39,7 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
   const [unitName, setUnitName] = useState("")
   const [isPublic, setIsPublic] = useState(false)
   const [isAddExerciseOpen, setIsAddExerciseOpen] = useState(false)
-  const [selectedExerciseType, setSelectedExerciseType] = useState("")
+  const [selectedExerciseType, setSelectedExerciseType] = useState<UnitItemType | "">("")
   const [newExerciseName, setNewExerciseName] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [isAddingExercise, setIsAddingExercise] = useState(false)
@@ -91,13 +90,30 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
 
     setIsAddingExercise(true)
     try {
-      await addExerciseToUnit(unitId, {
-        type: selectedExerciseType,
-        data: {
-          name: newExerciseName,
-          isPublic: false,
-        },
-      })
+      let unitItemData;
+      if (selectedExerciseType === "VOCABULARY_DECK") {
+        unitItemData = {
+          type: "VOCABULARY_DECK" as const,
+          data: {
+            name: newExerciseName,
+            isPublic: false,
+          },
+        };
+      } else if (selectedExerciseType === "GRAMMAR_EXERCISE") {
+        unitItemData = {
+          type: "GRAMMAR_EXERCISE" as const,
+          data: {
+            title: newExerciseName,
+            grammarTopic: "General",
+            exerciseData: {},
+            isPublic: false,
+          },
+        };
+      } else {
+        throw new Error("Unsupported exercise type");
+      }
+      
+      await addExerciseToUnit(unitId, unitItemData)
       toast({
         title: "Exercise added",
         description: `${newExerciseName} has been added to the unit.`,
@@ -143,29 +159,21 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
     return typeMap[type] || { label: "Unknown", icon: FileText, color: "bg-gray-100 text-gray-700" }
   }
 
-  const primaryAction = {
-    label: "Save Unit",
-    onClick: handleSave,
-  }
-
   if (isError) {
     return (
-      <MainLayout>
-        <div className="p-6">
-          <Card>
-            <CardContent className="p-6 text-center">
-              <p className="text-slate-600">Failed to load unit. Please try again.</p>
-            </CardContent>
-          </Card>
-        </div>
-      </MainLayout>
+      <div className="p-6">
+        <Card>
+          <CardContent className="p-6 text-center">
+            <p className="text-slate-600">Failed to load unit. Please try again.</p>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
   if (isLoading || !unit) {
     return (
-      <MainLayout>
-        <div className="p-6 space-y-6">
+      <div className="p-6 space-y-6">
           <Card>
             <CardHeader>
               <Skeleton className="h-8 w-64" />
@@ -188,13 +196,23 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
             </CardContent>
           </Card>
         </div>
-      </MainLayout>
     )
   }
 
   return (
-    <MainLayout primaryAction={primaryAction}>
-      <div className="p-6 space-y-6">
+    <div className="space-y-6">
+        {/* Page Header */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold text-slate-900">Edit Unit</h1>
+            <p className="text-slate-600">Configure unit settings and manage exercises</p>
+          </div>
+          <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
+            <Save className="h-4 w-4 mr-2" />
+            {isSaving ? "Saving..." : "Save Unit"}
+          </Button>
+        </div>
+
         {/* Unit Header */}
         <Card>
           <CardHeader>
@@ -220,10 +238,6 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
               />
               <Label htmlFor="unit-public">Make this unit public</Label>
             </div>
-            <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
-              <Save className="h-4 w-4 mr-2" />
-              {isSaving ? "Saving..." : "Save Changes"}
-            </Button>
           </CardContent>
         </Card>
 
@@ -249,7 +263,7 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
               </div>
             ) : (
               <div className="space-y-4">
-                {unit.items.map((item, index) => {
+                {unit.items.map((item) => {
                   const typeInfo = getExerciseTypeInfo(item.type)
                   const Icon = typeInfo.icon
 
@@ -322,7 +336,7 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
                         key={type.type}
                         variant={selectedExerciseType === type.type ? "default" : "outline"}
                         className="justify-start h-auto p-4"
-                        onClick={() => setSelectedExerciseType(type.type)}
+                        onClick={() => setSelectedExerciseType(type.type as UnitItemType)}
                         disabled={isAddingExercise}
                       >
                         <div className="flex items-center space-x-3">
@@ -370,6 +384,5 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
           </DialogContent>
         </Dialog>
       </div>
-    </MainLayout>
   )
 }

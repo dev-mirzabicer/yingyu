@@ -9,7 +9,7 @@ import { UpdateScheduleSchema } from '@/lib/schemas';
  */
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { scheduleId: string } }
+  { params }: { params: Promise<{ scheduleId: string }> }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -17,7 +17,7 @@ export async function PUT(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
-    const { scheduleId } = params;
+    const { scheduleId } = await params;
     const body = await req.json();
     const updateData = UpdateScheduleSchema.parse(body);
 
@@ -39,7 +39,7 @@ export async function PUT(
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { scheduleId: string } }
+  { params }: { params: Promise<{ scheduleId: string }> }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -47,7 +47,7 @@ export async function DELETE(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
-    const { scheduleId } = params;
+    const { scheduleId } = await params;
 
     const deletedSchedule = await StudentService.deleteSchedule(
       scheduleId,

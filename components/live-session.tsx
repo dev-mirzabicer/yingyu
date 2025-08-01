@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Volume2, RotateCcw, CheckCircle, XCircle, Clock, BookOpen, ArrowLeft, Pause, Play, FileText, Mic } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { useSession, submitAnswer, endSession } from "@/hooks/use-api"
+import { useSession, submitAnswer, endSession } from "@/hooks/use-api-enhanced"
 import { FullSessionState, VocabularyDeckProgress, AnswerPayload } from "@/lib/types"
 import { UnitItemType } from "@prisma/client"
 

@@ -53,7 +53,7 @@ const navigationItems = [
     items: [
       {
         title: "Overview",
-        url: "/dashboard",
+        url: "/",
         icon: BarChart3,
         badge: null,
       },

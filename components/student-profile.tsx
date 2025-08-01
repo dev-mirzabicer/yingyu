@@ -1,7 +1,6 @@
 "use client"
 
 import React, { useState } from "react"
-import { MainLayout } from "@/components/main-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -16,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { MoreHorizontal, Play, DollarSign, Edit, Archive, BookOpen, Calendar, TrendingUp, Clock } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useStudent, useDecks, assignDeck } from "@/hooks/use-api"
+import { useStudent, useDecks, assignDeck } from "@/hooks/use-api-enhanced"
 import { format } from "date-fns"
 import { SessionStartDialog } from "@/components/session-start-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -150,48 +149,43 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
 
   if (isError) {
     return (
-      <MainLayout>
-        <div className="p-6">
-          <Card>
-            <CardContent className="p-6 text-center">
-              <p className="text-slate-600">Failed to load student profile. Please try again.</p>
-            </CardContent>
-          </Card>
-        </div>
-      </MainLayout>
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="p-6 text-center">
+            <p className="text-slate-600">Failed to load student profile. Please try again.</p>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
   if (isLoading || !student) {
     return (
-      <MainLayout>
-        <div className="p-6 space-y-6">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center space-x-4">
-                  <Skeleton className="h-20 w-20 rounded-full" />
-                  <div className="space-y-2">
-                    <Skeleton className="h-8 w-48" />
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-4 w-24" />
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Skeleton className="h-10 w-32" />
-                  <Skeleton className="h-10 w-10" />
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center space-x-4">
+                <Skeleton className="h-20 w-20 rounded-full" />
+                <div className="space-y-2">
+                  <Skeleton className="h-8 w-48" />
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-24" />
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-      </MainLayout>
+              <div className="flex items-center space-x-2">
+                <Skeleton className="h-10 w-32" />
+                <Skeleton className="h-10 w-10" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
   return (
-    <MainLayout>
-      <div className="p-6 space-y-6">
+    <div className="space-y-6">
         {/* Profile Header */}
         <Card>
           <CardContent className="p-6">
@@ -520,8 +514,7 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
             </div>
           </DialogContent>
         </Dialog>
-      </div>
-    </MainLayout>
+    </div>
   )
 }
 

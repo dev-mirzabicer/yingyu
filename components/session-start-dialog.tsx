@@ -16,12 +16,11 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-  Users,
   Target
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { useAvailableUnits, startSession } from "@/hooks/use-api"
+import { useAvailableUnits, startSession } from "@/hooks/use-api-enhanced"
 import { UnitItemType } from "@prisma/client"
 
 interface SessionStartDialogProps {

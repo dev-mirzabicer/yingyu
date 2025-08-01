@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { MainLayout } from "@/components/main-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -11,10 +10,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Calendar, Clock, User, AlertTriangle, TrendingUp, Play } from "lucide-react"
+import { Calendar, Clock, User, AlertTriangle, TrendingUp, Play, Plus } from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { useStudents, createStudent, useDecks } from "@/hooks/use-api"
+import { useStudents, createStudent, useDecks } from "@/hooks/use-api-enhanced"
 import { format } from "date-fns"
 import { SessionStartDialog } from "@/components/session-start-dialog"
 
@@ -82,19 +81,19 @@ export function TeacherDashboard() {
     return format(new Date(nextClass.scheduledTime), "EEEE 'at' h:mm a")
   }
 
-  const primaryAction = {
-    label: "Add New Student",
-    onClick: () => setIsAddStudentOpen(true),
-  }
-
   return (
-    <MainLayout primaryAction={primaryAction}>
-      <div className="p-6 space-y-6">
-        {/* Welcome Header */}
+    <div className="space-y-6">
+      {/* Welcome Header */}
+      <div className="flex items-center justify-between">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold text-slate-900">Welcome back, Jane!</h1>
           <p className="text-slate-600">Here's what's happening with your students today.</p>
         </div>
+        <Button onClick={() => setIsAddStudentOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+          <Plus className="h-4 w-4 mr-2" />
+          Add New Student
+        </Button>
+      </div>
 
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -330,7 +329,6 @@ export function TeacherDashboard() {
             onOpenChange={(open) => !open && setSessionStudent(null)}
           />
         )}
-      </div>
-    </MainLayout>
+    </div>
   )
 }

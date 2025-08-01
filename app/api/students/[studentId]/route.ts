@@ -4,7 +4,7 @@ import { apiResponse, handleApiError } from '@/lib/api-utils';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { studentId: string } }
+  { params }: { params: Promise<{ studentId: string }> }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -12,7 +12,7 @@ export async function GET(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
-    const { studentId } = params;
+    const { studentId } = await params;
     const studentProfile = await StudentService.getStudentProfile(
       studentId,
       teacherId
@@ -26,7 +26,7 @@ export async function GET(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { studentId: string } }
+  { params }: { params: Promise<{ studentId: string }> }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -34,7 +34,7 @@ export async function DELETE(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
-    const { studentId } = params;
+    const { studentId } = await params;
     const archivedStudent = await StudentService.archiveStudent(
       studentId,
       teacherId

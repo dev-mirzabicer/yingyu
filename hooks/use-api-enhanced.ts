@@ -36,7 +36,7 @@ export type ApiResponse<T> = {
 }
 
 // Mock teacher ID - in production this would come from auth context
-const MOCK_TEACHER_ID = "8326a8fc-91c3-475a-8fc2-68b4896449cd"
+const MOCK_TEACHER_ID = "0ba4fea8-b7ed-4dbd-9298-6efcad1f28a2"
 
 // Enhanced fetcher with better error handling
 const fetcher = async (url: string): Promise<any> => {

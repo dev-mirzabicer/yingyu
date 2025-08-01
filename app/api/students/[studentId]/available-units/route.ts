@@ -11,7 +11,7 @@ import { prisma } from '@/lib/db';
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { studentId: string } }
+  { params }: { params: Promise<{ studentId: string }> }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -19,7 +19,7 @@ export async function GET(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
-    const { studentId } = params;
+    const { studentId } = await params;
 
     // Authorize teacher access to this student
     await authorizeTeacherForStudent(teacherId, studentId, {

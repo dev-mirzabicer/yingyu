@@ -9,7 +9,7 @@ import { CreateScheduleSchema } from '@/lib/schemas';
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { studentId: string } }
+  { params }: { params: Promise<{ studentId: string }> }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -17,7 +17,7 @@ export async function GET(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
-    const { studentId } = params;
+    const { studentId } = await params;
     const schedules = await StudentService.getSchedulesForStudent(
       studentId,
       teacherId
@@ -35,7 +35,7 @@ export async function GET(
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { studentId: string } }
+  { params }: { params: Promise<{ studentId: string }> }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -43,7 +43,7 @@ export async function POST(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
-    const { studentId } = params;
+    const { studentId } = await params;
     const body = await req.json();
     const scheduleData = CreateScheduleSchema.parse(body);
 
