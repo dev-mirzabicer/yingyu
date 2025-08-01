@@ -4,7 +4,7 @@ import { apiResponse, handleApiError } from '@/lib/api-utils';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { jobId: string } }
+  { params }: { params: Promise<{ jobId: string }> }
 ): Promise<NextResponse> {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -12,7 +12,7 @@ export async function GET(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
-    const { jobId } = params;
+    const { jobId } = await params;
 
     // The getJobStatus service method is already secure and ensures
     // a teacher can only query their own jobs.

@@ -5,7 +5,7 @@ import { VocabularyExerciseConfigSchema } from '@/lib/schemas';
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { unitItemId: string } }
+  { params }: { params: Promise<{ unitItemId: string }> }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -13,7 +13,7 @@ export async function PUT(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
-    const { unitItemId } = params;
+    const { unitItemId } = await params;
     const body = await req.json();
     const config = VocabularyExerciseConfigSchema.parse(body);
 

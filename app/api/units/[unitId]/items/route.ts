@@ -16,7 +16,7 @@ const AddItemBodySchema = z.object({
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { unitId: string } } // Correctly destructure params here
+  { params }: { params: Promise<{ unitId: string }> } // Correctly destructure params here
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -25,7 +25,7 @@ export async function POST(
     }
 
     // The `unitId` is now correctly and safely accessed from `params`.
-    const { unitId } = params;
+    const { unitId } = await params;
     const body = await req.json();
 
     // The schema is now more flexible to accommodate different exercise types.
