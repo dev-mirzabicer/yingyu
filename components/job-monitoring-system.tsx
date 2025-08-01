@@ -27,17 +27,13 @@ import {
 } from "lucide-react"
 import { format, formatDistanceToNow } from "date-fns"
 import { useToast } from "@/hooks/use-toast"
+import { useJobs } from "@/hooks/use-api-enhanced"
 import type { Job, JobStatus } from "@prisma/client"
 
 interface JobMonitoringSystemProps {
   teacherId: string
 }
 
-interface JobWithDetails extends Job {
-  progress?: number
-  estimatedTimeRemaining?: number
-  logs?: string[]
-}
 
 const jobTypeIcons = {
   INITIALIZE_CARD_STATES: Database,
@@ -69,91 +65,13 @@ const statusIcons = {
   SKIPPED: AlertTriangle,
 }
 
-// Mock job data - in production this would come from the API
-const mockJobs: JobWithDetails[] = [
-  {
-    id: "job-1",
-    ownerId: "teacher-1",
-    type: "OPTIMIZE_FSRS_PARAMS",
-    status: "RUNNING",
-    payload: { studentId: "student-1" },
-    result: null,
-    error: null,
-    createdAt: new Date(Date.now() - 300000), // 5 minutes ago
-    updatedAt: new Date(Date.now() - 60000), // 1 minute ago
-    progress: 65,
-    estimatedTimeRemaining: 120000, // 2 minutes
-    logs: [
-      "Starting FSRS parameter optimization...",
-      "Loading student review history...",
-      "Analyzing 1,247 review records...",
-      "Running optimization algorithm...",
-      "Current progress: 65%",
-    ],
-  },
-  {
-    id: "job-2",
-    ownerId: "teacher-1",
-    type: "GENERATE_PRACTICE_PDF",
-    status: "COMPLETED",
-    payload: { studentId: "student-2", deckId: "deck-1" },
-    result: { pdfUrl: "https://example.com/practice.pdf", pageCount: 12 },
-    error: null,
-    createdAt: new Date(Date.now() - 600000), // 10 minutes ago
-    updatedAt: new Date(Date.now() - 300000), // 5 minutes ago
-    progress: 100,
-  },
-  {
-    id: "job-3",
-    ownerId: "teacher-1",
-    type: "INITIALIZE_CARD_STATES",
-    status: "FAILED",
-    payload: { studentId: "student-3", deckId: "deck-2" },
-    result: null,
-    error: "Database connection timeout",
-    createdAt: new Date(Date.now() - 900000), // 15 minutes ago
-    updatedAt: new Date(Date.now() - 800000), // 13 minutes ago
-  },
-]
-
 export function JobMonitoringSystem({ teacherId }: JobMonitoringSystemProps) {
-  const [jobs, setJobs] = useState<JobWithDetails[]>(mockJobs)
-  const [selectedJob, setSelectedJob] = useState<JobWithDetails | null>(null)
+  const { jobs, isLoading, isError, mutate } = useJobs()
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null)
   const [isJobDetailOpen, setIsJobDetailOpen] = useState(false)
   const [filter, setFilter] = useState<JobStatus | "ALL">("ALL")
 
   const { toast } = useToast()
-
-  // Simulate real-time updates for running jobs
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setJobs((prevJobs) =>
-        prevJobs.map((job) => {
-          if (job.status === "RUNNING" && job.progress !== undefined) {
-            const newProgress = Math.min(job.progress + Math.random() * 5, 100)
-            const newStatus = newProgress >= 100 ? "COMPLETED" : "RUNNING"
-
-            return {
-              ...job,
-              progress: newProgress,
-              status: newStatus as JobStatus,
-              updatedAt: new Date(),
-              estimatedTimeRemaining:
-                newStatus === "COMPLETED"
-                  ? 0
-                  : job.estimatedTimeRemaining
-                    ? Math.max(job.estimatedTimeRemaining - 5000, 0)
-                    : undefined,
-              logs: job.logs ? [...job.logs, `Progress update: ${Math.round(newProgress)}%`].slice(-10) : undefined, // Keep last 10 logs
-            }
-          }
-          return job
-        }),
-      )
-    }, 5000) // Update every 5 seconds
-
-    return () => clearInterval(interval)
-  }, [])
 
   const filteredJobs = filter === "ALL" ? jobs : jobs.filter((job) => job.status === filter)
   const runningJobs = jobs.filter((job) => job.status === "RUNNING")
@@ -167,41 +85,32 @@ export function JobMonitoringSystem({ teacherId }: JobMonitoringSystemProps) {
 
   const handleRetryJob = (jobId: string) => {
     // In production, this would call the API to retry the job
-    setJobs((prevJobs) =>
-      prevJobs.map((job) =>
-        job.id === jobId ? { ...job, status: "PENDING" as JobStatus, error: null, updatedAt: new Date() } : job,
-      ),
-    )
     toast({
-      title: "Job queued for retry",
-      description: "The job has been added back to the queue.",
+      title: "Feature not implemented",
+      description: "Job retry functionality will be implemented in a future version.",
+      variant: "default",
     })
   }
 
   const handleCancelJob = (jobId: string) => {
     // In production, this would call the API to cancel the job
-    setJobs((prevJobs) =>
-      prevJobs.map((job) =>
-        job.id === jobId && job.status === "RUNNING"
-          ? { ...job, status: "FAILED" as JobStatus, error: "Cancelled by user", updatedAt: new Date() }
-          : job,
-      ),
-    )
     toast({
-      title: "Job cancelled",
-      description: "The running job has been cancelled.",
+      title: "Feature not implemented", 
+      description: "Job cancellation functionality will be implemented in a future version.",
+      variant: "default",
     })
   }
 
   const handleDeleteJob = (jobId: string) => {
-    setJobs((prevJobs) => prevJobs.filter((job) => job.id !== jobId))
+    // In production, this would call the API to delete the job
     toast({
-      title: "Job deleted",
-      description: "The job record has been removed.",
+      title: "Feature not implemented",
+      description: "Job deletion functionality will be implemented in a future version.",
+      variant: "default",
     })
   }
 
-  const JobCard = ({ job }: { job: JobWithDetails }) => {
+  const JobCard = ({ job }: { job: Job }) => {
     const Icon = jobTypeIcons[job.type]
     const StatusIcon = statusIcons[job.status]
 
@@ -218,11 +127,6 @@ export function JobMonitoringSystem({ teacherId }: JobMonitoringSystemProps) {
                 <p className="text-sm text-slate-500">
                   Started {formatDistanceToNow(new Date(job.createdAt), { addSuffix: true })}
                 </p>
-                {job.status === "RUNNING" && job.estimatedTimeRemaining && (
-                  <p className="text-xs text-blue-600">
-                    ~{Math.round(job.estimatedTimeRemaining / 60000)} min remaining
-                  </p>
-                )}
               </div>
             </div>
 
@@ -236,16 +140,6 @@ export function JobMonitoringSystem({ teacherId }: JobMonitoringSystemProps) {
               </Button>
             </div>
           </div>
-
-          {job.status === "RUNNING" && job.progress !== undefined && (
-            <div className="mt-3 space-y-1">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-600">Progress</span>
-                <span className="font-medium">{Math.round(job.progress)}%</span>
-              </div>
-              <Progress value={job.progress} className="h-2" />
-            </div>
-          )}
 
           {job.status === "FAILED" && job.error && (
             <div className="mt-3">
@@ -266,6 +160,48 @@ export function JobMonitoringSystem({ teacherId }: JobMonitoringSystemProps) {
     )
   }
 
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">Job Monitor</h2>
+            <p className="text-slate-600">Track background tasks and system operations</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-2 text-slate-600">Loading jobs...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">Job Monitor</h2>
+            <p className="text-slate-600">Track background tasks and system operations</p>
+          </div>
+          <Button variant="outline" onClick={() => mutate()}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <p className="text-slate-600">Failed to load jobs. Please try again.</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -274,7 +210,7 @@ export function JobMonitoringSystem({ teacherId }: JobMonitoringSystemProps) {
           <h2 className="text-2xl font-bold text-slate-900">Job Monitor</h2>
           <p className="text-slate-600">Track background tasks and system operations</p>
         </div>
-        <Button variant="outline" onClick={() => window.location.reload()}>
+        <Button variant="outline" onClick={() => mutate()}>
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
@@ -395,19 +331,6 @@ export function JobMonitoringSystem({ teacherId }: JobMonitoringSystemProps) {
                   </div>
                 </div>
 
-                {/* Progress */}
-                {selectedJob.status === "RUNNING" && selectedJob.progress !== undefined && (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-slate-600">Progress</Label>
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span>Completion</span>
-                        <span>{Math.round(selectedJob.progress)}%</span>
-                      </div>
-                      <Progress value={selectedJob.progress} className="h-2" />
-                    </div>
-                  </div>
-                )}
 
                 {/* Payload */}
                 <div className="space-y-2">
@@ -441,21 +364,6 @@ export function JobMonitoringSystem({ teacherId }: JobMonitoringSystemProps) {
                   </div>
                 )}
 
-                {/* Logs */}
-                {selectedJob.logs && selectedJob.logs.length > 0 && (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-slate-600">Logs</Label>
-                    <div className="bg-slate-900 p-3 rounded-lg">
-                      <div className="space-y-1">
-                        {selectedJob.logs.map((log, index) => (
-                          <p key={index} className="text-xs text-green-400 font-mono">
-                            {log}
-                          </p>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {/* Actions */}
                 <div className="flex justify-end space-x-2 pt-4 border-t">

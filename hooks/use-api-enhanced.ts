@@ -237,6 +237,21 @@ export function useDecks() {
   }
 }
 
+export function useDeck(deckId: string) {
+  const { data, error, isLoading, mutate } = useSWR<VocabularyDeck>(
+    deckId ? `/api/decks/${deckId}` : null,
+    fetcher
+  )
+
+  return {
+    deck: data,
+    isLoading,
+    isError: error,
+    mutate,
+    error: error as ApiError | undefined,
+  }
+}
+
 // ============================================================================
 // VOCABULARY CARD MANAGEMENT HOOKS
 // ============================================================================
@@ -318,6 +333,18 @@ export async function updateUnitItemConfig(unitItemId: string, config: Vocabular
 // ============================================================================
 // SESSION MANAGEMENT HOOKS
 // ============================================================================
+
+export function useSessions() {
+  const { data, error, isLoading, mutate } = useSWR<any[]>("/api/sessions", fetcher)
+
+  return {
+    sessions: data || [],
+    isLoading,
+    isError: error,
+    mutate,
+    error: error as ApiError | undefined,
+  }
+}
 
 export function useSession(sessionId: string) {
   const { data, error, isLoading, mutate } = useSWR<FullSessionState>(
@@ -429,6 +456,20 @@ export function useJob(jobId: string) {
 
   return {
     job: data,
+    isLoading,
+    isError: error,
+    mutate,
+    error: error as ApiError | undefined,
+  }
+}
+
+export function useJobs() {
+  const { data, error, isLoading, mutate } = useSWR<Job[]>("/api/jobs", fetcher, {
+    refreshInterval: 5000, // Poll every 5 seconds for job updates
+  })
+
+  return {
+    jobs: data || [],
     isLoading,
     isError: error,
     mutate,

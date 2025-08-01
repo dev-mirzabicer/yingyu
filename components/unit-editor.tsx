@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { BookOpen, FileText, Mic, GripVertical, MoreHorizontal, Plus, Settings, Trash2, Save } from "lucide-react"
+import { BookOpen, FileText, Mic, GripVertical, MoreHorizontal, Plus, Settings, Trash2, Save, Edit3 } from "lucide-react"
+import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 import { useUnit, updateUnit, addExerciseToUnit } from "@/hooks/use-api-enhanced"
 import { UnitItemType } from "@prisma/client"
@@ -292,23 +293,33 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
                               </Badge>
                             </div>
                           </div>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem>
-                                <Settings className="mr-2 h-4 w-4" />
-                                Configure
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="text-red-600">
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Remove
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <div className="flex items-center space-x-2">
+                            {item.type === 'VOCABULARY_DECK' && item.vocabularyDeck && (
+                              <Link href={`/decks/${item.vocabularyDeck.id}/manage`}>
+                                <Button variant="outline" size="sm">
+                                  <Edit3 className="h-4 w-4 mr-2" />
+                                  Manage Cards
+                                </Button>
+                              </Link>
+                            )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem>
+                                  <Settings className="mr-2 h-4 w-4" />
+                                  Configure
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-red-600">
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Remove
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>

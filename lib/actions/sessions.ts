@@ -205,5 +205,60 @@ export const SessionService = {
 
     return updatedSession as unknown as FullSessionState;
   },
+
+  /**
+   * Retrieves all sessions for a specific teacher, ordered by creation date (newest first).
+   * This provides the data needed for the sessions overview page.
+   *
+   * @param teacherId The UUID of the teacher.
+   * @returns A promise that resolves to an array of session summaries.
+   */
+  async getAllSessionsForTeacher(teacherId: string): Promise<any[]> {
+    const sessions = await prisma.session.findMany({
+      where: { teacherId },
+      include: {
+        student: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        unit: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Transform the sessions to match the expected format for the frontend
+    return sessions.map(session => {
+      const duration = session.endTime && session.startTime 
+        ? Math.round((session.endTime.getTime() - session.startTime.getTime()) / 60000)
+        : session.startTime 
+          ? Math.round((new Date().getTime() - session.startTime.getTime()) / 60000)
+          : 0;
+
+      // For now, we'll use placeholder values for cards reviewed and accuracy
+      // These could be calculated from the session progress or stored separately
+      const cardsReviewed = session.progress ? 
+        (session.progress as any)?.payload?.queue?.length || 0 : 0;
+      
+      return {
+        id: session.id,
+        studentId: session.student.id,
+        studentName: session.student.name,
+        unitName: session.unit.name,
+        status: session.status,
+        startedAt: session.startTime,
+        endedAt: session.endTime,
+        duration,
+        cardsReviewed,
+        accuracy: 85, // Placeholder - could be calculated from session history
+      };
+    });
+  },
 };
 

@@ -19,6 +19,8 @@ import { useStudent, useDecks, assignDeck } from "@/hooks/use-api-enhanced"
 import { format } from "date-fns"
 import { SessionStartDialog } from "@/components/session-start-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { PaymentManager } from "@/components/payment-manager"
+import { ClassScheduler } from "@/components/class-scheduler"
 
 interface StudentProfileProps {
   studentId: string
@@ -31,11 +33,11 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
   const [notes, setNotes] = useState("")
   const [isEditingNotes, setIsEditingNotes] = useState(false)
   const [isSessionDialogOpen, setIsSessionDialogOpen] = useState(false)
-  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
   const [isAssignDeckOpen, setIsAssignDeckOpen] = useState(false)
   const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null)
   const [isAssigning, setIsAssigning] = useState(false)
   const [isSavingNotes, setIsSavingNotes] = useState(false)
+  const [activeTab, setActiveTab] = useState("overview")
   const { toast } = useToast()
 
   React.useEffect(() => {
@@ -91,6 +93,14 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
     }
   }
 
+  const handleRecordPaymentClick = () => {
+    setActiveTab("payments")
+  }
+
+  const handleScheduleClassClick = () => {
+    setActiveTab("schedule")
+  }
+
   const assignedDeckIds = new Set(student?.studentDecks.map(sd => sd.deckId))
   const availableDecks = decks.filter(deck => !assignedDeckIds.has(deck.id))
 
@@ -116,36 +126,6 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
     },
   ]
 
-  const paymentColumns = [
-    {
-      key: "paymentDate",
-      header: "Payment Date",
-      render: (value: string) => format(new Date(value), "MMM dd, yyyy"),
-    },
-    {
-      key: "amount",
-      header: "Amount",
-      render: (value: number) => `$${value}`,
-    },
-    { key: "classesPurchased", header: "Classes Purchased" },
-  ]
-
-  const scheduleColumns = [
-    {
-      key: "scheduledTime",
-      header: "Date & Time",
-      render: (value: string) => format(new Date(value), "MMM dd, yyyy 'at' h:mm a"),
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (value: string) => (
-        <Badge variant={value === "COMPLETED" ? "secondary" : "default"}>
-          {value}
-        </Badge>
-      ),
-    },
-  ]
 
   if (isError) {
     return (
@@ -231,9 +211,13 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setIsPaymentDialogOpen(true)}>
+                    <DropdownMenuItem onClick={handleRecordPaymentClick}>
                       <DollarSign className="mr-2 h-4 w-4" />
                       Record Payment
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleScheduleClassClick}>
+                      <Calendar className="mr-2 h-4 w-4" />
+                      Schedule Class
                     </DropdownMenuItem>
                     <DropdownMenuItem>
                       <Edit className="mr-2 h-4 w-4" />
@@ -251,7 +235,7 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
         </Card>
 
         {/* Tabbed Interface */}
-        <Tabs defaultValue="overview" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="learning">Learning Plan</TabsTrigger>
@@ -384,60 +368,11 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
           </TabsContent>
 
           <TabsContent value="payments">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Payment History</CardTitle>
-                  <Button onClick={() => setIsPaymentDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700">
-                    <DollarSign className="h-4 w-4 mr-2" />
-                    Record Payment
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {student.payments.length === 0 ? (
-                  <div className="text-center py-8">
-                    <DollarSign className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-                    <p className="text-slate-500 mb-4">No payments recorded yet</p>
-                    <Button
-                      onClick={() => setIsPaymentDialogOpen(true)}
-                      className="bg-blue-600 hover:bg-blue-700"
-                    >
-                      Record First Payment
-                    </Button>
-                  </div>
-                ) : (
-                  <DataTable data={student.payments} columns={paymentColumns} />
-                )}
-              </CardContent>
-            </Card>
+            <PaymentManager student={student} onPaymentRecorded={mutate} />
           </TabsContent>
 
           <TabsContent value="schedule">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Class Schedule</CardTitle>
-                  <Button className="bg-blue-600 hover:bg-blue-700">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Schedule Class
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {student.upcomingClasses.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Calendar className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-                    <p className="text-slate-500 mb-4">No classes scheduled yet</p>
-                    <Button className="bg-blue-600 hover:bg-blue-700">
-                      Schedule First Class
-                    </Button>
-                  </div>
-                ) : (
-                  <DataTable data={student.upcomingClasses} columns={scheduleColumns} />
-                )}
-              </CardContent>
-            </Card>
+            <ClassScheduler student={student} onScheduleUpdated={mutate} />
           </TabsContent>
         </Tabs>
 
@@ -490,30 +425,6 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
           </DialogContent>
         </Dialog>
 
-        {/* Payment Dialog */}
-        <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Record Payment</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="amount">Amount</Label>
-                <Input id="amount" type="number" placeholder="0.00" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="classes">Classes Purchased</Label>
-                <Input id="classes" type="number" placeholder="0" />
-              </div>
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setIsPaymentDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button className="bg-blue-600 hover:bg-blue-700">Record Payment</Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
     </div>
   )
 }

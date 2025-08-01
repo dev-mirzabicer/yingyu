@@ -116,12 +116,9 @@ export default function UnitsPage() {
           <Link href={`/units/${row.id}`}>
             <Button variant="outline" size="sm">
               <Edit className="h-4 w-4 mr-2" />
-              Edit
+              Edit Unit & Exercises
             </Button>
           </Link>
-          <Button variant="outline" size="sm">
-            View Exercises
-          </Button>
         </div>
       ),
     },

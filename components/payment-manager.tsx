@@ -31,6 +31,23 @@ import type { FullStudentProfile } from "@/lib/types"
 import type { Payment } from "@prisma/client"
 import { DataTable } from "@/components/data-table"
 
+/**
+ * Safely converts a Prisma Decimal (string) or number to a number for calculations
+ * 
+ * IMPORTANT: Prisma returns Decimal fields as strings in JSON to prevent floating-point 
+ * precision loss. The Payment.amount field is defined as Decimal in the schema, so it 
+ * comes as a string from the database. Always use this function when performing numeric 
+ * operations on Decimal fields to prevent "TypeError: value.toFixed is not a function"
+ * 
+ * @param value - The value to convert (string from Prisma Decimal, number, null, or undefined)
+ * @returns A safe number for calculations (0 if input is invalid)
+ */
+const safeNumberConversion = (value: string | number | null | undefined): number => {
+  if (value === null || value === undefined) return 0
+  const num = Number(value)
+  return isNaN(num) ? 0 : num
+}
+
 interface PaymentManagerProps {
   student: FullStudentProfile
   onPaymentRecorded: () => void
@@ -69,7 +86,7 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
   const { toast } = useToast()
 
   // Calculate payment statistics
-  const totalPaid = student.payments.reduce((sum, payment) => sum + Number(payment.amount), 0)
+  const totalPaid = student.payments.reduce((sum, payment) => sum + safeNumberConversion(payment.amount), 0)
   const totalClassesPurchased = student.payments.reduce((sum, payment) => sum + payment.classesPurchased, 0)
   const totalClassesUsed = student.payments.reduce((sum, payment) => sum + payment.classesUsed, 0)
   const averageClassPrice = totalClassesPurchased > 0 ? totalPaid / totalClassesPurchased : 0
@@ -107,7 +124,7 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
 
       toast({
         title: "Payment recorded successfully",
-        description: `$${amount} for ${classes} classes has been recorded.`,
+        description: `¥${amount} for ${classes} classes has been recorded.`,
       })
 
       setFormData(initialFormData)
@@ -142,7 +159,9 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
     {
       key: "amount",
       header: "Amount",
-      render: (value: number) => <div className="font-medium text-green-600">${value.toFixed(2)}</div>,
+      render: (value: string | number) => (
+        <div className="font-medium text-green-600">¥{safeNumberConversion(value).toFixed(2)}</div>
+      ),
     },
     {
       key: "classesPurchased",
@@ -157,9 +176,13 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
     {
       key: "pricePerClass",
       header: "Price/Class",
-      render: (_: any, row: Payment) => (
-        <div className="text-slate-600">${(Number(row.amount) / row.classesPurchased).toFixed(2)}</div>
-      ),
+      render: (_: any, row: Payment) => {
+        const amount = safeNumberConversion(row.amount)
+        const pricePerClass = row.classesPurchased > 0 ? amount / row.classesPurchased : 0
+        return (
+          <div className="text-slate-600">¥{pricePerClass.toFixed(2)}</div>
+        )
+      },
     },
     {
       key: "status",
@@ -185,7 +208,7 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
               <DollarSign className="h-5 w-5 text-green-600" />
               <div>
                 <p className="text-sm font-medium text-slate-600">Total Paid</p>
-                <p className="text-2xl font-bold text-slate-900">${totalPaid.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-slate-900">¥{totalPaid.toFixed(2)}</p>
               </div>
             </div>
           </CardContent>
@@ -221,7 +244,7 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
               <DollarSign className="h-5 w-5 text-orange-600" />
               <div>
                 <p className="text-sm font-medium text-slate-600">Avg Price/Class</p>
-                <p className="text-2xl font-bold text-slate-900">${averageClassPrice.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-slate-900">¥{averageClassPrice.toFixed(2)}</p>
               </div>
             </div>
           </CardContent>
@@ -308,7 +331,7 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
               <div className="p-3 bg-slate-50 rounded-lg">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-slate-600">Price per class:</span>
-                  <span className="font-medium text-slate-900">${calculateClassPrice()}</span>
+                  <span className="font-medium text-slate-900">¥{calculateClassPrice()}</span>
                 </div>
               </div>
             )}

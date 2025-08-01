@@ -4,7 +4,7 @@ import { apiResponse, handleApiError } from '@/lib/api-utils';
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { studentId: string } }
+  { params }: { params: Promise<{ studentId: string }> }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -12,7 +12,7 @@ export async function POST(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
-    const { studentId } = params;
+    const { studentId } = await params;
 
     // The service method handles its own authorization check.
     const job = await FSRSService.createRebuildCacheJob(studentId, teacherId);

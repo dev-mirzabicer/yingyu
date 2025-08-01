@@ -9,6 +9,23 @@ import { DollarSign, Users, CreditCard } from "lucide-react"
 import { PaymentManager } from "@/components/payment-manager"
 import { useStudents } from "@/hooks/use-api-enhanced"
 
+/**
+ * Safely converts a Prisma Decimal (string) or number to a number for calculations
+ * 
+ * IMPORTANT: Prisma returns Decimal fields as strings in JSON to prevent floating-point 
+ * precision loss. The Payment.amount field is defined as Decimal in the schema, so it 
+ * comes as a string from the database. Always use this function when performing numeric 
+ * operations on Decimal fields to prevent "TypeError: value.toFixed is not a function"
+ * 
+ * @param value - The value to convert (string from Prisma Decimal, number, null, or undefined)
+ * @returns A safe number for calculations (0 if input is invalid)
+ */
+const safeNumberConversion = (value: string | number | null | undefined): number => {
+  if (value === null || value === undefined) return 0
+  const num = Number(value)
+  return isNaN(num) ? 0 : num
+}
+
 export default function PaymentsPage() {
   const { students, isLoading, isError, mutate } = useStudents()
   const [selectedStudentId, setSelectedStudentId] = useState<string>("")
@@ -75,7 +92,7 @@ export default function PaymentsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {activeStudents.map((student) => {
-                        const totalPaid = student.payments.reduce((sum, p) => sum + Number(p.amount), 0)
+                        const totalPaid = student.payments.reduce((sum, p) => sum + safeNumberConversion(p.amount), 0)
                         return (
                           <SelectItem key={student.id} value={student.id}>
                             <div className="flex items-center space-x-3">
@@ -128,7 +145,7 @@ export default function PaymentsPage() {
                         {selectedStudent.classesRemaining} classes remaining
                       </Badge>
                       <Badge variant="outline">
-                        ¥{selectedStudent.payments.reduce((sum, p) => sum + Number(p.amount), 0).toFixed(2)} total paid
+                        ¥{selectedStudent.payments.reduce((sum, p) => sum + safeNumberConversion(p.amount), 0).toFixed(2)} total paid
                       </Badge>
                     </div>
                   </div>

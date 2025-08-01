@@ -20,52 +20,13 @@ import {
 import Link from "next/link"
 import { format } from "date-fns"
 import { useToast } from "@/hooks/use-toast"
-import { useStudents } from "@/hooks/use-api-enhanced"
+import { useStudents, useSessions } from "@/hooks/use-api-enhanced"
 import type { FullStudentProfile } from "@/lib/types"
 import { SessionStartDialog } from "@/components/session-start-dialog"
 
-// Mock session data - in production this would come from an API
-const mockSessions = [
-  {
-    id: "session-1",
-    studentId: "student-1",
-    studentName: "John Doe",
-    unitName: "Basic Vocabulary",
-    status: "COMPLETED",
-    startedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-    endedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 30 * 60 * 1000),
-    duration: 30,
-    cardsReviewed: 25,
-    accuracy: 85,
-  },
-  {
-    id: "session-2", 
-    studentId: "student-2",
-    studentName: "Jane Smith",
-    unitName: "Advanced Grammar",
-    status: "IN_PROGRESS",
-    startedAt: new Date(Date.now() - 15 * 60 * 1000),
-    endedAt: null,
-    duration: 15,
-    cardsReviewed: 12,
-    accuracy: 92,
-  },
-  {
-    id: "session-3",
-    studentId: "student-1", 
-    studentName: "John Doe",
-    unitName: "Conversation Practice",
-    status: "CANCELLED",
-    startedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-    endedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000 + 10 * 60 * 1000),
-    duration: 10,
-    cardsReviewed: 5,
-    accuracy: 60,
-  },
-]
-
 export default function SessionsPage() {
-  const { students, isLoading } = useStudents()
+  const { students, isLoading: studentsLoading } = useStudents()
+  const { sessions, isLoading: sessionsLoading, isError: sessionsError } = useSessions()
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [studentFilter, setStudentFilter] = useState<string>("all")
@@ -75,7 +36,7 @@ export default function SessionsPage() {
   const { toast } = useToast()
 
   // Filter sessions based on search, status, and student
-  const filteredSessions = mockSessions.filter(session => {
+  const filteredSessions = sessions.filter(session => {
     const matchesSearch = session.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          session.unitName.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = statusFilter === "all" || session.status === statusFilter
@@ -85,10 +46,10 @@ export default function SessionsPage() {
 
   // Calculate statistics
   const stats = {
-    total: mockSessions.length,
-    completed: mockSessions.filter(s => s.status === "COMPLETED").length,
-    inProgress: mockSessions.filter(s => s.status === "IN_PROGRESS").length,
-    avgDuration: mockSessions.reduce((sum, s) => sum + s.duration, 0) / mockSessions.length,
+    total: sessions.length,
+    completed: sessions.filter(s => s.status === "COMPLETED").length,
+    inProgress: sessions.filter(s => s.status === "IN_PROGRESS").length,
+    avgDuration: sessions.length > 0 ? sessions.reduce((sum, s) => sum + s.duration, 0) / sessions.length : 0,
   }
 
   const getStatusBadge = (status: string) => {
@@ -188,6 +149,44 @@ export default function SessionsPage() {
     },
   ]
 
+  // Loading state
+  if (sessionsLoading || studentsLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold text-slate-900">Live Sessions</h1>
+            <p className="text-slate-600">Track and manage teaching sessions across all students</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-2 text-slate-600">Loading sessions...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (sessionsError) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold text-slate-900">Live Sessions</h1>
+            <p className="text-slate-600">Track and manage teaching sessions across all students</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <p className="text-slate-600">Failed to load sessions. Please try again.</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -283,7 +282,7 @@ export default function SessionsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Students</SelectItem>
-            {isLoading ? (
+            {studentsLoading ? (
               <SelectItem value="loading" disabled>Loading...</SelectItem>
             ) : (
               students.map((student) => (
@@ -299,10 +298,23 @@ export default function SessionsPage() {
       {/* Sessions Table */}
       <Card>
         <CardContent className="p-0">
-          <DataTable
-            columns={columns}
-            data={filteredSessions}
-          />
+          {filteredSessions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <BarChart3 className="h-16 w-16 text-slate-300 mb-4" />
+              <h3 className="text-lg font-medium text-slate-900 mb-2">No sessions found</h3>
+              <p className="text-slate-500 text-center max-w-sm">
+                {sessions.length === 0 
+                  ? "Start your first teaching session to see it appear here."
+                  : "No sessions match your current filters. Try adjusting your search criteria."
+                }
+              </p>
+            </div>
+          ) : (
+            <DataTable
+              columns={columns}
+              data={filteredSessions}
+            />
+          )}
         </CardContent>
       </Card>
 
