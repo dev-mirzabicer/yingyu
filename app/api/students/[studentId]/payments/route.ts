@@ -5,7 +5,7 @@ import { RecordPaymentSchema } from '@/lib/schemas';
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ studentId: string }> }
+  { params }: { params: { studentId: string } }
 ) {
   try {
     // 1. Authentication & Authorization
@@ -16,7 +16,7 @@ export async function POST(
     // The service method below will perform the necessary authorization check.
 
     // 2. Parameter & Body Validation
-    const { studentId } = await params;
+    const { studentId } = params;
     const body = await req.json();
     const paymentData = RecordPaymentSchema.parse(body);
 

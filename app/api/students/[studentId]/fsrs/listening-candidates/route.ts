@@ -10,7 +10,7 @@ import { authorizeTeacherForStudent } from '@/lib/auth';
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ studentId: string }> }
+  { params }: { params: { studentId: string } }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -18,7 +18,7 @@ export async function GET(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
-    const { studentId } = await params;
+    const { studentId } = params;
 
     // Explicit authorization before calling the service.
     await authorizeTeacherForStudent(teacherId, studentId);

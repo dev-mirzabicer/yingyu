@@ -28,7 +28,7 @@ const SubmitAnswerBodySchema = z.discriminatedUnion('action', [
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ sessionId: string }> }
+  { params }: { params: { sessionId: string } }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -40,7 +40,7 @@ export async function POST(
       );
     }
 
-    const { sessionId } = await params;
+    const { sessionId } = params;
     const body = await req.json();
 
     // Now, when we parse, Zod validates the entire structure based on the action.

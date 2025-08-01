@@ -22,7 +22,7 @@ const AddCardBodySchema = z.object({
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ deckId: string }> }
+  { params }: { params: { deckId: string } }
 ) {
   try {
     // 1. Authentication (Development Placeholder)
@@ -32,7 +32,7 @@ export async function POST(
     }
 
     // 2. Parameter & Body Validation
-    const { deckId } = await params;
+    const { deckId } = params;
     if (!deckId) {
       return apiResponse(400, null, 'Bad Request: Missing deckId parameter.');
     }

@@ -36,7 +36,7 @@ export type ApiResponse<T> = {
 }
 
 // Mock teacher ID - in production this would come from auth context
-const MOCK_TEACHER_ID = "60d091e8-93ed-45b7-a42b-d844ba87eb00";
+const MOCK_TEACHER_ID = "0ba4fea8-b7ed-4dbd-9298-6efcad1f28a2"
 
 // Enhanced fetcher with better error handling
 const fetcher = async (url: string): Promise<any> => {
@@ -230,21 +230,6 @@ export function useDecks() {
 
   return {
     decks: data || [],
-    isLoading,
-    isError: error,
-    mutate,
-    error: error as ApiError | undefined,
-  }
-}
-
-export function useDeck(deckId: string) {
-  const { data, error, isLoading, mutate } = useSWR<VocabularyDeck & { cards: VocabularyCard[] }>(
-    deckId ? `/api/decks/${deckId}` : null,
-    fetcher
-  )
-
-  return {
-    deck: data,
     isLoading,
     isError: error,
     mutate,

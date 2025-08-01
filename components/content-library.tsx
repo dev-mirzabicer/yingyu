@@ -93,11 +93,6 @@ export function ContentLibrary() {
     {
       key: "name",
       header: "Deck Name",
-      render: (value: string, row: any) => (
-        <Link href={`/decks/${row.id}`} className="font-medium text-blue-600 hover:text-blue-800">
-          {value}
-        </Link>
-      ),
     },
     {
       key: "description",

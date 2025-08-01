@@ -9,7 +9,7 @@ import { apiResponse, handleApiError } from '@/lib/api-utils';
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ studentId: string }> }
+  { params }: { params: { studentId: string } }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -17,7 +17,7 @@ export async function POST(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
-    const { studentId } = await params;
+    const { studentId } = params;
 
     const job = await FSRSService.createOptimizeParametersJob(
       studentId,

@@ -4,7 +4,7 @@ import { apiResponse, handleApiError } from '@/lib/api-utils';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ sessionId: string }> }
+  { params }: { params: { sessionId: string } }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -12,7 +12,7 @@ export async function GET(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
-    const { sessionId } = await params;
+    const { sessionId } = params;
 
     // The service method handles its own authorization check.
     const sessionState = await SessionService.getFullState(sessionId, teacherId);
@@ -29,7 +29,7 @@ export async function GET(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ sessionId: string }> }
+  { params }: { params: { sessionId: string } }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -37,7 +37,7 @@ export async function DELETE(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
-    const { sessionId } = await params;
+    const { sessionId } = params;
 
     // The service method handles its own authorization check.
     const finalState = await SessionService.endSession(sessionId, teacherId);

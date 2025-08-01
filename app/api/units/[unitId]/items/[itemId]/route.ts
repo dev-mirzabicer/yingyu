@@ -6,7 +6,7 @@ import { AuthorizationError } from '@/lib/auth';
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ unitId: string; itemId: string }> }
+  { params }: { params: { unitId: string; itemId: string } }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -14,7 +14,7 @@ export async function DELETE(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
-    const { unitId, itemId } = await params;
+    const { unitId, itemId } = params;
 
     // Meticulous Authorization: Ensure the teacher owns the parent unit before deleting an item from it.
     const item = await prisma.unitItem.findUnique({
