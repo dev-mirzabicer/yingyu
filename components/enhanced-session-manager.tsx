@@ -71,7 +71,7 @@ export function EnhancedSessionManager({ sessionId, onSessionEnd }: EnhancedSess
       const progress = session.progress as VocabularyDeckProgress
       setSessionStats({
         totalCards: progress.payload.initialCardIds.length,
-        completedCards: progress.payload.initialCardIds.length - progress.payload.queue.length,
+        completedCards: Math.max(0, progress.payload.initialCardIds.length - progress.payload.queue.length), // Cards removed from initial queue
         correctAnswers: 0, // This would come from session history
         averageResponseTime: 0, // This would be calculated from response times
         sessionDuration: Date.now() - sessionStartTime,
@@ -600,7 +600,7 @@ export function EnhancedSessionManager({ sessionId, onSessionEnd }: EnhancedSess
             <div className="flex items-center space-x-2">
               <Target className="h-5 w-5 text-blue-600" />
               <div>
-                <p className="text-sm font-medium text-slate-600">Progress</p>
+                <p className="text-sm font-medium text-slate-600">Queue Progress</p>
                 <p className="text-lg font-bold text-slate-900">
                   {sessionStats.completedCards}/{sessionStats.totalCards}
                 </p>
@@ -651,6 +651,46 @@ export function EnhancedSessionManager({ sessionId, onSessionEnd }: EnhancedSess
           </CardContent>
         </Card>
       </div>
+
+      {/* Dynamic Queue Analysis */}
+      {session?.progress?.type === "VOCABULARY_DECK" && (
+        <Card className="border-l-4 border-l-blue-500">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Target className="h-5 w-5 text-blue-600" />
+              <span>Dynamic Queue Analysis</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              const progress = session.progress as VocabularyDeckProgress
+              const newCards = progress.payload.queue.filter(item => item.isNew).length
+              const reviewCards = progress.payload.queue.filter(item => !item.isNew).length
+              const totalInQueue = progress.payload.queue.length
+              
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="text-center p-4 bg-blue-50 rounded-lg">
+                    <div className="text-2xl font-bold text-blue-700">{newCards}</div>
+                    <div className="text-sm text-blue-600">New Cards</div>
+                    <div className="text-xs text-blue-500">First time learning</div>
+                  </div>
+                  <div className="text-center p-4 bg-orange-50 rounded-lg">
+                    <div className="text-2xl font-bold text-orange-700">{reviewCards}</div>
+                    <div className="text-sm text-orange-600">Review Cards</div>
+                    <div className="text-xs text-orange-500">FSRS scheduled</div>
+                  </div>
+                  <div className="text-center p-4 bg-gray-50 rounded-lg">
+                    <div className="text-2xl font-bold text-gray-700">{totalInQueue}</div>
+                    <div className="text-sm text-gray-600">Total Remaining</div>
+                    <div className="text-xs text-gray-500">Cards in queue</div>
+                  </div>
+                </div>
+              )
+            })()}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Exercise Content */}
       {renderExerciseContent()}
