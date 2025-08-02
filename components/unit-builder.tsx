@@ -71,8 +71,9 @@ const unitItemTemplates: UnitItemTemplate[] = [
     icon: BookOpen,
     defaultConfig: {
       deckId: "",
-      maxNewCards: 10,
-      maxReviewCards: 50,
+      newCards: 10,        // Fixed field name
+      maxDue: 50,          // Fixed field name  
+      minDue: 10,          // Added missing field
       enableAudio: true,
       showPinyin: true,
     },
@@ -380,36 +381,53 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
           </Select>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="maxNewCards">Max New Cards</Label>
+            <Label htmlFor="newCards">New Cards</Label>
             <Input
-              id="maxNewCards"
+              id="newCards"
               type="number"
-              min="1"
+              min="0"
               max="50"
-              value={editingItem.config.maxNewCards || 10}
+              value={editingItem.config.newCards || 10}
               onChange={(e) =>
                 setEditingItem({
                   ...editingItem,
-                  config: { ...editingItem.config, maxNewCards: Number.parseInt(e.target.value) },
+                  config: { ...editingItem.config, newCards: Number.parseInt(e.target.value) },
                 })
               }
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="maxReviewCards">Max Review Cards</Label>
+            <Label htmlFor="maxDue">Max Due Cards</Label>
             <Input
-              id="maxReviewCards"
+              id="maxDue"
               type="number"
-              min="1"
+              min="0"
               max="200"
-              value={editingItem.config.maxReviewCards || 50}
+              value={editingItem.config.maxDue || 50}
               onChange={(e) =>
                 setEditingItem({
                   ...editingItem,
-                  config: { ...editingItem.config, maxReviewCards: Number.parseInt(e.target.value) },
+                  config: { ...editingItem.config, maxDue: Number.parseInt(e.target.value) },
+                })
+              }
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="minDue">Min Due Cards</Label>
+            <Input
+              id="minDue"
+              type="number"
+              min="0"
+              max="50"
+              value={editingItem.config.minDue || 10}
+              onChange={(e) =>
+                setEditingItem({
+                  ...editingItem,
+                  config: { ...editingItem.config, minDue: Number.parseInt(e.target.value) },
                 })
               }
             />
@@ -1025,10 +1043,13 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
                                             {decks.find((d) => d.id === item.config.deckId)?.name || "Not selected"}
                                           </p>
                                           <p>
-                                            <strong>New Cards:</strong> {item.config.maxNewCards || 10}
+                                            <strong>New Cards:</strong> {item.config.newCards || 10}
                                           </p>
                                           <p>
-                                            <strong>Review Cards:</strong> {item.config.maxReviewCards || 50}
+                                            <strong>Max Due:</strong> {item.config.maxDue || 50}
+                                          </p>
+                                          <p>
+                                            <strong>Min Due:</strong> {item.config.minDue || 10}
                                           </p>
                                         </div>
                                       )}

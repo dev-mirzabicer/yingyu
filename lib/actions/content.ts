@@ -255,6 +255,7 @@ export const ContentService = {
               order: newOrder,
               type: 'VOCABULARY_DECK',
               vocabularyDeckId: deckId,
+              exerciseConfig: itemData.config || null,
             },
           });
           break;
@@ -269,6 +270,37 @@ export const ContentService = {
               order: newOrder,
               type: 'GRAMMAR_EXERCISE',
               grammarExerciseId: exercise.id,
+              exerciseConfig: itemData.config || null,
+            },
+          });
+          break;
+        }
+        case 'LISTENING_EXERCISE': {
+          const exercise = await tx.listeningExercise.create({
+            data: { ...itemData.data, creatorId },
+          });
+          newUnitItem = await tx.unitItem.create({
+            data: {
+              unitId,
+              order: newOrder,
+              type: 'LISTENING_EXERCISE',
+              listeningExerciseId: exercise.id,
+              exerciseConfig: itemData.config || null,
+            },
+          });
+          break;
+        }
+        case 'VOCAB_FILL_IN_BLANK_EXERCISE': {
+          const exercise = await tx.vocabFillInBlankExercise.create({
+            data: { ...itemData.data, creatorId },
+          });
+          newUnitItem = await tx.unitItem.create({
+            data: {
+              unitId,
+              order: newOrder,
+              type: 'VOCAB_FILL_IN_BLANK_EXERCISE',
+              vocabFillInBlankExerciseId: exercise.id,
+              exerciseConfig: itemData.config || null,
             },
           });
           break;
