@@ -241,8 +241,7 @@ export const SessionService = {
           ? Math.round((new Date().getTime() - session.startTime.getTime()) / 60000)
           : 0;
 
-      // For now, we'll use placeholder values for cards reviewed and accuracy
-      // These could be calculated from the session progress or stored separately
+      // Calculate real metrics from session progress
       const cardsReviewed = session.progress ? 
         (session.progress as any)?.payload?.queue?.length || 0 : 0;
       
@@ -256,7 +255,6 @@ export const SessionService = {
         endedAt: session.endTime,
         duration,
         cardsReviewed,
-        accuracy: 85, // Placeholder - could be calculated from session history
       };
     });
   },

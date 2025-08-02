@@ -36,7 +36,7 @@ export type ApiResponse<T> = {
 }
 
 // Mock teacher ID - in production this would come from auth context
-const MOCK_TEACHER_ID = "0ba4fea8-b7ed-4dbd-9298-6efcad1f28a2"
+const MOCK_TEACHER_ID = "52302784-43a2-46d5-ae0b-f8cb0351d5d9";
 
 // Enhanced fetcher with better error handling
 const fetcher = async (url: string): Promise<any> => {
@@ -149,6 +149,10 @@ export async function createStudent(
 
 export async function updateStudentNotes(studentId: string, notes: string) {
   return mutateWithOptimistic<FullStudentProfile>(`/api/students/${studentId}/notes`, "PUT", { notes })
+}
+
+export async function updateStudent(studentId: string, updateData: { name?: string; email?: string; phone?: string; proficiencyLevel?: string; notes?: string }) {
+  return mutateWithOptimistic<FullStudentProfile>(`/api/students/${studentId}`, "PUT", updateData)
 }
 
 export async function archiveStudent(studentId: string) {
@@ -311,6 +315,10 @@ export async function createUnit(unitData: { name: string; description?: string;
   return mutateWithOptimistic<Unit>("/api/units", "POST", unitData)
 }
 
+export async function createDeck(deckData: { name: string; description?: string; isPublic?: boolean }) {
+  return mutateWithOptimistic<VocabularyDeck>("/api/decks", "POST", deckData)
+}
+
 export async function updateUnit(
   unitId: string,
   unitData: { name?: string; description?: string; isPublic?: boolean },
@@ -443,39 +451,6 @@ export async function assignDeck(studentId: string, deckId: string) {
   return mutateWithOptimistic<{ studentDeck: any; job: Job }>(`/api/students/${studentId}/decks`, "POST", { deckId })
 }
 
-// ============================================================================
-// JOB MONITORING HOOKS
-// ============================================================================
-
-export function useJob(jobId: string) {
-  const { data, error, isLoading, mutate } = useSWR<Job>(
-    jobId ? `/api/jobs/${jobId}` : null,
-    fetcher,
-    { refreshInterval: 2000 }, // Poll every 2 seconds for job status
-  )
-
-  return {
-    job: data,
-    isLoading,
-    isError: error,
-    mutate,
-    error: error as ApiError | undefined,
-  }
-}
-
-export function useJobs() {
-  const { data, error, isLoading, mutate } = useSWR<Job[]>("/api/jobs", fetcher, {
-    refreshInterval: 5000, // Poll every 5 seconds for job updates
-  })
-
-  return {
-    jobs: data || [],
-    isLoading,
-    isError: error,
-    mutate,
-    error: error as ApiError | undefined,
-  }
-}
 
 // ============================================================================
 // TEACHER SETTINGS HOOKS

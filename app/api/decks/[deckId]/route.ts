@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { ContentService } from '@/lib/actions/content';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
 import { UnitItemType } from '@prisma/client';
-import { db } from '@/lib/db';
+import { prisma } from '@/lib/db';
 
 export async function GET(
   req: NextRequest,
@@ -17,7 +17,7 @@ export async function GET(
     const { deckId } = await params;
 
     // Fetch the vocabulary deck by ID
-    const deck = await db.vocabularyDeck.findUnique({
+    const deck = await prisma.vocabularyDeck.findUnique({
       where: {
         id: deckId,
       },
@@ -35,7 +35,7 @@ export async function GET(
     }
 
     // Check if the teacher has access to this deck (either owned by them or it's public)
-    if (!deck.isPublic && deck.teacherId !== teacherId) {
+    if (!deck.isPublic && deck.creatorId !== teacherId) {
       return apiResponse(403, null, 'Access denied: You do not have permission to access this deck.');
     }
 

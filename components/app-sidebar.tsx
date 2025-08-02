@@ -121,12 +121,6 @@ const navigationItems = [
     title: "System",
     items: [
       {
-        title: "Job Monitor",
-        url: "/jobs",
-        icon: Monitor,
-        badge: null,
-      },
-      {
         title: "Settings",
         url: "/settings",
         icon: Settings,

@@ -27,6 +27,7 @@ import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { recordPayment } from "@/hooks/use-api-enhanced"
+import { useCurrencyFormatter } from "@/hooks/use-ui-preferences"
 import type { FullStudentProfile } from "@/lib/types"
 import type { Payment } from "@prisma/client"
 import { DataTable } from "@/components/data-table"
@@ -78,6 +79,7 @@ const initialFormData: PaymentFormData = {
 }
 
 export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerProps) {
+  const { formatCurrency } = useCurrencyFormatter()
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false)
   const [formData, setFormData] = useState<PaymentFormData>(initialFormData)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -124,7 +126,7 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
 
       toast({
         title: "Payment recorded successfully",
-        description: `¥${amount} for ${classes} classes has been recorded.`,
+        description: `${formatCurrency(amount)} for ${classes} classes has been recorded.`,
       })
 
       setFormData(initialFormData)
@@ -160,7 +162,7 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
       key: "amount",
       header: "Amount",
       render: (value: string | number) => (
-        <div className="font-medium text-green-600">¥{safeNumberConversion(value).toFixed(2)}</div>
+        <div className="font-medium text-green-600">{formatCurrency(safeNumberConversion(value))}</div>
       ),
     },
     {
@@ -180,7 +182,7 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
         const amount = safeNumberConversion(row.amount)
         const pricePerClass = row.classesPurchased > 0 ? amount / row.classesPurchased : 0
         return (
-          <div className="text-slate-600">¥{pricePerClass.toFixed(2)}</div>
+          <div className="text-slate-600">{formatCurrency(pricePerClass)}</div>
         )
       },
     },
@@ -208,7 +210,7 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
               <DollarSign className="h-5 w-5 text-green-600" />
               <div>
                 <p className="text-sm font-medium text-slate-600">Total Paid</p>
-                <p className="text-2xl font-bold text-slate-900">¥{totalPaid.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalPaid)}</p>
               </div>
             </div>
           </CardContent>
@@ -244,7 +246,7 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
               <DollarSign className="h-5 w-5 text-orange-600" />
               <div>
                 <p className="text-sm font-medium text-slate-600">Avg Price/Class</p>
-                <p className="text-2xl font-bold text-slate-900">¥{averageClassPrice.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-slate-900">{formatCurrency(averageClassPrice)}</p>
               </div>
             </div>
           </CardContent>
@@ -331,7 +333,7 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
               <div className="p-3 bg-slate-50 rounded-lg">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-slate-600">Price per class:</span>
-                  <span className="font-medium text-slate-900">¥{calculateClassPrice()}</span>
+                  <span className="font-medium text-slate-900">{formatCurrency(Number.parseFloat(calculateClassPrice()))}</span>
                 </div>
               </div>
             )}

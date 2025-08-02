@@ -5,14 +5,31 @@ import { z } from 'zod';
 import { NewUnitItemData } from '@/lib/types';
 
 // This schema can be expanded as you implement more exercise types.
-const AddItemBodySchema = z.object({
-  type: z.enum(['VOCABULARY_DECK', 'GRAMMAR_EXERCISE']), // Allow multiple types
-  data: z.object({
-    name: z.string().min(1).optional(), // Optional for some types
-    title: z.string().min(1).optional(),
-    isPublic: z.boolean().optional(),
-  }).passthrough(), // Allow other fields that will be validated by the service layer
-});
+const AddItemBodySchema = z.union([
+  z.object({
+    type: z.literal('VOCABULARY_DECK'),
+    mode: z.literal('new'),
+    data: z.object({
+      name: z.string().min(1),
+      description: z.string().optional(),
+      isPublic: z.boolean().optional(),
+    }),
+  }),
+  z.object({
+    type: z.literal('VOCABULARY_DECK'),
+    mode: z.literal('existing'),
+    existingDeckId: z.string().uuid(),
+  }),
+  z.object({
+    type: z.literal('GRAMMAR_EXERCISE'),
+    data: z.object({
+      title: z.string().min(1),
+      grammarTopic: z.string().optional(),
+      exerciseData: z.any().optional(),
+      isPublic: z.boolean().optional(),
+    }),
+  }),
+]);
 
 export async function POST(
   req: NextRequest,

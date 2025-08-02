@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { MoreHorizontal, Play, DollarSign, Edit, Archive, BookOpen, Calendar, TrendingUp, Clock } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useStudent, useDecks, assignDeck } from "@/hooks/use-api-enhanced"
+import { useStudent, useDecks, assignDeck, updateStudent, archiveStudent } from "@/hooks/use-api-enhanced"
 import { format } from "date-fns"
 import { SessionStartDialog } from "@/components/session-start-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -38,6 +38,17 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
   const [isAssigning, setIsAssigning] = useState(false)
   const [isSavingNotes, setIsSavingNotes] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
+  const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false)
+  const [isArchiveConfirmOpen, setIsArchiveConfirmOpen] = useState(false)
+  const [editFormData, setEditFormData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    proficiencyLevel: "",
+    notes: ""
+  })
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [isArchiving, setIsArchiving] = useState(false)
   const { toast } = useToast()
 
   React.useEffect(() => {
@@ -45,6 +56,18 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
       setNotes(student.notes)
     }
   }, [student?.notes])
+
+  React.useEffect(() => {
+    if (student) {
+      setEditFormData({
+        name: student.name || "",
+        email: student.email || "",
+        phone: student.phone || "",
+        proficiencyLevel: student.proficiencyLevel || "",
+        notes: student.notes || ""
+      })
+    }
+  }, [student])
 
   const handleSaveNotes = async () => {
     if (!student) return
@@ -99,6 +122,68 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
 
   const handleScheduleClassClick = () => {
     setActiveTab("schedule")
+  }
+
+  const handleUpdateStudent = async () => {
+    if (!student) return
+
+    if (!editFormData.name.trim()) {
+      toast({
+        title: "Error",
+        description: "Student name is required.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsUpdating(true)
+    try {
+      await updateStudent(student.id, {
+        name: editFormData.name,
+        email: editFormData.email || undefined,
+        phone: editFormData.phone || undefined,
+        proficiencyLevel: editFormData.proficiencyLevel || undefined,
+        notes: editFormData.notes || undefined,
+      })
+      toast({
+        title: "Student updated",
+        description: "Student details have been updated successfully.",
+      })
+      setIsEditDetailsOpen(false)
+      mutate()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update student. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  const handleArchiveStudent = async () => {
+    if (!student) return
+
+    setIsArchiving(true)
+    try {
+      await archiveStudent(student.id)
+      toast({
+        title: "Student archived",
+        description: "Student has been archived successfully.",
+      })
+      setIsArchiveConfirmOpen(false)
+      // Navigate back to students list or refresh the page
+      window.location.href = "/students"
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to archive student. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsArchiving(false)
+    }
   }
 
   const assignedDeckIds = new Set(student?.studentDecks.map(sd => sd.deckId))
@@ -219,11 +304,11 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
                       <Calendar className="mr-2 h-4 w-4" />
                       Schedule Class
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setIsEditDetailsOpen(true)}>
                       <Edit className="mr-2 h-4 w-4" />
                       Edit Details
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="text-red-600">
+                    <DropdownMenuItem className="text-red-600" onClick={() => setIsArchiveConfirmOpen(true)}>
                       <Archive className="mr-2 h-4 w-4" />
                       Archive Student
                     </DropdownMenuItem>
@@ -420,6 +505,109 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
               <Button variant="outline" onClick={() => setIsAssignDeckOpen(false)}>Cancel</Button>
               <Button onClick={handleAssignDeck} disabled={!selectedDeckId || isAssigning} className="bg-blue-600 hover:bg-blue-700">
                 {isAssigning ? "Assigning..." : "Assign Deck"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Details Dialog */}
+        <Dialog open={isEditDetailsOpen} onOpenChange={setIsEditDetailsOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit Student Details</DialogTitle>
+              <DialogDescription>
+                Update the student's information below.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Name *</Label>
+                <Input
+                  id="edit-name"
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
+                  disabled={isUpdating}
+                  placeholder="Student name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-email">Email</Label>
+                <Input
+                  id="edit-email"
+                  type="email"
+                  value={editFormData.email}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, email: e.target.value }))}
+                  disabled={isUpdating}
+                  placeholder="student@example.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-phone">Phone</Label>
+                <Input
+                  id="edit-phone"
+                  value={editFormData.phone}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, phone: e.target.value }))}
+                  disabled={isUpdating}
+                  placeholder="Phone number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-proficiency">Proficiency Level</Label>
+                <Select value={editFormData.proficiencyLevel} onValueChange={(value) => setEditFormData(prev => ({ ...prev, proficiencyLevel: value }))}>
+                  <SelectTrigger id="edit-proficiency">
+                    <SelectValue placeholder="Select proficiency level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Not specified</SelectItem>
+                    <SelectItem value="BEGINNER">Beginner</SelectItem>
+                    <SelectItem value="ELEMENTARY">Elementary</SelectItem>
+                    <SelectItem value="INTERMEDIATE">Intermediate</SelectItem>
+                    <SelectItem value="ADVANCED">Advanced</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-notes">Notes</Label>
+                <Textarea
+                  id="edit-notes"
+                  value={editFormData.notes}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, notes: e.target.value }))}
+                  disabled={isUpdating}
+                  placeholder="Additional notes about the student..."
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setIsEditDetailsOpen(false)} disabled={isUpdating}>
+                Cancel
+              </Button>
+              <Button onClick={handleUpdateStudent} disabled={isUpdating} className="bg-blue-600 hover:bg-blue-700">
+                {isUpdating ? "Updating..." : "Update Student"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Archive Confirmation Dialog */}
+        <Dialog open={isArchiveConfirmOpen} onOpenChange={setIsArchiveConfirmOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Archive Student</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to archive {student?.name}? This will hide them from your active students list, but their data will be preserved.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button variant="outline" onClick={() => setIsArchiveConfirmOpen(false)} disabled={isArchiving}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleArchiveStudent} 
+                disabled={isArchiving} 
+                variant="destructive"
+              >
+                {isArchiving ? "Archiving..." : "Archive Student"}
               </Button>
             </div>
           </DialogContent>

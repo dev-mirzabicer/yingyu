@@ -7,14 +7,15 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DataTable } from "@/components/data-table"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { BookOpen, Plus, Search, FileText, Users, Globe, Lock } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useDecks } from "@/hooks/use-api-enhanced"
+import { useDecks, createDeck, useStudents, assignDeck } from "@/hooks/use-api-enhanced"
 import { format } from "date-fns"
+import Link from "next/link"
 
 export default function DecksPage() {
   const [isCreateDeckOpen, setIsCreateDeckOpen] = useState(false)
@@ -22,9 +23,14 @@ export default function DecksPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [filterVisibility, setFilterVisibility] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
+  const [isAssignDeckOpen, setIsAssignDeckOpen] = useState(false)
+  const [selectedDeckForAssignment, setSelectedDeckForAssignment] = useState<any>(null)
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
+  const [isAssigning, setIsAssigning] = useState(false)
 
   const { toast } = useToast()
   const { decks, isLoading, isError, mutate } = useDecks()
+  const { students, isLoading: studentsLoading } = useStudents()
 
   const handleCreateDeck = async () => {
     if (!newDeck.name) {
@@ -38,8 +44,7 @@ export default function DecksPage() {
 
     setIsSubmitting(true)
     try {
-      // This would use a createDeck function from enhanced API hooks
-      // await createDeck(newDeck)
+      await createDeck(newDeck)
       toast({
         title: "Deck created successfully",
         description: `${newDeck.name} has been created.`,
@@ -56,6 +61,35 @@ export default function DecksPage() {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const handleAssignDeck = async () => {
+    if (!selectedStudentId || !selectedDeckForAssignment) return
+
+    setIsAssigning(true)
+    try {
+      await assignDeck(selectedStudentId, selectedDeckForAssignment.id)
+      toast({
+        title: "Deck assigned successfully",
+        description: `${selectedDeckForAssignment.name} has been assigned to the student.`,
+      })
+      setIsAssignDeckOpen(false)
+      setSelectedDeckForAssignment(null)
+      setSelectedStudentId(null)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to assign deck. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsAssigning(false)
+    }
+  }
+
+  const handleOpenAssignDialog = (deck: any) => {
+    setSelectedDeckForAssignment(deck)
+    setIsAssignDeckOpen(true)
   }
 
   // Filter decks based on visibility and search
@@ -111,11 +145,13 @@ export default function DecksPage() {
       header: "Actions",
       render: (_: any, row: any) => (
         <div className="flex items-center space-x-2">
-          <Button variant="outline" size="sm">
-            <FileText className="h-4 w-4 mr-2" />
-            Manage Cards
-          </Button>
-          <Button variant="outline" size="sm">
+          <Link href={`/decks/${row.id}/manage`}>
+            <Button variant="outline" size="sm">
+              <FileText className="h-4 w-4 mr-2" />
+              Manage Cards
+            </Button>
+          </Link>
+          <Button variant="outline" size="sm" onClick={() => handleOpenAssignDialog(row)}>
             <Users className="h-4 w-4 mr-2" />
             Assign
           </Button>
@@ -305,6 +341,53 @@ export default function DecksPage() {
                 {isSubmitting ? "Creating..." : "Create Deck"}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign Deck Dialog */}
+      <Dialog open={isAssignDeckOpen} onOpenChange={setIsAssignDeckOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Deck to Student</DialogTitle>
+            <DialogDescription>
+              Select a student to assign "{selectedDeckForAssignment?.name}" to. They will begin seeing cards from this deck in their sessions.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="student-select">Select Student</Label>
+              <Select onValueChange={setSelectedStudentId} value={selectedStudentId || undefined}>
+                <SelectTrigger id="student-select">
+                  <SelectValue placeholder="Select a student..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {studentsLoading ? (
+                    <SelectItem value="loading" disabled>Loading students...</SelectItem>
+                  ) : students.length > 0 ? (
+                    students.map(student => (
+                      <SelectItem key={student.id} value={student.id}>
+                        {student.name} ({student.email})
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-students" disabled>No students available</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setIsAssignDeckOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleAssignDeck} 
+              disabled={!selectedStudentId || isAssigning} 
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {isAssigning ? "Assigning..." : "Assign Deck"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

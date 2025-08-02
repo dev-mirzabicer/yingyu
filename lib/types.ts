@@ -140,11 +140,19 @@ export type NewUnitItemData =
     type: 'VOCABULARY_DECK';
     order?: number;
     config?: VocabularyExerciseConfig;
+    mode: 'new';
     data: {
       name: string;
       description?: string;
       isPublic?: boolean;
     };
+  }
+  | {
+    type: 'VOCABULARY_DECK';
+    order?: number;
+    config?: VocabularyExerciseConfig;
+    mode: 'existing';
+    existingDeckId: string;
   }
   | {
     type: 'GRAMMAR_EXERCISE';

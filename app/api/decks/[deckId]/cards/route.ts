@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { ContentService } from '@/lib/actions/content';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
+import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 
@@ -19,6 +20,52 @@ const AddCardBodySchema = z.object({
   frequencyRank: z.number().int().optional(),
   tags: z.array(z.string()).optional(),
 });
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ deckId: string }> }
+) {
+  try {
+    // 1. Authentication (Development Placeholder)
+    const teacherId = req.headers.get('X-Teacher-ID');
+    if (!teacherId) {
+      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
+    }
+
+    // 2. Parameter Validation
+    const { deckId } = await params;
+    if (!deckId) {
+      return apiResponse(400, null, 'Bad Request: Missing deckId parameter.');
+    }
+
+    // 3. Check if the deck exists and the teacher has access to it
+    const deck = await prisma.vocabularyDeck.findUnique({
+      where: { id: deckId },
+      select: { creatorId: true, isPublic: true },
+    });
+
+    if (!deck) {
+      return apiResponse(404, null, 'Deck not found.');
+    }
+
+    // Check if the teacher has access to this deck (either owned by them or it's public)
+    if (!deck.isPublic && deck.creatorId !== teacherId) {
+      return apiResponse(403, null, 'Access denied: You do not have permission to access this deck.');
+    }
+
+    // 4. Fetch all cards for this deck
+    const cards = await prisma.vocabularyCard.findMany({
+      where: { deckId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // 5. Return Success Response
+    return apiResponse(200, cards, null);
+  } catch (error) {
+    // 6. Centralized Error Handling
+    return handleApiError(error);
+  }
+}
 
 export async function POST(
   req: NextRequest,

@@ -85,8 +85,30 @@ export const ContentService = {
         creatorId: teacherId,
         isArchived: false
       },
+      include: {
+        _count: {
+          select: {
+            cards: true,
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
+  },
+
+  /**
+   * Creates a new vocabulary deck for a given teacher.
+   * 
+   * @param data An object containing the necessary data to create the deck.
+   * @returns A promise that resolves to the newly created VocabularyDeck object.
+   */
+  async createDeck(data: {
+    creatorId: string;
+    name: string;
+    description?: string;
+    isPublic?: boolean;
+  }): Promise<VocabularyDeck> {
+    return prisma.vocabularyDeck.create({ data });
   },
 
   /**
@@ -103,6 +125,21 @@ export const ContentService = {
     isPublic?: boolean;
   }): Promise<Unit> {
     return prisma.unit.create({ data });
+  },
+
+  /**
+   * Creates a new, empty VocabularyDeck.
+   *
+   * @param data An object containing the necessary data to create the deck.
+   * @returns A promise that resolves to the newly created VocabularyDeck object.
+   */
+  async createDeck(data: {
+    creatorId: string;
+    name: string;
+    description?: string;
+    isPublic?: boolean;
+  }): Promise<VocabularyDeck> {
+    return prisma.vocabularyDeck.create({ data });
   },
 
   /**
@@ -185,15 +222,39 @@ export const ContentService = {
       let newUnitItem: UnitItem;
       switch (itemData.type) {
         case 'VOCABULARY_DECK': {
-          const deck = await tx.vocabularyDeck.create({
-            data: { ...itemData.data, creatorId },
-          });
+          let deckId: string;
+          
+          if (itemData.mode === 'existing') {
+            // Link existing deck
+            const existingDeck = await tx.vocabularyDeck.findUnique({
+              where: { id: itemData.existingDeckId },
+              select: { id: true, creatorId: true, isPublic: true },
+            });
+            
+            if (!existingDeck) {
+              throw new Error('Selected deck not found.');
+            }
+            
+            // Check if the teacher has access to this deck
+            if (!existingDeck.isPublic && existingDeck.creatorId !== creatorId) {
+              throw new AuthorizationError('You do not have permission to use this deck.');
+            }
+            
+            deckId = existingDeck.id;
+          } else {
+            // Create new deck
+            const deck = await tx.vocabularyDeck.create({
+              data: { ...itemData.data, creatorId },
+            });
+            deckId = deck.id;
+          }
+          
           newUnitItem = await tx.unitItem.create({
             data: {
               unitId,
               order: newOrder,
               type: 'VOCABULARY_DECK',
-              vocabularyDeckId: deck.id,
+              vocabularyDeckId: deckId,
             },
           });
           break;

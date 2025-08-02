@@ -10,21 +10,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Search,
   Star,
   Download,
   Eye,
-  Heart,
-  Share2,
   BookOpen,
   Tag,
   Award,
   Globe,
   Copy,
-  ThumbsUp,
-  MessageSquare,
 } from "lucide-react"
 import { format } from "date-fns"
 import { useToast } from "@/hooks/use-toast"
@@ -45,9 +40,6 @@ interface PublicDeck extends VocabularyDeck {
   }
   stats: {
     downloads: number
-    likes: number
-    rating: number
-    reviews: number
     forks: number
   }
   tags: string[]
@@ -57,16 +49,6 @@ interface PublicDeck extends VocabularyDeck {
   featured: boolean
 }
 
-interface DeckReview {
-  id: string
-  userId: string
-  userName: string
-  userAvatar?: string
-  rating: number
-  comment: string
-  createdAt: Date
-  helpful: number
-}
 
 // Mock data for public decks
 const mockPublicDecks: PublicDeck[] = [
@@ -89,9 +71,6 @@ const mockPublicDecks: PublicDeck[] = [
     },
     stats: {
       downloads: 2847,
-      likes: 456,
-      rating: 4.8,
-      reviews: 89,
       forks: 23,
     },
     tags: ["business", "professional", "workplace", "communication"],
@@ -119,9 +98,6 @@ const mockPublicDecks: PublicDeck[] = [
     },
     stats: {
       downloads: 1923,
-      likes: 312,
-      rating: 4.6,
-      reviews: 67,
       forks: 45,
     },
     tags: ["hsk", "chinese", "test-prep", "intermediate"],
@@ -149,9 +125,6 @@ const mockPublicDecks: PublicDeck[] = [
     },
     stats: {
       downloads: 3421,
-      likes: 678,
-      rating: 4.9,
-      reviews: 134,
       forks: 67,
     },
     tags: ["conversation", "daily", "beginner", "phrases"],
@@ -162,28 +135,6 @@ const mockPublicDecks: PublicDeck[] = [
   },
 ]
 
-const mockReviews: DeckReview[] = [
-  {
-    id: "review-1",
-    userId: "user-1",
-    userName: "Alex Thompson",
-    userAvatar: "/placeholder.svg?height=32&width=32",
-    rating: 5,
-    comment:
-      "Excellent deck! Really helped me prepare for my business presentations. The audio pronunciations are spot on.",
-    createdAt: new Date("2024-01-18"),
-    helpful: 12,
-  },
-  {
-    id: "review-2",
-    userId: "user-2",
-    userName: "Lisa Wang",
-    rating: 4,
-    comment: "Great vocabulary selection. Would love to see more example sentences for context.",
-    createdAt: new Date("2024-01-16"),
-    helpful: 8,
-  },
-]
 
 const categories = [
   "All Categories",
@@ -211,7 +162,6 @@ const sortOptions = [
   { value: "featured", label: "Featured" },
   { value: "popular", label: "Most Popular" },
   { value: "recent", label: "Recently Updated" },
-  { value: "rating", label: "Highest Rated" },
   { value: "downloads", label: "Most Downloaded" },
 ]
 
@@ -223,7 +173,6 @@ export function PublicDeckLibrary({ onDeckImported }: PublicDeckLibraryProps) {
   const [selectedDeck, setSelectedDeck] = useState<PublicDeck | null>(null)
   const [isDeckDetailOpen, setIsDeckDetailOpen] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
-  const [likedDecks, setLikedDecks] = useState<Set<string>>(new Set())
 
   const { toast } = useToast()
 
@@ -246,8 +195,6 @@ export function PublicDeckLibrary({ onDeckImported }: PublicDeckLibraryProps) {
           return b.stats.downloads - a.stats.downloads
         case "recent":
           return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()
-        case "rating":
-          return b.stats.rating - a.stats.rating
         case "downloads":
           return b.stats.downloads - a.stats.downloads
         case "featured":
@@ -283,20 +230,6 @@ export function PublicDeckLibrary({ onDeckImported }: PublicDeckLibraryProps) {
     }
   }
 
-  const handleLikeDeck = (deckId: string) => {
-    const newLikedDecks = new Set(likedDecks)
-    if (likedDecks.has(deckId)) {
-      newLikedDecks.delete(deckId)
-    } else {
-      newLikedDecks.add(deckId)
-    }
-    setLikedDecks(newLikedDecks)
-
-    toast({
-      title: likedDecks.has(deckId) ? "Removed from favorites" : "Added to favorites",
-      description: likedDecks.has(deckId) ? "Deck removed from your favorites." : "Deck added to your favorites.",
-    })
-  }
 
   const DeckCard = ({ deck }: { deck: PublicDeck }) => (
     <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
@@ -318,17 +251,6 @@ export function PublicDeckLibrary({ onDeckImported }: PublicDeckLibraryProps) {
               </div>
               <p className="text-sm text-slate-600 line-clamp-2">{deck.description}</p>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation()
-                handleLikeDeck(deck.id)
-              }}
-              className={likedDecks.has(deck.id) ? "text-red-500" : "text-slate-400"}
-            >
-              <Heart className={`h-4 w-4 ${likedDecks.has(deck.id) ? "fill-current" : ""}`} />
-            </Button>
           </div>
 
           {/* Author */}
@@ -369,10 +291,6 @@ export function PublicDeckLibrary({ onDeckImported }: PublicDeckLibraryProps) {
               <div className="flex items-center space-x-1">
                 <Download className="h-4 w-4" />
                 <span>{deck.stats.downloads.toLocaleString()}</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <Star className="h-4 w-4 fill-current text-yellow-500" />
-                <span>{deck.stats.rating}</span>
               </div>
             </div>
             <Badge variant="outline" className="text-xs">
@@ -541,7 +459,6 @@ export function PublicDeckLibrary({ onDeckImported }: PublicDeckLibraryProps) {
               <TabsList>
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="preview">Preview Cards</TabsTrigger>
-                <TabsTrigger value="reviews">Reviews ({selectedDeck.stats.reviews})</TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="space-y-4">
@@ -608,34 +525,7 @@ export function PublicDeckLibrary({ onDeckImported }: PublicDeckLibraryProps) {
                           <span className="font-medium">{selectedDeck.stats.downloads.toLocaleString()}</span>
                         </div>
 
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <Heart className="h-4 w-4 text-slate-500" />
-                            <span className="text-sm text-slate-600">Likes</span>
-                          </div>
-                          <span className="font-medium">{selectedDeck.stats.likes}</span>
-                        </div>
 
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <Star className="h-4 w-4 text-slate-500" />
-                            <span className="text-sm text-slate-600">Rating</span>
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            <span className="font-medium">{selectedDeck.stats.rating}</span>
-                            <div className="flex">
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <Star
-                                  key={star}
-                                  className={`h-3 w-3 ${star <= selectedDeck.stats.rating
-                                    ? "fill-current text-yellow-500"
-                                    : "text-slate-300"
-                                    }`}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        </div>
 
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-2">
@@ -681,17 +571,6 @@ export function PublicDeckLibrary({ onDeckImported }: PublicDeckLibraryProps) {
                         {isImporting ? "Importing..." : "Import Deck"}
                       </Button>
 
-                      <Button variant="outline" onClick={() => handleLikeDeck(selectedDeck.id)} className="w-full">
-                        <Heart
-                          className={`h-4 w-4 mr-2 ${likedDecks.has(selectedDeck.id) ? "fill-current text-red-500" : ""}`}
-                        />
-                        {likedDecks.has(selectedDeck.id) ? "Unlike" : "Like"}
-                      </Button>
-
-                      <Button variant="outline" className="w-full bg-transparent">
-                        <Share2 className="h-4 w-4 mr-2" />
-                        Share
-                      </Button>
                     </div>
                   </div>
                 </div>
@@ -712,54 +591,6 @@ export function PublicDeckLibrary({ onDeckImported }: PublicDeckLibraryProps) {
                 </div>
               </TabsContent>
 
-              <TabsContent value="reviews" className="space-y-4">
-                <ScrollArea className="h-96">
-                  <div className="space-y-4">
-                    {mockReviews.map((review) => (
-                      <Card key={review.id}>
-                        <CardContent className="p-4">
-                          <div className="flex items-start space-x-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={review.userAvatar || "/placeholder.svg"} />
-                              <AvatarFallback>{review.userName.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center space-x-2">
-                                  <span className="font-medium text-sm">{review.userName}</span>
-                                  <div className="flex">
-                                    {[1, 2, 3, 4, 5].map((star) => (
-                                      <Star
-                                        key={star}
-                                        className={`h-3 w-3 ${star <= review.rating ? "fill-current text-yellow-500" : "text-slate-300"
-                                          }`}
-                                      />
-                                    ))}
-                                  </div>
-                                </div>
-                                <span className="text-xs text-slate-500">
-                                  {format(review.createdAt, "MMM dd, yyyy")}
-                                </span>
-                              </div>
-                              <p className="text-sm text-slate-700 mb-2">{review.comment}</p>
-                              <div className="flex items-center space-x-4">
-                                <Button variant="ghost" size="sm" className="text-xs">
-                                  <ThumbsUp className="h-3 w-3 mr-1" />
-                                  Helpful ({review.helpful})
-                                </Button>
-                                <Button variant="ghost" size="sm" className="text-xs">
-                                  <MessageSquare className="h-3 w-3 mr-1" />
-                                  Reply
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </TabsContent>
             </Tabs>
           )}
         </DialogContent>

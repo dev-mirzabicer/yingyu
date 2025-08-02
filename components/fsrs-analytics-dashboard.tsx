@@ -30,7 +30,6 @@ import {
   useListeningCandidates,
   optimizeFsrsParameters,
   rebuildFsrsCache,
-  useJob,
   useAsyncOperation,
 } from "@/hooks/use-api-enhanced"
 import type { FullStudentProfile } from "@/lib/types"
@@ -51,7 +50,6 @@ interface AnalyticsData {
   newCards: number
   reviewCards: number
   averageRetention: number
-  studyStreak: number
   totalReviews: number
   averageResponseTime: number
 }
@@ -83,8 +81,6 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
   const [rebuildJobId, setRebuildJobId] = useState<string | null>(null)
   const [isOptimizationDialogOpen, setIsOptimizationDialogOpen] = useState(false)
 
-  const { job: optimizationJob } = useJob(optimizationJobId || "")
-  const { job: rebuildJob } = useJob(rebuildJobId || "")
   const { execute, isLoading: isExecuting, error: executionError } = useAsyncOperation()
 
   const { toast } = useToast()
@@ -99,7 +95,6 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
       dueCards.length > 0
         ? (dueCards.reduce((sum, card) => sum + (card.retrievability || 0), 0) / dueCards.length) * 100
         : 0,
-    studyStreak: 7, // This would come from review history analysis
     totalReviews: dueCards.reduce((sum, card) => sum + card.reps, 0),
     averageResponseTime:
       dueCards.length > 0 ? dueCards.reduce((sum, card) => sum + card.averageResponseTimeMs, 0) / dueCards.length : 0,
@@ -258,28 +253,10 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
           <h2 className="text-2xl font-bold text-slate-900">FSRS Analytics</h2>
           <p className="text-slate-600">Advanced spaced repetition analytics for {student.name}</p>
         </div>
-        <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            onClick={handleRebuildCache}
-            disabled={isExecuting || rebuildJob?.status === "RUNNING"}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${rebuildJob?.status === "RUNNING" ? "animate-spin" : ""}`} />
-            Rebuild Cache
-          </Button>
-          <Button
-            onClick={handleOptimizeParameters}
-            disabled={isExecuting || optimizationJob?.status === "RUNNING"}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            <Settings className={`h-4 w-4 mr-2 ${optimizationJob?.status === "RUNNING" ? "animate-spin" : ""}`} />
-            Optimize Parameters
-          </Button>
-        </div>
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
@@ -311,18 +288,6 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
               <div>
                 <p className="text-sm font-medium text-slate-600">Avg Retention</p>
                 <p className="text-2xl font-bold text-slate-900">{analyticsData.averageRetention.toFixed(1)}%</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <Zap className="h-5 w-5 text-purple-600" />
-              <div>
-                <p className="text-sm font-medium text-slate-600">Study Streak</p>
-                <p className="text-2xl font-bold text-slate-900">{analyticsData.studyStreak} days</p>
               </div>
             </div>
           </CardContent>
@@ -457,7 +422,6 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
         <TabsList>
           <TabsTrigger value="due-cards">Due Cards</TabsTrigger>
           <TabsTrigger value="listening-candidates">Listening Candidates</TabsTrigger>
-          <TabsTrigger value="optimization-history">Optimization History</TabsTrigger>
         </TabsList>
 
         <TabsContent value="due-cards">
@@ -518,95 +482,7 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
           </Card>
         </TabsContent>
 
-        <TabsContent value="optimization-history">
-          <Card>
-            <CardHeader>
-              <CardTitle>Parameter Optimization History</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <Brain className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-                <p className="text-slate-500 mb-4">No optimization history available</p>
-                <Button onClick={handleOptimizeParameters} className="bg-blue-600 hover:bg-blue-700">
-                  Run First Optimization
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
-
-      {/* Optimization Job Dialog */}
-      <Dialog open={isOptimizationDialogOpen} onOpenChange={setIsOptimizationDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Parameter Optimization Progress</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {optimizationJob ? (
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <div
-                    className={`w-3 h-3 rounded-full ${optimizationJob.status === "COMPLETED"
-                        ? "bg-green-500"
-                        : optimizationJob.status === "FAILED"
-                          ? "bg-red-500"
-                          : optimizationJob.status === "RUNNING"
-                            ? "bg-blue-500 animate-pulse"
-                            : "bg-slate-300"
-                      }`}
-                  />
-                  <span className="font-medium">Status: {optimizationJob.status}</span>
-                </div>
-
-                {optimizationJob.status === "RUNNING" && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Optimizing FSRS parameters...</span>
-                      <span>This may take several minutes</span>
-                    </div>
-                    <Progress value={undefined} className="h-2" />
-                  </div>
-                )}
-
-                {optimizationJob.status === "COMPLETED" && optimizationJob.result && (
-                  <div className="space-y-2">
-                    <div className="text-sm text-green-600">✓ Optimization completed successfully!</div>
-                    <div className="bg-slate-50 p-3 rounded-lg">
-                      <pre className="text-xs text-slate-600">{JSON.stringify(optimizationJob.result, null, 2)}</pre>
-                    </div>
-                  </div>
-                )}
-
-                {optimizationJob.status === "FAILED" && (
-                  <Alert>
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertDescription>Optimization failed: {optimizationJob.error || "Unknown error"}</AlertDescription>
-                  </Alert>
-                )}
-
-                <div className="text-xs text-slate-500">
-                  Started: {format(new Date(optimizationJob.createdAt), "PPp")}
-                  {optimizationJob.updatedAt !== optimizationJob.createdAt && (
-                    <> • Updated: {format(new Date(optimizationJob.updatedAt), "PPp")}</>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2" />
-                <p className="text-sm text-slate-600">Loading optimization status...</p>
-              </div>
-            )}
-
-            <div className="flex justify-end">
-              <Button variant="outline" onClick={() => setIsOptimizationDialogOpen(false)}>
-                Close
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Error Display */}
       {executionError && (

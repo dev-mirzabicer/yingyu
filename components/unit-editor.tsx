@@ -13,8 +13,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { BookOpen, FileText, Mic, GripVertical, MoreHorizontal, Plus, Settings, Trash2, Save, Edit3 } from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { useUnit, updateUnit, addExerciseToUnit } from "@/hooks/use-api-enhanced"
+import { useUnit, updateUnit, addExerciseToUnit, useDecks } from "@/hooks/use-api-enhanced"
 import { UnitItemType } from "@prisma/client"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface UnitEditorProps {
   unitId: string
@@ -37,14 +39,55 @@ const exerciseTypes = [
 
 export function UnitEditor({ unitId }: UnitEditorProps) {
   const { unit, isLoading, isError, mutate } = useUnit(unitId)
+  const { decks, isLoading: decksLoading } = useDecks()
   const [unitName, setUnitName] = useState("")
   const [isPublic, setIsPublic] = useState(false)
   const [isAddExerciseOpen, setIsAddExerciseOpen] = useState(false)
   const [selectedExerciseType, setSelectedExerciseType] = useState<UnitItemType | "">("")
+  const [addMode, setAddMode] = useState<"new" | "existing">("existing")
+  const [selectedExistingDeckId, setSelectedExistingDeckId] = useState("")
   const [newExerciseName, setNewExerciseName] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [isAddingExercise, setIsAddingExercise] = useState(false)
   const { toast } = useToast()
+
+  // Add handlers for configure and remove actions
+  const handleConfigureExercise = (itemId: string) => {
+    toast({
+      title: "Configure Exercise",
+      description: "Exercise configuration coming soon!",
+    })
+  }
+
+  const handleRemoveExercise = async (itemId: string, exerciseName: string) => {
+    if (!confirm(`Are you sure you want to remove "${exerciseName}" from this unit?`)) {
+      return
+    }
+    
+    try {
+      // Call the API to remove the unit item
+      await fetch(`/api/units/${unitId}/items/${itemId}`, {
+        method: 'DELETE',
+        headers: {
+          'X-Teacher-ID': 'teacher-1', // This should come from auth
+        },
+      })
+      
+      toast({
+        title: "Exercise removed",
+        description: `${exerciseName} has been removed from the unit.`,
+      })
+      
+      // Refresh the unit data
+      mutate()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to remove exercise. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
 
   // Initialize form when unit data loads
   React.useEffect(() => {
@@ -80,10 +123,37 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
   }
 
   const handleAddExercise = async () => {
-    if (!selectedExerciseType || !newExerciseName) {
+    if (!selectedExerciseType) {
       toast({
         title: "Error",
-        description: "Please select exercise type and enter a name.",
+        description: "Please select exercise type.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validation based on mode and type
+    if (selectedExerciseType === "VOCABULARY_DECK") {
+      if (addMode === "existing" && !selectedExistingDeckId) {
+        toast({
+          title: "Error", 
+          description: "Please select an existing deck.",
+          variant: "destructive",
+        })
+        return
+      }
+      if (addMode === "new" && !newExerciseName) {
+        toast({
+          title: "Error",
+          description: "Please enter a name for the new deck.",
+          variant: "destructive",
+        })
+        return
+      }
+    } else if (selectedExerciseType === "GRAMMAR_EXERCISE" && !newExerciseName) {
+      toast({
+        title: "Error",
+        description: "Please enter a name for the exercise.",
         variant: "destructive",
       })
       return
@@ -92,14 +162,24 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
     setIsAddingExercise(true)
     try {
       let unitItemData;
+      
       if (selectedExerciseType === "VOCABULARY_DECK") {
-        unitItemData = {
-          type: "VOCABULARY_DECK" as const,
-          data: {
-            name: newExerciseName,
-            isPublic: false,
-          },
-        };
+        if (addMode === "existing") {
+          unitItemData = {
+            type: "VOCABULARY_DECK" as const,
+            mode: "existing" as const,
+            existingDeckId: selectedExistingDeckId,
+          };
+        } else {
+          unitItemData = {
+            type: "VOCABULARY_DECK" as const,
+            mode: "new" as const,
+            data: {
+              name: newExerciseName,
+              isPublic: false,
+            },
+          };
+        }
       } else if (selectedExerciseType === "GRAMMAR_EXERCISE") {
         unitItemData = {
           type: "GRAMMAR_EXERCISE" as const,
@@ -115,13 +195,20 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
       }
       
       await addExerciseToUnit(unitId, unitItemData)
+      
+      const exerciseName = selectedExerciseType === "VOCABULARY_DECK" && addMode === "existing" 
+        ? decks.find(d => d.id === selectedExistingDeckId)?.name || "Selected deck"
+        : newExerciseName;
+      
       toast({
         title: "Exercise added",
-        description: `${newExerciseName} has been added to the unit.`,
+        description: `${exerciseName} has been added to the unit.`,
       })
       setIsAddExerciseOpen(false)
       setSelectedExerciseType("")
       setNewExerciseName("")
+      setSelectedExistingDeckId("")
+      setAddMode("existing")
       mutate()
     } catch (error) {
       toast({
@@ -309,11 +396,19 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleConfigureExercise(item.id)}>
                                   <Settings className="mr-2 h-4 w-4" />
                                   Configure
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="text-red-600">
+                                <DropdownMenuItem 
+                                  className="text-red-600"
+                                  onClick={() => handleRemoveExercise(item.id, 
+                                    item.vocabularyDeck?.name || 
+                                    item.grammarExercise?.title || 
+                                    item.listeningExercise?.title || 
+                                    "Exercise"
+                                  )}
+                                >
                                   <Trash2 className="mr-2 h-4 w-4" />
                                   Remove
                                 </DropdownMenuItem>
@@ -336,8 +431,8 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
             <DialogHeader>
               <DialogTitle>Add Exercise</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
+            <div className="space-y-6">
+              <div className="space-y-3">
                 <Label>Exercise Type</Label>
                 <div className="grid grid-cols-1 gap-2">
                   {exerciseTypes.map((type) => {
@@ -363,7 +458,77 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
                   })}
                 </div>
               </div>
-              {selectedExerciseType && (
+
+              {selectedExerciseType === "VOCABULARY_DECK" && (
+                <div className="space-y-4">
+                  <div className="space-y-3">
+                    <Label>Add Mode</Label>
+                    <RadioGroup 
+                      value={addMode} 
+                      onValueChange={(value) => setAddMode(value as "new" | "existing")}
+                      disabled={isAddingExercise}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="existing" id="existing" />
+                        <Label htmlFor="existing">Link Existing Deck</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="new" id="new" />
+                        <Label htmlFor="new">Create New Deck</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  {addMode === "existing" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="existing-deck">Select Existing Deck</Label>
+                      {decksLoading ? (
+                        <div className="h-10 bg-gray-100 rounded animate-pulse" />
+                      ) : (
+                        <Select 
+                          value={selectedExistingDeckId} 
+                          onValueChange={setSelectedExistingDeckId}
+                          disabled={isAddingExercise}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Choose a deck..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {decks.map((deck) => (
+                              <SelectItem key={deck.id} value={deck.id}>
+                                <div className="flex items-center justify-between w-full">
+                                  <span>{deck.name}</span>
+                                  <span className="text-sm text-gray-500 ml-2">
+                                    {(deck as any)._count?.cards || 0} cards
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      {decks.length === 0 && !decksLoading && (
+                        <p className="text-sm text-gray-500">No decks available. Create a deck first.</p>
+                      )}
+                    </div>
+                  )}
+
+                  {addMode === "new" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="new-deck-name">New Deck Name</Label>
+                      <Input
+                        id="new-deck-name"
+                        placeholder="Enter deck name"
+                        value={newExerciseName}
+                        onChange={(e) => setNewExerciseName(e.target.value)}
+                        disabled={isAddingExercise}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {selectedExerciseType === "GRAMMAR_EXERCISE" && (
                 <div className="space-y-2">
                   <Label htmlFor="exercise-name">Exercise Name</Label>
                   <Input
@@ -375,6 +540,7 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
                   />
                 </div>
               )}
+
               <div className="flex justify-end space-x-2">
                 <Button
                   variant="outline"
@@ -385,7 +551,12 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
                 </Button>
                 <Button
                   onClick={handleAddExercise}
-                  disabled={isAddingExercise || !selectedExerciseType || !newExerciseName}
+                  disabled={isAddingExercise || !selectedExerciseType || 
+                    (selectedExerciseType === "VOCABULARY_DECK" && 
+                      ((addMode === "existing" && !selectedExistingDeckId) || 
+                       (addMode === "new" && !newExerciseName))) ||
+                    (selectedExerciseType === "GRAMMAR_EXERCISE" && !newExerciseName)
+                  }
                   className="bg-blue-600 hover:bg-blue-700"
                 >
                   {isAddingExercise ? "Adding..." : "Add Exercise"}

@@ -36,6 +36,15 @@ export const CreateUnitSchema = z.object({
   isPublic: z.boolean().optional(),
 });
 
+// Schema for creating a new Vocabulary Deck.
+export const CreateDeckSchema = z.object({
+  name: z
+    .string()
+    .min(3, { message: 'Deck name must be at least 3 characters long.' }),
+  description: z.string().optional(),
+  isPublic: z.boolean().optional(),
+});
+
 // Schema for updating an existing Unit. All fields are optional.
 export const UpdateUnitSchema = z.object({
   name: z
@@ -48,6 +57,17 @@ export const UpdateUnitSchema = z.object({
 
 // Schema for updating a student's notes.
 export const UpdateNotesSchema = z.object({
+  notes: z.string().max(5000, 'Notes cannot exceed 5000 characters.').optional(),
+});
+
+// Schema for updating student details.
+export const UpdateStudentSchema = z.object({
+  name: z.string().min(1, { message: 'Student name cannot be empty.' }).optional(),
+  email: z.string().email({ message: 'Invalid email address.' }).optional(),
+  phone: z.string().optional(),
+  proficiencyLevel: z
+    .enum(['BEGINNER', 'ELEMENTARY', 'INTERMEDIATE', 'ADVANCED'])
+    .optional(),
   notes: z.string().max(5000, 'Notes cannot exceed 5000 characters.').optional(),
 });
 

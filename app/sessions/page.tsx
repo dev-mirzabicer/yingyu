@@ -121,15 +121,6 @@ export default function SessionsPage() {
       render: (value: number) => <span>{value}</span>,
     },
     {
-      key: "accuracy",
-      header: "Accuracy",
-      render: (value: number) => (
-        <Badge variant={value >= 80 ? "default" : value >= 60 ? "secondary" : "destructive"}>
-          {value}%
-        </Badge>
-      ),
-    },
-    {
       key: "actions",
       header: "Actions",
       render: (_: any, row: any) => (
