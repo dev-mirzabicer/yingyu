@@ -397,12 +397,13 @@ model StudentFsrsParams {
 }
 
 model Payment {
-  id               String   @id @default(uuid()) @db.Uuid
-  studentId        String   @db.Uuid
-  amount           Decimal  @db.Decimal(10, 2)
+  id               String        @id @default(uuid()) @db.Uuid
+  studentId        String        @db.Uuid
+  amount           Decimal       @db.Decimal(10, 2)
   classesPurchased Int
-  classesUsed      Int      @default(0)
-  paymentDate      DateTime @db.Date
+  classesUsed      Int           @default(0)
+  paymentDate      DateTime      @db.Date
+  status           PaymentStatus @default(ACTIVE)
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
@@ -413,7 +414,6 @@ model ClassSchedule {
   scheduledTime DateTime
   status        ClassStatus @default(SCHEDULED)
   duration      Int?
-  notes         String?
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }

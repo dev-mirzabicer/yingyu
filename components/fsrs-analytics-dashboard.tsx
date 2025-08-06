@@ -157,12 +157,7 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
       key: "difficulty",
       header: "Difficulty",
       render: (value: number) => (
-        <div className="flex items-center space-x-2">
-          <div className="w-16 bg-slate-200 rounded-full h-2">
-            <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${value * 100}%` }} />
-          </div>
-          <span className="text-sm text-slate-600">{value.toFixed(2)}</span>
-        </div>
+        <div className="text-sm text-slate-600">{value.toFixed(2)}</div>
       ),
     },
     {

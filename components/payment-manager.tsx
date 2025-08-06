@@ -43,24 +43,12 @@ interface PaymentFormData {
   amount: string
   classesPurchased: string
   paymentDate: Date
-  paymentMethod: string
-  notes: string
 }
-
-const paymentMethods = [
-  { value: "cash", label: "Cash", icon: Banknote },
-  { value: "card", label: "Credit/Debit Card", icon: CreditCard },
-  { value: "bank_transfer", label: "Bank Transfer", icon: Receipt },
-  { value: "mobile_payment", label: "Mobile Payment", icon: Smartphone },
-  { value: "other", label: "Other", icon: DollarSign },
-]
 
 const initialFormData: PaymentFormData = {
   amount: "",
   classesPurchased: "",
   paymentDate: new Date(),
-  paymentMethod: "",
-  notes: "",
 }
 
 export function PaymentManager({ studentId, studentName, classesRemaining, onPaymentRecorded }: PaymentManagerProps) {
@@ -176,12 +164,26 @@ export function PaymentManager({ studentId, studentName, classesRemaining, onPay
       key: "status",
       header: "Status",
       render: (_: any, row: Payment) => {
-        const remaining = row.classesPurchased - row.classesUsed
-        return (
-          <Badge variant={remaining > 0 ? "default" : "secondary"}>
-            {remaining > 0 ? `${remaining} remaining` : "Fully used"}
-          </Badge>
-        )
+        const p = row as Payment & { status: PaymentStatus }
+        let variant: "default" | "secondary" | "destructive" | "outline" = "outline";
+        let text = p.status;
+        switch (p.status) {
+          case "ACTIVE":
+            variant = "default";
+            text = "Active";
+            break;
+          case "EXPIRED":
+            variant = "secondary"; // Or a warning variant
+            text = "Expired";
+            break;
+          case "REFUNDED":
+            variant = "destructive";
+            text = "Refunded";
+            break;
+          default:
+            break;
+        }
+        return <Badge variant={variant}>{text}</Badge>;
       },
     },
   ]
@@ -367,43 +369,6 @@ export function PaymentManager({ studentId, studentName, classesRemaining, onPay
                   />
                 </PopoverContent>
               </Popover>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="paymentMethod">Payment Method</Label>
-              <Select
-                value={formData.paymentMethod}
-                onValueChange={(value) => setFormData((prev) => ({ ...prev, paymentMethod: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select payment method" />
-                </SelectTrigger>
-                <SelectContent>
-                  {paymentMethods.map((method) => {
-                    const Icon = method.icon
-                    return (
-                      <SelectItem key={method.value} value={method.value}>
-                        <div className="flex items-center space-x-2">
-                          <Icon className="h-4 w-4" />
-                          <span>{method.label}</span>
-                        </div>
-                      </SelectItem>
-                    )
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes (Optional)</Label>
-              <Textarea
-                id="notes"
-                placeholder="Add any notes about this payment..."
-                value={formData.notes}
-                onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
-                rows={3}
-                disabled={isSubmitting}
-              />
             </div>
 
             <div className="flex justify-end space-x-2">
