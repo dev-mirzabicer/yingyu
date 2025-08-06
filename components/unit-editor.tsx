@@ -1,7 +1,6 @@
 "use client"
 
 import React, { useState } from "react"
-import { MainLayout } from "@/components/main-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,40 +10,84 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { BookOpen, FileText, Mic, Video, GripVertical, MoreHorizontal, Plus, Settings, Trash2, Save } from "lucide-react"
+import { BookOpen, FileText, Mic, GripVertical, MoreHorizontal, Plus, Settings, Trash2, Save, Edit3 } from "lucide-react"
+import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { useUnit, updateUnit, addExerciseToUnit } from "@/hooks/use-api"
+import { useUnit, updateUnit, addExerciseToUnit, useDecks } from "@/hooks/use-api-enhanced"
 import { UnitItemType } from "@prisma/client"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface UnitEditorProps {
   unitId: string
 }
 
 const exerciseTypes = [
-  { 
-    type: "VOCABULARY_DECK", 
+  {
+    type: "VOCABULARY_DECK",
     label: "Vocabulary Deck",
-    icon: BookOpen, 
-    color: "bg-blue-100 text-blue-700" 
+    icon: BookOpen,
+    color: "bg-blue-100 text-blue-700"
   },
-  { 
-    type: "GRAMMAR_EXERCISE", 
+  {
+    type: "GRAMMAR_EXERCISE",
     label: "Grammar Exercise",
-    icon: FileText, 
-    color: "bg-green-100 text-green-700" 
+    icon: FileText,
+    color: "bg-green-100 text-green-700"
   },
 ]
 
 export function UnitEditor({ unitId }: UnitEditorProps) {
   const { unit, isLoading, isError, mutate } = useUnit(unitId)
+  const { decks, isLoading: decksLoading } = useDecks()
   const [unitName, setUnitName] = useState("")
   const [isPublic, setIsPublic] = useState(false)
   const [isAddExerciseOpen, setIsAddExerciseOpen] = useState(false)
-  const [selectedExerciseType, setSelectedExerciseType] = useState("")
+  const [selectedExerciseType, setSelectedExerciseType] = useState<UnitItemType | "">("")
+  const [addMode, setAddMode] = useState<"new" | "existing">("existing")
+  const [selectedExistingDeckId, setSelectedExistingDeckId] = useState("")
   const [newExerciseName, setNewExerciseName] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [isAddingExercise, setIsAddingExercise] = useState(false)
   const { toast } = useToast()
+
+  // Add handlers for configure and remove actions
+  const handleConfigureExercise = (itemId: string) => {
+    toast({
+      title: "Configure Exercise",
+      description: "Exercise configuration coming soon!",
+    })
+  }
+
+  const handleRemoveExercise = async (itemId: string, exerciseName: string) => {
+    if (!confirm(`Are you sure you want to remove "${exerciseName}" from this unit?`)) {
+      return
+    }
+    
+    try {
+      // Call the API to remove the unit item
+      await fetch(`/api/units/${unitId}/items/${itemId}`, {
+        method: 'DELETE',
+        headers: {
+          'X-Teacher-ID': 'teacher-1', // This should come from auth
+        },
+      })
+      
+      toast({
+        title: "Exercise removed",
+        description: `${exerciseName} has been removed from the unit.`,
+      })
+      
+      // Refresh the unit data
+      mutate()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to remove exercise. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
 
   // Initialize form when unit data loads
   React.useEffect(() => {
@@ -56,7 +99,7 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
 
   const handleSave = async () => {
     if (!unit || !unitName) return
-    
+
     setIsSaving(true)
     try {
       await updateUnit(unit.id, {
@@ -80,10 +123,37 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
   }
 
   const handleAddExercise = async () => {
-    if (!selectedExerciseType || !newExerciseName) {
+    if (!selectedExerciseType) {
       toast({
         title: "Error",
-        description: "Please select exercise type and enter a name.",
+        description: "Please select exercise type.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validation based on mode and type
+    if (selectedExerciseType === "VOCABULARY_DECK") {
+      if (addMode === "existing" && !selectedExistingDeckId) {
+        toast({
+          title: "Error", 
+          description: "Please select an existing deck.",
+          variant: "destructive",
+        })
+        return
+      }
+      if (addMode === "new" && !newExerciseName) {
+        toast({
+          title: "Error",
+          description: "Please enter a name for the new deck.",
+          variant: "destructive",
+        })
+        return
+      }
+    } else if (selectedExerciseType === "GRAMMAR_EXERCISE" && !newExerciseName) {
+      toast({
+        title: "Error",
+        description: "Please enter a name for the exercise.",
         variant: "destructive",
       })
       return
@@ -91,20 +161,54 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
 
     setIsAddingExercise(true)
     try {
-      await addExerciseToUnit(unitId, {
-        type: selectedExerciseType,
-        data: {
-          name: newExerciseName,
-          isPublic: false,
-        },
-      })
+      let unitItemData;
+      
+      if (selectedExerciseType === "VOCABULARY_DECK") {
+        if (addMode === "existing") {
+          unitItemData = {
+            type: "VOCABULARY_DECK" as const,
+            mode: "existing" as const,
+            existingDeckId: selectedExistingDeckId,
+          };
+        } else {
+          unitItemData = {
+            type: "VOCABULARY_DECK" as const,
+            mode: "new" as const,
+            data: {
+              name: newExerciseName,
+              isPublic: false,
+            },
+          };
+        }
+      } else if (selectedExerciseType === "GRAMMAR_EXERCISE") {
+        unitItemData = {
+          type: "GRAMMAR_EXERCISE" as const,
+          data: {
+            title: newExerciseName,
+            grammarTopic: "General",
+            exerciseData: {},
+            isPublic: false,
+          },
+        };
+      } else {
+        throw new Error("Unsupported exercise type");
+      }
+      
+      await addExerciseToUnit(unitId, unitItemData)
+      
+      const exerciseName = selectedExerciseType === "VOCABULARY_DECK" && addMode === "existing" 
+        ? decks.find(d => d.id === selectedExistingDeckId)?.name || "Selected deck"
+        : newExerciseName;
+      
       toast({
         title: "Exercise added",
-        description: `${newExerciseName} has been added to the unit.`,
+        description: `${exerciseName} has been added to the unit.`,
       })
       setIsAddExerciseOpen(false)
       setSelectedExerciseType("")
       setNewExerciseName("")
+      setSelectedExistingDeckId("")
+      setAddMode("existing")
       mutate()
     } catch (error) {
       toast({
@@ -119,53 +223,45 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
 
   const getExerciseTypeInfo = (type: UnitItemType) => {
     const typeMap: Record<UnitItemType, { label: string; icon: any; color: string }> = {
-      [UnitItemType.VOCABULARY_DECK]: { 
-        label: "Vocabulary", 
-        icon: BookOpen, 
-        color: "bg-blue-100 text-blue-700" 
+      [UnitItemType.VOCABULARY_DECK]: {
+        label: "Vocabulary",
+        icon: BookOpen,
+        color: "bg-blue-100 text-blue-700"
       },
-      [UnitItemType.GRAMMAR_EXERCISE]: { 
-        label: "Grammar", 
-        icon: FileText, 
-        color: "bg-green-100 text-green-700" 
+      [UnitItemType.GRAMMAR_EXERCISE]: {
+        label: "Grammar",
+        icon: FileText,
+        color: "bg-green-100 text-green-700"
       },
-      [UnitItemType.LISTENING_EXERCISE]: { 
-        label: "Listening", 
-        icon: Mic, 
-        color: "bg-purple-100 text-purple-700" 
+      [UnitItemType.LISTENING_EXERCISE]: {
+        label: "Listening",
+        icon: Mic,
+        color: "bg-purple-100 text-purple-700"
       },
-      [UnitItemType.VOCAB_FILL_IN_BLANK_EXERCISE]: { 
-        label: "Fill in Blank", 
-        icon: FileText, 
-        color: "bg-orange-100 text-orange-700" 
+      [UnitItemType.VOCAB_FILL_IN_BLANK_EXERCISE]: {
+        label: "Fill in Blank",
+        icon: FileText,
+        color: "bg-orange-100 text-orange-700"
       },
     }
     return typeMap[type] || { label: "Unknown", icon: FileText, color: "bg-gray-100 text-gray-700" }
   }
 
-  const primaryAction = {
-    label: "Save Unit",
-    onClick: handleSave,
-  }
-
   if (isError) {
     return (
-      <MainLayout>
-        <div className="p-6">
-          <Card>
-            <CardContent className="p-6 text-center">
-              <p className="text-slate-600">Failed to load unit. Please try again.</p>
-            </CardContent>
-          </Card>
-        </div>
-      </MainLayout>
+      <div className="p-6">
+        <Card>
+          <CardContent className="p-6 text-center">
+            <p className="text-slate-600">Failed to load unit. Please try again.</p>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
   if (isLoading || !unit) {
     return (
-      <MainLayout>
-        <div className="p-6 space-y-6">
+      <div className="p-6 space-y-6">
           <Card>
             <CardHeader>
               <Skeleton className="h-8 w-64" />
@@ -188,13 +284,23 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
             </CardContent>
           </Card>
         </div>
-      </MainLayout>
     )
   }
 
   return (
-    <MainLayout primaryAction={primaryAction}>
-      <div className="p-6 space-y-6">
+    <div className="space-y-6">
+        {/* Page Header */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold text-slate-900">Edit Unit</h1>
+            <p className="text-slate-600">Configure unit settings and manage exercises</p>
+          </div>
+          <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
+            <Save className="h-4 w-4 mr-2" />
+            {isSaving ? "Saving..." : "Save Unit"}
+          </Button>
+        </div>
+
         {/* Unit Header */}
         <Card>
           <CardHeader>
@@ -220,10 +326,6 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
               />
               <Label htmlFor="unit-public">Make this unit public</Label>
             </div>
-            <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
-              <Save className="h-4 w-4 mr-2" />
-              {isSaving ? "Saving..." : "Save Changes"}
-            </Button>
           </CardContent>
         </Card>
 
@@ -249,7 +351,7 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
               </div>
             ) : (
               <div className="space-y-4">
-                {unit.items.map((item, index) => {
+                {unit.items.map((item) => {
                   const typeInfo = getExerciseTypeInfo(item.type)
                   const Icon = typeInfo.icon
 
@@ -267,34 +369,52 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
                             </div>
                             <div>
                               <h3 className="font-medium text-slate-900">
-                                {item.vocabularyDeck?.name || 
-                                 item.grammarExercise?.name || 
-                                 item.listeningExercise?.name ||
-                                 item.vocabFillInBlankExercise?.name ||
-                                 'Unnamed Exercise'}
+                                {item.vocabularyDeck?.name ||
+                                  item.grammarExercise?.title ||
+                                  item.listeningExercise?.title ||
+                                  item.vocabFillInBlankExercise?.title ||
+                                  'Unnamed Exercise'}
                               </h3>
                               <Badge variant="secondary" className="text-xs">
                                 {typeInfo.label}
                               </Badge>
                             </div>
                           </div>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem>
-                                <Settings className="mr-2 h-4 w-4" />
-                                Configure
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="text-red-600">
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Remove
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <div className="flex items-center space-x-2">
+                            {item.type === 'VOCABULARY_DECK' && item.vocabularyDeck && (
+                              <Link href={`/decks/${item.vocabularyDeck.id}/manage`}>
+                                <Button variant="outline" size="sm">
+                                  <Edit3 className="h-4 w-4 mr-2" />
+                                  Manage Cards
+                                </Button>
+                              </Link>
+                            )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleConfigureExercise(item.id)}>
+                                  <Settings className="mr-2 h-4 w-4" />
+                                  Configure
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  className="text-red-600"
+                                  onClick={() => handleRemoveExercise(item.id, 
+                                    item.vocabularyDeck?.name || 
+                                    item.grammarExercise?.title || 
+                                    item.listeningExercise?.title || 
+                                    "Exercise"
+                                  )}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Remove
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -311,8 +431,8 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
             <DialogHeader>
               <DialogTitle>Add Exercise</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
+            <div className="space-y-6">
+              <div className="space-y-3">
                 <Label>Exercise Type</Label>
                 <div className="grid grid-cols-1 gap-2">
                   {exerciseTypes.map((type) => {
@@ -322,7 +442,7 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
                         key={type.type}
                         variant={selectedExerciseType === type.type ? "default" : "outline"}
                         className="justify-start h-auto p-4"
-                        onClick={() => setSelectedExerciseType(type.type)}
+                        onClick={() => setSelectedExerciseType(type.type as UnitItemType)}
                         disabled={isAddingExercise}
                       >
                         <div className="flex items-center space-x-3">
@@ -338,7 +458,77 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
                   })}
                 </div>
               </div>
-              {selectedExerciseType && (
+
+              {selectedExerciseType === "VOCABULARY_DECK" && (
+                <div className="space-y-4">
+                  <div className="space-y-3">
+                    <Label>Add Mode</Label>
+                    <RadioGroup 
+                      value={addMode} 
+                      onValueChange={(value) => setAddMode(value as "new" | "existing")}
+                      disabled={isAddingExercise}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="existing" id="existing" />
+                        <Label htmlFor="existing">Link Existing Deck</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="new" id="new" />
+                        <Label htmlFor="new">Create New Deck</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  {addMode === "existing" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="existing-deck">Select Existing Deck</Label>
+                      {decksLoading ? (
+                        <div className="h-10 bg-gray-100 rounded animate-pulse" />
+                      ) : (
+                        <Select 
+                          value={selectedExistingDeckId} 
+                          onValueChange={setSelectedExistingDeckId}
+                          disabled={isAddingExercise}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Choose a deck..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {decks.map((deck) => (
+                              <SelectItem key={deck.id} value={deck.id}>
+                                <div className="flex items-center justify-between w-full">
+                                  <span>{deck.name}</span>
+                                  <span className="text-sm text-gray-500 ml-2">
+                                    {(deck as any)._count?.cards || 0} cards
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      {decks.length === 0 && !decksLoading && (
+                        <p className="text-sm text-gray-500">No decks available. Create a deck first.</p>
+                      )}
+                    </div>
+                  )}
+
+                  {addMode === "new" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="new-deck-name">New Deck Name</Label>
+                      <Input
+                        id="new-deck-name"
+                        placeholder="Enter deck name"
+                        value={newExerciseName}
+                        onChange={(e) => setNewExerciseName(e.target.value)}
+                        disabled={isAddingExercise}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {selectedExerciseType === "GRAMMAR_EXERCISE" && (
                 <div className="space-y-2">
                   <Label htmlFor="exercise-name">Exercise Name</Label>
                   <Input
@@ -350,17 +540,23 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
                   />
                 </div>
               )}
+
               <div className="flex justify-end space-x-2">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setIsAddExerciseOpen(false)}
                   disabled={isAddingExercise}
                 >
                   Cancel
                 </Button>
-                <Button 
+                <Button
                   onClick={handleAddExercise}
-                  disabled={isAddingExercise || !selectedExerciseType || !newExerciseName}
+                  disabled={isAddingExercise || !selectedExerciseType || 
+                    (selectedExerciseType === "VOCABULARY_DECK" && 
+                      ((addMode === "existing" && !selectedExistingDeckId) || 
+                       (addMode === "new" && !newExerciseName))) ||
+                    (selectedExerciseType === "GRAMMAR_EXERCISE" && !newExerciseName)
+                  }
                   className="bg-blue-600 hover:bg-blue-700"
                 >
                   {isAddingExercise ? "Adding..." : "Add Exercise"}
@@ -370,6 +566,5 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
           </DialogContent>
         </Dialog>
       </div>
-    </MainLayout>
   )
 }

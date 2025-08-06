@@ -16,6 +16,7 @@ import {
   RecordPaymentSchema,
   CreateScheduleSchema,
   UpdateScheduleSchema,
+  UpdateStudentSchema,
 } from '../schemas';
 import { z } from 'zod';
 
@@ -23,6 +24,7 @@ type CreateStudentInput = z.infer<typeof CreateStudentSchema>;
 type RecordPaymentInput = z.infer<typeof RecordPaymentSchema>;
 type CreateScheduleInput = z.infer<typeof CreateScheduleSchema>;
 type UpdateScheduleInput = z.infer<typeof UpdateScheduleSchema>;
+type UpdateStudentInput = z.infer<typeof UpdateStudentSchema>;
 
 /**
  * Service responsible for managing student profiles, their assignments,
@@ -61,6 +63,27 @@ export const StudentService = {
     return prisma.student.update({
       where: { id: studentId },
       data: { isArchived: true },
+    });
+  },
+
+  /**
+   * Updates student details like name, email, phone, proficiency level, and notes.
+   *
+   * @param studentId The UUID of the student to update.
+   * @param teacherId The UUID of the teacher for authorization.
+   * @param updateData The validated data to update.
+   * @returns A promise that resolves to the updated Student object.
+   */
+  async updateStudent(
+    studentId: string,
+    teacherId: string,
+    updateData: UpdateStudentInput
+  ): Promise<Student> {
+    await authorizeTeacherForStudent(teacherId, studentId);
+    UpdateStudentSchema.parse(updateData);
+    return prisma.student.update({
+      where: { id: studentId },
+      data: updateData,
     });
   },
 
@@ -146,16 +169,52 @@ export const StudentService = {
           data: { studentId, deckId, ...settings },
         });
 
-        // The job creation is now a direct database operation within the transaction.
-        const newJob = await tx.job.create({
-          data: {
-            ownerId: teacherId,
-            type: 'INITIALIZE_CARD_STATES',
-            payload: { studentId, deckId },
-          },
+        // Check deck size to decide between sync and async initialization
+        const cardCount = await tx.vocabularyCard.count({
+          where: { deckId },
         });
 
-        return { studentDeck: newAssignment, job: newJob };
+        if (cardCount <= 50) {
+          // Initialize card states synchronously for small decks
+          const cards = await tx.vocabularyCard.findMany({
+            where: { deckId },
+            select: { id: true },
+          });
+
+          if (cards.length > 0) {
+            const now = new Date();
+            const defaultDifficulty = 5.0;
+            const defaultStability = 1.0;
+            const cardStatesToCreate = cards.map((card) => ({
+              studentId: studentId,
+              cardId: card.id,
+              state: CardState.NEW,
+              due: now,
+              difficulty: defaultDifficulty,
+              stability: defaultStability,
+              reps: 0,
+              lapses: 0,
+            }));
+
+            await tx.studentCardState.createMany({
+              data: cardStatesToCreate,
+              skipDuplicates: true,
+            });
+          }
+
+          return { studentDeck: newAssignment, job: null };
+        } else {
+          // Use job system for larger decks
+          const newJob = await tx.job.create({
+            data: {
+              ownerId: teacherId,
+              type: 'INITIALIZE_CARD_STATES',
+              payload: { studentId, deckId },
+            },
+          });
+
+          return { studentDeck: newAssignment, job: newJob };
+        }
       }
     });
   },

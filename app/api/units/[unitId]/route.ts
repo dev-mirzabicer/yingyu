@@ -7,7 +7,7 @@ import { AuthorizationError } from '@/lib/auth';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { unitId: string } }
+  { params }: { params: Promise<{ unitId: string }> }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -15,7 +15,7 @@ export async function GET(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
-    const { unitId } = params;
+    const { unitId } = await params;
 
     // Meticulous Authorization: Fetch the unit first to check ownership.
     const unit = await prisma.unit.findUnique({ where: { id: unitId } });
@@ -35,7 +35,7 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { unitId: string } }
+  { params }: { params: Promise<{ unitId: string }> }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -43,7 +43,7 @@ export async function PUT(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
-    const { unitId } = params;
+    const { unitId } = await params;
     const body = await req.json();
     const updateData = UpdateUnitSchema.parse(body);
 

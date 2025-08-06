@@ -1,7 +1,6 @@
 "use client"
 
 import React, { useState } from "react"
-import { MainLayout } from "@/components/main-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -16,10 +15,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { MoreHorizontal, Play, DollarSign, Edit, Archive, BookOpen, Calendar, TrendingUp, Clock } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useStudent, useDecks, assignDeck } from "@/hooks/use-api"
+import { useStudent, useDecks, assignDeck, updateStudent, archiveStudent } from "@/hooks/use-api-enhanced"
 import { format } from "date-fns"
 import { SessionStartDialog } from "@/components/session-start-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { PaymentManager } from "@/components/payment-manager"
+import { ClassScheduler } from "@/components/class-scheduler"
 
 interface StudentProfileProps {
   studentId: string
@@ -32,11 +33,22 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
   const [notes, setNotes] = useState("")
   const [isEditingNotes, setIsEditingNotes] = useState(false)
   const [isSessionDialogOpen, setIsSessionDialogOpen] = useState(false)
-  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
   const [isAssignDeckOpen, setIsAssignDeckOpen] = useState(false)
   const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null)
   const [isAssigning, setIsAssigning] = useState(false)
   const [isSavingNotes, setIsSavingNotes] = useState(false)
+  const [activeTab, setActiveTab] = useState("overview")
+  const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false)
+  const [isArchiveConfirmOpen, setIsArchiveConfirmOpen] = useState(false)
+  const [editFormData, setEditFormData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    proficiencyLevel: "",
+    notes: ""
+  })
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [isArchiving, setIsArchiving] = useState(false)
   const { toast } = useToast()
 
   React.useEffect(() => {
@@ -44,6 +56,18 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
       setNotes(student.notes)
     }
   }, [student?.notes])
+
+  React.useEffect(() => {
+    if (student) {
+      setEditFormData({
+        name: student.name || "",
+        email: student.email || "",
+        phone: student.phone || "",
+        proficiencyLevel: student.proficiencyLevel || "",
+        notes: student.notes || ""
+      })
+    }
+  }, [student])
 
   const handleSaveNotes = async () => {
     if (!student) return
@@ -92,6 +116,76 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
     }
   }
 
+  const handleRecordPaymentClick = () => {
+    setActiveTab("payments")
+  }
+
+  const handleScheduleClassClick = () => {
+    setActiveTab("schedule")
+  }
+
+  const handleUpdateStudent = async () => {
+    if (!student) return
+
+    if (!editFormData.name.trim()) {
+      toast({
+        title: "Error",
+        description: "Student name is required.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsUpdating(true)
+    try {
+      await updateStudent(student.id, {
+        name: editFormData.name,
+        email: editFormData.email || undefined,
+        phone: editFormData.phone || undefined,
+        proficiencyLevel: editFormData.proficiencyLevel || undefined,
+        notes: editFormData.notes || undefined,
+      })
+      toast({
+        title: "Student updated",
+        description: "Student details have been updated successfully.",
+      })
+      setIsEditDetailsOpen(false)
+      mutate()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update student. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  const handleArchiveStudent = async () => {
+    if (!student) return
+
+    setIsArchiving(true)
+    try {
+      await archiveStudent(student.id)
+      toast({
+        title: "Student archived",
+        description: "Student has been archived successfully.",
+      })
+      setIsArchiveConfirmOpen(false)
+      // Navigate back to students list or refresh the page
+      window.location.href = "/students"
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to archive student. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsArchiving(false)
+    }
+  }
+
   const assignedDeckIds = new Set(student?.studentDecks.map(sd => sd.deckId))
   const availableDecks = decks.filter(deck => !assignedDeckIds.has(deck.id))
 
@@ -117,81 +211,46 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
     },
   ]
 
-  const paymentColumns = [
-    {
-      key: "paymentDate",
-      header: "Payment Date",
-      render: (value: string) => format(new Date(value), "MMM dd, yyyy"),
-    },
-    {
-      key: "amount",
-      header: "Amount",
-      render: (value: number) => `$${value}`,
-    },
-    { key: "classesPurchased", header: "Classes Purchased" },
-  ]
-
-  const scheduleColumns = [
-    {
-      key: "scheduledTime",
-      header: "Date & Time",
-      render: (value: string) => format(new Date(value), "MMM dd, yyyy 'at' h:mm a"),
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (value: string) => (
-        <Badge variant={value === "COMPLETED" ? "secondary" : "default"}>
-          {value}
-        </Badge>
-      ),
-    },
-  ]
 
   if (isError) {
     return (
-      <MainLayout>
-        <div className="p-6">
-          <Card>
-            <CardContent className="p-6 text-center">
-              <p className="text-slate-600">Failed to load student profile. Please try again.</p>
-            </CardContent>
-          </Card>
-        </div>
-      </MainLayout>
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="p-6 text-center">
+            <p className="text-slate-600">Failed to load student profile. Please try again.</p>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
   if (isLoading || !student) {
     return (
-      <MainLayout>
-        <div className="p-6 space-y-6">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center space-x-4">
-                  <Skeleton className="h-20 w-20 rounded-full" />
-                  <div className="space-y-2">
-                    <Skeleton className="h-8 w-48" />
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-4 w-24" />
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Skeleton className="h-10 w-32" />
-                  <Skeleton className="h-10 w-10" />
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center space-x-4">
+                <Skeleton className="h-20 w-20 rounded-full" />
+                <div className="space-y-2">
+                  <Skeleton className="h-8 w-48" />
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-24" />
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-      </MainLayout>
+              <div className="flex items-center space-x-2">
+                <Skeleton className="h-10 w-32" />
+                <Skeleton className="h-10 w-10" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
   return (
-    <MainLayout>
-      <div className="p-6 space-y-6">
+    <div className="space-y-6">
         {/* Profile Header */}
         <Card>
           <CardContent className="p-6">
@@ -237,15 +296,19 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setIsPaymentDialogOpen(true)}>
+                    <DropdownMenuItem onClick={handleRecordPaymentClick}>
                       <DollarSign className="mr-2 h-4 w-4" />
                       Record Payment
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleScheduleClassClick}>
+                      <Calendar className="mr-2 h-4 w-4" />
+                      Schedule Class
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setIsEditDetailsOpen(true)}>
                       <Edit className="mr-2 h-4 w-4" />
                       Edit Details
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="text-red-600">
+                    <DropdownMenuItem className="text-red-600" onClick={() => setIsArchiveConfirmOpen(true)}>
                       <Archive className="mr-2 h-4 w-4" />
                       Archive Student
                     </DropdownMenuItem>
@@ -257,7 +320,7 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
         </Card>
 
         {/* Tabbed Interface */}
-        <Tabs defaultValue="overview" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="learning">Learning Plan</TabsTrigger>
@@ -390,60 +453,11 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
           </TabsContent>
 
           <TabsContent value="payments">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Payment History</CardTitle>
-                  <Button onClick={() => setIsPaymentDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700">
-                    <DollarSign className="h-4 w-4 mr-2" />
-                    Record Payment
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {student.payments.length === 0 ? (
-                  <div className="text-center py-8">
-                    <DollarSign className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-                    <p className="text-slate-500 mb-4">No payments recorded yet</p>
-                    <Button
-                      onClick={() => setIsPaymentDialogOpen(true)}
-                      className="bg-blue-600 hover:bg-blue-700"
-                    >
-                      Record First Payment
-                    </Button>
-                  </div>
-                ) : (
-                  <DataTable data={student.payments} columns={paymentColumns} />
-                )}
-              </CardContent>
-            </Card>
+            <PaymentManager student={student} onPaymentRecorded={mutate} />
           </TabsContent>
 
           <TabsContent value="schedule">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Class Schedule</CardTitle>
-                  <Button className="bg-blue-600 hover:bg-blue-700">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Schedule Class
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {student.upcomingClasses.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Calendar className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-                    <p className="text-slate-500 mb-4">No classes scheduled yet</p>
-                    <Button className="bg-blue-600 hover:bg-blue-700">
-                      Schedule First Class
-                    </Button>
-                  </div>
-                ) : (
-                  <DataTable data={student.upcomingClasses} columns={scheduleColumns} />
-                )}
-              </CardContent>
-            </Card>
+            <ClassScheduler student={student} onScheduleUpdated={mutate} />
           </TabsContent>
         </Tabs>
 
@@ -496,32 +510,110 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
           </DialogContent>
         </Dialog>
 
-        {/* Payment Dialog */}
-        <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-          <DialogContent>
+        {/* Edit Details Dialog */}
+        <Dialog open={isEditDetailsOpen} onOpenChange={setIsEditDetailsOpen}>
+          <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Record Payment</DialogTitle>
+              <DialogTitle>Edit Student Details</DialogTitle>
+              <DialogDescription>
+                Update the student's information below.
+              </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
+            <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="amount">Amount</Label>
-                <Input id="amount" type="number" placeholder="0.00" />
+                <Label htmlFor="edit-name">Name *</Label>
+                <Input
+                  id="edit-name"
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
+                  disabled={isUpdating}
+                  placeholder="Student name"
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="classes">Classes Purchased</Label>
-                <Input id="classes" type="number" placeholder="0" />
+                <Label htmlFor="edit-email">Email</Label>
+                <Input
+                  id="edit-email"
+                  type="email"
+                  value={editFormData.email}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, email: e.target.value }))}
+                  disabled={isUpdating}
+                  placeholder="student@example.com"
+                />
               </div>
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setIsPaymentDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button className="bg-blue-600 hover:bg-blue-700">Record Payment</Button>
+              <div className="space-y-2">
+                <Label htmlFor="edit-phone">Phone</Label>
+                <Input
+                  id="edit-phone"
+                  value={editFormData.phone}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, phone: e.target.value }))}
+                  disabled={isUpdating}
+                  placeholder="Phone number"
+                />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-proficiency">Proficiency Level</Label>
+                <Select value={editFormData.proficiencyLevel} onValueChange={(value) => setEditFormData(prev => ({ ...prev, proficiencyLevel: value }))}>
+                  <SelectTrigger id="edit-proficiency">
+                    <SelectValue placeholder="Select proficiency level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Not specified</SelectItem>
+                    <SelectItem value="BEGINNER">Beginner</SelectItem>
+                    <SelectItem value="ELEMENTARY">Elementary</SelectItem>
+                    <SelectItem value="INTERMEDIATE">Intermediate</SelectItem>
+                    <SelectItem value="ADVANCED">Advanced</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-notes">Notes</Label>
+                <Textarea
+                  id="edit-notes"
+                  value={editFormData.notes}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, notes: e.target.value }))}
+                  disabled={isUpdating}
+                  placeholder="Additional notes about the student..."
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setIsEditDetailsOpen(false)} disabled={isUpdating}>
+                Cancel
+              </Button>
+              <Button onClick={handleUpdateStudent} disabled={isUpdating} className="bg-blue-600 hover:bg-blue-700">
+                {isUpdating ? "Updating..." : "Update Student"}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
-      </div>
-    </MainLayout>
+
+        {/* Archive Confirmation Dialog */}
+        <Dialog open={isArchiveConfirmOpen} onOpenChange={setIsArchiveConfirmOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Archive Student</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to archive {student?.name}? This will hide them from your active students list, but their data will be preserved.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button variant="outline" onClick={() => setIsArchiveConfirmOpen(false)} disabled={isArchiving}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleArchiveStudent} 
+                disabled={isArchiving} 
+                variant="destructive"
+              >
+                {isArchiving ? "Archiving..." : "Archive Student"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+    </div>
   )
 }
 

@@ -20,6 +20,7 @@ export type PopulatedUnitItem = UnitItem & {
   grammarExercise: GrammarExercise | null;
   listeningExercise: ListeningExercise | null;
   vocabFillInBlankExercise: VocabFillInBlankExercise | null;
+  config?: VocabularyExerciseConfig;
 };
 
 export type FullUnit = Unit & {
@@ -27,7 +28,9 @@ export type FullUnit = Unit & {
 };
 
 export type PopulatedStudentDeck = StudentDeck & {
-  deck: VocabularyDeck;
+  deck: VocabularyDeck & {
+    cards?: { id: string }[];
+  };
 };
 
 export type FullStudentProfile = Student & {
@@ -49,6 +52,8 @@ export type VocabularyExerciseConfig = {
   newCards?: number;
   maxDue?: number;
   minDue?: number;
+  deckId?: string; // Added to support dynamic queue expansion
+  learningSteps?: string[]; // Added to support configurable learning steps (e.g., ['3m', '15m', '30m'])
 };
 
 /**
@@ -135,6 +140,9 @@ export type FullSessionState = Omit<Session, 'progress'> & {
 export type NewUnitItemData =
   | {
     type: 'VOCABULARY_DECK';
+    order?: number;
+    config?: VocabularyExerciseConfig;
+    mode: 'new';
     data: {
       name: string;
       description?: string;
@@ -142,7 +150,16 @@ export type NewUnitItemData =
     };
   }
   | {
+    type: 'VOCABULARY_DECK';
+    order?: number;
+    config?: VocabularyExerciseConfig;
+    mode: 'existing';
+    existingDeckId: string;
+  }
+  | {
     type: 'GRAMMAR_EXERCISE';
+    order?: number;
+    config?: any;
     data: {
       title: string;
       grammarTopic: string;
@@ -155,6 +172,8 @@ export type NewUnitItemData =
   }
   | {
     type: 'LISTENING_EXERCISE';
+    order?: number;
+    config?: any;
     data: {
       title: string;
       difficultyLevel?: number;
@@ -167,6 +186,8 @@ export type NewUnitItemData =
   }
   | {
     type: 'VOCAB_FILL_IN_BLANK_EXERCISE';
+    order?: number;
+    config?: any;
     data: {
       title: string;
       difficultyLevel?: number;

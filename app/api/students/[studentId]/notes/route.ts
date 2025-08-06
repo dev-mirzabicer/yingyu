@@ -5,7 +5,7 @@ import { UpdateNotesSchema } from '@/lib/schemas';
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { studentId: string } }
+  { params }: { params: Promise<{ studentId: string }> }
 ) {
   try {
     // 1. Authentication & Authorization
@@ -16,7 +16,7 @@ export async function PUT(
     // The service method below will perform the necessary authorization check.
 
     // 2. Parameter & Body Validation
-    const { studentId } = params;
+    const { studentId } = await params;
     const body = await req.json();
     const { notes } = UpdateNotesSchema.parse(body);
 

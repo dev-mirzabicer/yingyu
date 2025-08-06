@@ -8,20 +8,19 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { 
-  BookOpen, 
-  FileText, 
-  Mic, 
-  Play, 
-  AlertTriangle, 
-  CheckCircle, 
+import {
+  BookOpen,
+  FileText,
+  Mic,
+  Play,
+  AlertTriangle,
+  CheckCircle,
   Clock,
-  Users,
   Target
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { useAvailableUnits, startSession } from "@/hooks/use-api"
+import { useAvailableUnits, startSession } from "@/hooks/use-api-enhanced"
 import { UnitItemType } from "@prisma/client"
 
 interface SessionStartDialogProps {
@@ -39,7 +38,7 @@ const exerciseTypeInfo = {
     color: "bg-blue-100 text-blue-700 border-blue-200",
   },
   [UnitItemType.GRAMMAR_EXERCISE]: {
-    label: "Grammar", 
+    label: "Grammar",
     icon: FileText,
     color: "bg-green-100 text-green-700 border-green-200",
   },
@@ -55,11 +54,11 @@ const exerciseTypeInfo = {
   },
 }
 
-export function SessionStartDialog({ 
-  studentId, 
-  studentName, 
-  open, 
-  onOpenChange 
+export function SessionStartDialog({
+  studentId,
+  studentName,
+  open,
+  onOpenChange
 }: SessionStartDialogProps) {
   const { units, isLoading, isError } = useAvailableUnits(studentId)
   const [selectedUnit, setSelectedUnit] = useState<any>(null)
@@ -77,12 +76,12 @@ export function SessionStartDialog({
     setIsStarting(true)
     try {
       const result = await startSession(studentId, selectedUnit.id)
-      
+
       toast({
         title: "Session started successfully",
         description: `${studentName} is now learning: ${selectedUnit.name}`,
       })
-      
+
       // Navigate to the live session
       router.push(`/session/${result.data.id}`)
       onOpenChange(false)
@@ -153,13 +152,12 @@ export function SessionStartDialog({
                   <>
                     {/* Available Units */}
                     {availableUnits.map((unit: any) => (
-                      <Card 
+                      <Card
                         key={unit.id}
-                        className={`cursor-pointer transition-all hover:shadow-md ${
-                          selectedUnit?.id === unit.id 
-                            ? 'ring-2 ring-blue-500 shadow-md' 
+                        className={`cursor-pointer transition-all hover:shadow-md ${selectedUnit?.id === unit.id
+                            ? 'ring-2 ring-blue-500 shadow-md'
                             : 'hover:ring-1 hover:ring-slate-300'
-                        }`}
+                          }`}
                         onClick={() => handleUnitSelect(unit)}
                       >
                         <CardContent className="p-4">
@@ -293,10 +291,10 @@ export function SessionStartDialog({
                       <div className="space-y-3">
                         <h4 className="font-medium text-sm text-slate-700">Exercise Breakdown:</h4>
                         {selectedUnit.items.map((item: any, index: number) => {
-                          const typeInfo = exerciseTypeInfo[item.type] || { 
-                            label: "Unknown", 
-                            icon: FileText, 
-                            color: "bg-gray-100 text-gray-700 border-gray-200" 
+                          const typeInfo = exerciseTypeInfo[item.type as keyof typeof exerciseTypeInfo] || {
+                            label: "Unknown",
+                            icon: FileText,
+                            color: "bg-gray-100 text-gray-700 border-gray-200"
                           }
                           const Icon = typeInfo.icon
 
@@ -310,11 +308,11 @@ export function SessionStartDialog({
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-slate-900 truncate">
-                                  {item.vocabularyDeck?.name || 
-                                   item.grammarExercise?.title || 
-                                   item.listeningExercise?.title ||
-                                   item.vocabFillInBlankExercise?.title ||
-                                   'Unnamed Exercise'}
+                                  {item.vocabularyDeck?.name ||
+                                    item.grammarExercise?.title ||
+                                    item.listeningExercise?.title ||
+                                    item.vocabFillInBlankExercise?.title ||
+                                    'Unnamed Exercise'}
                                 </p>
                                 <p className="text-xs text-slate-500">{typeInfo.label}</p>
                               </div>
@@ -347,14 +345,14 @@ export function SessionStartDialog({
             )}
           </div>
           <div className="flex items-center space-x-2">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={isStarting}
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleStartSession}
               disabled={!selectedUnit || isStarting}
               className="bg-blue-600 hover:bg-blue-700"

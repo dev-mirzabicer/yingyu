@@ -54,4 +54,22 @@ export const JobService = {
       },
     });
   },
+
+  /**
+   * Retrieves all jobs for a specific teacher, ordered by creation date (newest first).
+   * This provides the data needed for the job monitoring page.
+   *
+   * @param ownerId The UUID of the Teacher whose jobs to retrieve.
+   * @returns A promise that resolves to an array of Job objects.
+   */
+  async getAllJobsForTeacher(ownerId: string): Promise<Job[]> {
+    if (!ownerId) {
+      return [];
+    }
+
+    return prisma.job.findMany({
+      where: { ownerId },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
 };

@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Volume2, RotateCcw, CheckCircle, XCircle, Clock, BookOpen, ArrowLeft, Pause, Play, FileText, Mic } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { useSession, submitAnswer, endSession } from "@/hooks/use-api"
+import { useSession, submitAnswer, endSession } from "@/hooks/use-api-enhanced"
 import { FullSessionState, VocabularyDeckProgress, AnswerPayload } from "@/lib/types"
 import { UnitItemType } from "@prisma/client"
 
@@ -27,7 +27,7 @@ const exerciseTypeInfo = {
     color: "bg-blue-100 text-blue-700",
   },
   [UnitItemType.GRAMMAR_EXERCISE]: {
-    label: "Grammar", 
+    label: "Grammar",
     icon: FileText,
     color: "bg-green-100 text-green-700",
   },
@@ -44,11 +44,11 @@ const exerciseTypeInfo = {
 }
 
 // Component for handling vocabulary deck exercises - modular and focused
-function VocabularyExercise({ 
-  sessionState, 
-  onRevealAnswer, 
-  onSubmitRating, 
-  isLoading 
+function VocabularyExercise({
+  sessionState,
+  onRevealAnswer,
+  onSubmitRating,
+  isLoading
 }: {
   sessionState: FullSessionState
   onRevealAnswer: () => void
@@ -88,8 +88,12 @@ function VocabularyExercise({
                 <p className="text-2xl font-medium text-slate-900 mb-2">
                   {currentCard.chineseTranslation}
                 </p>
-                {currentCard.exampleSentence && (
-                  <p className="text-slate-600">{currentCard.exampleSentence}</p>
+                {currentCard.exampleSentences && (
+                  <p className="text-slate-600">
+                    {typeof currentCard.exampleSentences === 'string' 
+                      ? currentCard.exampleSentences 
+                      : JSON.stringify(currentCard.exampleSentences)}
+                  </p>
                 )}
               </div>
               <Button variant="outline" size="sm">
@@ -181,6 +185,8 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
   const [isActionLoading, setIsActionLoading] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [elapsedTime, setElapsedTime] = useState(0)
+  const [reviewCount, setReviewCount] = useState(0) // Track total reviews, not just cards
+  const [encounteredCards, setEncounteredCards] = useState<Set<string>>(new Set()) // Track unique cards seen
   const router = useRouter()
   const { toast } = useToast()
 
@@ -203,6 +209,16 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     }
   }, [session?.startTime])
 
+  // Track cards encountered during session for accurate statistics
+  useEffect(() => {
+    if (session?.progress?.type === 'VOCABULARY_DECK') {
+      const progress = session.progress as VocabularyDeckProgress
+      if (progress.payload.currentCardData) {
+        setEncounteredCards(prev => new Set(prev).add(progress.payload.currentCardData!.id))
+      }
+    }
+  }, [session?.progress])
+
   const handleRevealAnswer = async () => {
     if (!session) return
 
@@ -215,7 +231,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
 
       await submitAnswer(sessionId, payload)
       await mutate() // Refresh session state
-      
+
       toast({
         title: "Answer revealed",
         description: "Rate how well you knew this card.",
@@ -242,6 +258,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
       }
 
       const result = await submitAnswer(sessionId, payload)
+      setReviewCount(prev => prev + 1) // Increment review count
       await mutate() // Refresh session state
 
       toast({
@@ -284,12 +301,47 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     return `${mins}:${secs.toString().padStart(2, "0")}`
   }
 
-  // Calculate progress based on session data - dynamic progress tracking
+  // Enhanced progress calculation for dynamic queues
   const getProgressData = () => {
     if (!session?.progress || !session.currentUnitItem) {
-      return { current: 0, total: 1, percentage: 0 }
+      return { 
+        current: 0, 
+        total: 1, 
+        percentage: 0,
+        reviewsCompleted: reviewCount,
+        uniqueCardsEncountered: encounteredCards.size,
+        queueAnalysis: { newCards: 0, reviewCards: 0, totalInQueue: 0 }
+      }
     }
 
+    if (session.progress.type === 'VOCABULARY_DECK') {
+      const progress = session.progress as VocabularyDeckProgress
+      const initialCardCount = progress.payload.initialCardIds.length
+      const currentQueueLength = progress.payload.queue.length
+      
+      // Analyze queue composition
+      const newCards = progress.payload.queue.filter(item => item.isNew).length
+      const reviewCards = progress.payload.queue.filter(item => !item.isNew).length
+      
+      // More accurate progress based on queue depletion, not completion
+      const cardsProcessedFromQueue = Math.max(0, initialCardCount - currentQueueLength)
+      const progressPercentage = initialCardCount > 0 ? (cardsProcessedFromQueue / initialCardCount) * 100 : 0
+
+      return {
+        current: cardsProcessedFromQueue,
+        total: initialCardCount,
+        percentage: progressPercentage,
+        reviewsCompleted: reviewCount,
+        uniqueCardsEncountered: encounteredCards.size,
+        queueAnalysis: {
+          newCards,
+          reviewCards,
+          totalInQueue: currentQueueLength
+        }
+      }
+    }
+
+    // Fallback for other exercise types
     const currentItemIndex = session.unit.items.findIndex(
       item => item.id === session.currentUnitItemId
     )
@@ -297,7 +349,14 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     const total = session.unit.items.length
     const percentage = (current / total) * 100
 
-    return { current, total, percentage }
+    return { 
+      current, 
+      total, 
+      percentage,
+      reviewsCompleted: reviewCount,
+      uniqueCardsEncountered: encounteredCards.size,
+      queueAnalysis: { newCards: 0, reviewCards: 0, totalInQueue: 0 }
+    }
   }
 
   const progressData = getProgressData()
@@ -433,15 +492,65 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
         <div className="w-64 bg-white border-r border-slate-200 p-4 space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-600">Progress</span>
+              <span className="text-slate-600">Queue Progress</span>
               <span className="font-medium">
                 {progressData.current} / {progressData.total}
               </span>
             </div>
             <Progress value={progressData.percentage} className="h-2" />
+            <div className="text-xs text-slate-500">
+              Cards processed from initial queue
+            </div>
           </div>
 
-          <div className="space-y-3">
+          {/* Dynamic Queue Analysis */}
+          {session?.progress?.type === 'VOCABULARY_DECK' && (
+            <div className="space-y-3 border-t pt-4">
+              <h4 className="text-sm font-medium text-slate-700">Live Queue Status</h4>
+              
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">Cards Remaining</span>
+                  <span className="font-medium">{progressData.queueAnalysis.totalInQueue}</span>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-blue-50 rounded p-2 text-center">
+                    <div className="font-medium text-blue-700">{progressData.queueAnalysis.newCards}</div>
+                    <div className="text-blue-600">New</div>
+                  </div>
+                  <div className="bg-orange-50 rounded p-2 text-center">
+                    <div className="font-medium text-orange-700">{progressData.queueAnalysis.reviewCards}</div>
+                    <div className="text-orange-600">Review</div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">Total Reviews</span>
+                  <span className="font-medium">{progressData.reviewsCompleted}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">Unique Cards Seen</span>
+                  <span className="font-medium">{progressData.uniqueCardsEncountered}</span>
+                </div>
+                
+                {progressData.reviewsCompleted > progressData.uniqueCardsEncountered && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded p-2">
+                    <div className="text-xs text-yellow-700 font-medium">
+                      🔄 Cards Cycling
+                    </div>
+                    <div className="text-xs text-yellow-600">
+                      {progressData.reviewsCompleted - progressData.uniqueCardsEncountered} repeat reviews due to FSRS scheduling
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-3 border-t pt-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-slate-600">Current Exercise</span>
               {currentExerciseTypeInfo && (
@@ -466,7 +575,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
           <div className="w-full max-w-2xl space-y-6">
             {/* Modular Exercise Rendering - Extensible Architecture */}
             {currentExerciseType === UnitItemType.VOCABULARY_DECK ? (
-              <VocabularyExercise 
+              <VocabularyExercise
                 sessionState={session}
                 onRevealAnswer={handleRevealAnswer}
                 onSubmitRating={handleRating}

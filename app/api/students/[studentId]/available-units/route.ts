@@ -11,7 +11,7 @@ import { prisma } from '@/lib/db';
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { studentId: string } }
+  { params }: { params: Promise<{ studentId: string }> }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -19,7 +19,7 @@ export async function GET(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
-    const { studentId } = params;
+    const { studentId } = await params;
 
     // Authorize teacher access to this student
     await authorizeTeacherForStudent(teacherId, studentId, {
@@ -85,6 +85,11 @@ export async function GET(
         let totalCards = 0;
         let readyCards = 0;
 
+        // FIXED: Calculate card stats per unit item instead of aggregating across all items
+        // This provides more accurate "cards ready" counts that match what the session will actually show
+        let unitTotalCards = 0;
+        let unitReadyCards = 0;
+
         for (const item of unit.items) {
           if (item.type === 'VOCABULARY_DECK' && item.vocabularyDeck) {
             const deckId = item.vocabularyDeck.id;
@@ -102,7 +107,7 @@ export async function GET(
               isAvailable = false;
               missingPrerequisites.push(`Vocabulary deck "${item.vocabularyDeck.name}" not assigned`);
             } else {
-              // Count cards available for this student
+              // Count cards available for this specific deck (not cumulative)
               const cardCount = await prisma.studentCardState.count({
                 where: {
                   studentId,
@@ -121,12 +126,17 @@ export async function GET(
                 }
               });
 
-              totalCards += cardCount;
-              readyCards += dueCount;
+              // For vocabulary deck units, we show the max ready cards from any single deck
+              // since sessions handle one deck at a time
+              unitTotalCards = Math.max(unitTotalCards, cardCount);
+              unitReadyCards = Math.max(unitReadyCards, dueCount);
             }
           }
           // Future: Add checks for other exercise types that might have prerequisites
         }
+
+        totalCards = unitTotalCards;
+        readyCards = unitReadyCards;
 
         return {
           ...unit,
