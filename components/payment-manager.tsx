@@ -24,34 +24,19 @@ import {
   Smartphone,
 } from "lucide-react"
 import { format } from "date-fns"
-import { cn } from "@/lib/utils"
+import { cn, safeNumberConversion } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
-import { recordPayment } from "@/hooks/use-api-enhanced"
+import { recordPayment, useStudentPayments } from "@/hooks/use-api-enhanced"
 import { useCurrencyFormatter } from "@/hooks/use-ui-preferences"
-import type { FullStudentProfile } from "@/lib/types"
 import type { Payment } from "@prisma/client"
 import { DataTable } from "@/components/data-table"
-
-/**
- * Safely converts a Prisma Decimal (string) or number to a number for calculations
- * 
- * IMPORTANT: Prisma returns Decimal fields as strings in JSON to prevent floating-point 
- * precision loss. The Payment.amount field is defined as Decimal in the schema, so it 
- * comes as a string from the database. Always use this function when performing numeric 
- * operations on Decimal fields to prevent "TypeError: value.toFixed is not a function"
- * 
- * @param value - The value to convert (string from Prisma Decimal, number, null, or undefined)
- * @returns A safe number for calculations (0 if input is invalid)
- */
-const safeNumberConversion = (value: string | number | null | undefined): number => {
-  if (value === null || value === undefined) return 0
-  const num = Number(value)
-  return isNaN(num) ? 0 : num
-}
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface PaymentManagerProps {
-  student: FullStudentProfile
-  onPaymentRecorded: () => void
+  studentId: string
+  studentName: string
+  classesRemaining: number
+  onPaymentRecorded: () => void // To refresh parent component's data
 }
 
 interface PaymentFormData {
@@ -78,7 +63,8 @@ const initialFormData: PaymentFormData = {
   notes: "",
 }
 
-export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerProps) {
+export function PaymentManager({ studentId, studentName, classesRemaining, onPaymentRecorded }: PaymentManagerProps) {
+  const { payments, isLoading, mutate: mutatePayments } = useStudentPayments(studentId)
   const { formatCurrency } = useCurrencyFormatter()
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false)
   const [formData, setFormData] = useState<PaymentFormData>(initialFormData)
@@ -88,11 +74,10 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
   const { toast } = useToast()
 
   // Calculate payment statistics
-  const totalPaid = student.payments.reduce((sum, payment) => sum + safeNumberConversion(payment.amount), 0)
-  const totalClassesPurchased = student.payments.reduce((sum, payment) => sum + payment.classesPurchased, 0)
-  const totalClassesUsed = student.payments.reduce((sum, payment) => sum + payment.classesUsed, 0)
+  const totalPaid = payments.reduce((sum, payment) => sum + safeNumberConversion(payment.amount), 0)
+  const totalClassesPurchased = payments.reduce((sum, payment) => sum + payment.classesPurchased, 0)
+  const totalClassesUsed = payments.reduce((sum, payment) => sum + payment.classesUsed, 0)
   const averageClassPrice = totalClassesPurchased > 0 ? totalPaid / totalClassesPurchased : 0
-  const recentPayments = student.payments.slice(0, 5)
 
   const handleRecordPayment = async () => {
     if (!formData.amount || !formData.classesPurchased) {
@@ -118,7 +103,7 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
 
     setIsSubmitting(true)
     try {
-      await recordPayment(student.id, {
+      await recordPayment(studentId, {
         amount,
         classesPurchased: classes,
         paymentDate: formData.paymentDate.toISOString(),
@@ -131,7 +116,8 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
 
       setFormData(initialFormData)
       setIsRecordPaymentOpen(false)
-      onPaymentRecorded()
+      mutatePayments() // Re-fetch payments for this component
+      onPaymentRecorded() // Re-fetch student data in parent
     } catch (error) {
       toast({
         title: "Error",
@@ -200,6 +186,19 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
     },
   ]
 
+  if (isLoading) {
+    return (
+        <Card>
+            <CardHeader>
+                <Skeleton className="h-8 w-48" />
+            </CardHeader>
+            <CardContent>
+                <Skeleton className="h-40 w-full" />
+            </CardContent>
+        </Card>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Payment Statistics */}
@@ -254,11 +253,11 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
       </div>
 
       {/* Low Balance Alert */}
-      {student.classesRemaining <= 2 && (
+      {classesRemaining <= 2 && (
         <Alert>
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            <strong>{student.name}</strong> has only {student.classesRemaining} classes remaining. Consider recording a
+            <strong>{studentName}</strong> has only {classesRemaining} classes remaining. Consider recording a
             new payment soon.
           </AlertDescription>
         </Alert>
@@ -276,7 +275,7 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
           </div>
         </CardHeader>
         <CardContent>
-          {student.payments.length === 0 ? (
+          {payments.length === 0 ? (
             <div className="text-center py-8">
               <DollarSign className="h-12 w-12 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-500 mb-4">No payments recorded yet</p>
@@ -285,7 +284,7 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
               </Button>
             </div>
           ) : (
-            <DataTable data={student.payments} columns={paymentColumns} pageSize={10} />
+            <DataTable data={payments} columns={paymentColumns} pageSize={10} />
           )}
         </CardContent>
       </Card>
@@ -294,7 +293,7 @@ export function PaymentManager({ student, onPaymentRecorded }: PaymentManagerPro
       <Dialog open={isRecordPaymentOpen} onOpenChange={setIsRecordPaymentOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Record Payment for {student.name}</DialogTitle>
+            <DialogTitle>Record Payment for {studentName}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">

@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { MoreHorizontal, Play, DollarSign, Edit, Archive, BookOpen, Calendar, TrendingUp, Clock } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useStudent, useDecks, assignDeck, updateStudent, archiveStudent } from "@/hooks/use-api-enhanced"
+import { useStudent, useDecks, assignDeck, updateStudent, archiveStudent, updateStudentNotes } from "@/hooks/use-api-enhanced"
 import { format } from "date-fns"
 import { SessionStartDialog } from "@/components/session-start-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -74,21 +74,13 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
 
     setIsSavingNotes(true)
     try {
-      await fetch(`/api/students/${student.id}/notes`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Teacher-ID': 'ef430bd0-5278-4b0d-a0d3-aecf91ba5cd8',
-        },
-        body: JSON.stringify({ notes }),
-      })
-
+      await updateStudentNotes(student.id, notes)
       toast({
         title: "Notes updated",
         description: "Student notes have been saved successfully.",
       })
       setIsEditingNotes(false)
-      mutate()
+      mutate() // Re-fetch student data to get the latest notes
     } catch (error) {
       toast({
         title: "Error",
@@ -453,11 +445,21 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
           </TabsContent>
 
           <TabsContent value="payments">
-            <PaymentManager student={student} onPaymentRecorded={mutate} />
+            <PaymentManager 
+              studentId={student.id} 
+              studentName={student.name}
+              classesRemaining={student.classesRemaining}
+              onPaymentRecorded={mutate} 
+            />
           </TabsContent>
 
           <TabsContent value="schedule">
-            <ClassScheduler student={student} onScheduleUpdated={mutate} />
+            <ClassScheduler 
+              studentId={student.id}
+              studentName={student.name}
+              classesRemaining={student.classesRemaining}
+              onScheduleUpdated={mutate} 
+            />
           </TabsContent>
         </Tabs>
 

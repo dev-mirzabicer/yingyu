@@ -29,12 +29,14 @@ import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay }
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { useStudentSchedules, createSchedule, updateSchedule, deleteSchedule } from "@/hooks/use-api-enhanced"
-import type { FullStudentProfile } from "@/lib/types"
 import type { ClassSchedule, ClassStatus } from "@prisma/client"
 import { DataTable } from "@/components/data-table"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface ClassSchedulerProps {
-  student: FullStudentProfile
+  studentId: string
+  studentName: string
+  classesRemaining: number
   onScheduleUpdated: () => void
 }
 
@@ -46,6 +48,7 @@ interface ScheduleFormData {
   recurringPattern: string
   recurringEnd: Date | null
 }
+
 
 const timeSlots = [
   "08:00",
@@ -119,8 +122,8 @@ const initialFormData: ScheduleFormData = {
   recurringEnd: null,
 }
 
-export function ClassScheduler({ student, onScheduleUpdated }: ClassSchedulerProps) {
-  const { schedules, isLoading, isError, mutate } = useStudentSchedules(student.id)
+export function ClassScheduler({ studentId, studentName, classesRemaining, onScheduleUpdated }: ClassSchedulerProps) {
+  const { schedules, isLoading, isError, mutate } = useStudentSchedules(studentId)
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const [editingSchedule, setEditingSchedule] = useState<ClassSchedule | null>(null)
@@ -147,7 +150,7 @@ export function ClassScheduler({ student, onScheduleUpdated }: ClassSchedulerPro
       return
     }
 
-    if (student.classesRemaining <= 0) {
+    if (classesRemaining <= 0) {
       toast({
         title: "Cannot schedule class",
         description: "Student has no remaining classes. Please record a payment first.",
@@ -158,7 +161,7 @@ export function ClassScheduler({ student, onScheduleUpdated }: ClassSchedulerPro
 
     setIsSubmitting(true)
     try {
-      await createSchedule(student.id, {
+      await createSchedule(studentId, {
         scheduledTime: formData.scheduledTime.toISOString(),
       })
 
@@ -375,7 +378,7 @@ export function ClassScheduler({ student, onScheduleUpdated }: ClassSchedulerPro
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Class Schedule</h2>
-          <p className="text-slate-600">Manage {student.name}'s class schedule</p>
+          <p className="text-slate-600">Manage {studentName}'s class schedule</p>
         </div>
         <div className="flex items-center space-x-2">
           <div className="flex items-center space-x-1 bg-slate-100 rounded-lg p-1">
@@ -398,11 +401,11 @@ export function ClassScheduler({ student, onScheduleUpdated }: ClassSchedulerPro
       </div>
 
       {/* Low Balance Warning */}
-      {student.classesRemaining <= 2 && (
+      {classesRemaining <= 2 && (
         <Alert>
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            <strong>{student.name}</strong> has only {student.classesRemaining} classes remaining. Consider recording a
+            <strong>{studentName}</strong> has only {classesRemaining} classes remaining. Consider recording a
             payment before scheduling more classes.
           </AlertDescription>
         </Alert>
@@ -428,7 +431,7 @@ export function ClassScheduler({ student, onScheduleUpdated }: ClassSchedulerPro
               <Users className="h-5 w-5 text-green-600" />
               <div>
                 <p className="text-sm font-medium text-slate-600">Classes Remaining</p>
-                <p className="text-2xl font-bold text-slate-900">{student.classesRemaining}</p>
+                <p className="text-2xl font-bold text-slate-900">{classesRemaining}</p>
               </div>
             </div>
           </CardContent>

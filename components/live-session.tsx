@@ -12,10 +12,12 @@ import { useToast } from "@/hooks/use-toast"
 import { useSession, submitAnswer, endSession } from "@/hooks/use-api-enhanced"
 import { FullSessionState, VocabularyDeckProgress, AnswerPayload } from "@/lib/types"
 import { UnitItemType } from "@prisma/client"
+import { formatTime } from "@/lib/utils"
 
 interface LiveSessionProps {
   sessionId: string
 }
+
 
 type Rating = 1 | 2 | 3 | 4 // Again, Hard, Good, Easy
 
@@ -293,12 +295,6 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
         variant: "destructive",
       })
     }
-  }
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, "0")}`
   }
 
   // Enhanced progress calculation for dynamic queues
