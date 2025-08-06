@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
@@ -13,6 +13,7 @@ import { useSession, submitAnswer, endSession } from "@/hooks/use-api-enhanced"
 import { FullSessionState, VocabularyDeckProgress, AnswerPayload } from "@/lib/types"
 import { UnitItemType } from "@prisma/client"
 import { formatTime } from "@/lib/utils"
+import { useLiveSessionStore, useProgressData } from "@/hooks/stores/use-live-session-store"
 
 interface LiveSessionProps {
   sessionId: string
@@ -184,47 +185,67 @@ function UnsupportedExercise({ type }: { type: UnitItemType }) {
 
 export function LiveSession({ sessionId }: LiveSessionProps) {
   const { session, isLoading: sessionLoading, isError, mutate } = useSession(sessionId)
-  const [isActionLoading, setIsActionLoading] = useState(false)
-  const [isPaused, setIsPaused] = useState(false)
-  const [elapsedTime, setElapsedTime] = useState(0)
-  const [reviewCount, setReviewCount] = useState(0) // Track total reviews, not just cards
-  const [encounteredCards, setEncounteredCards] = useState<Set<string>>(new Set()) // Track unique cards seen
   const router = useRouter()
   const { toast } = useToast()
 
-  // Timer effect - tracks real session time
+  // Zustand store integration
+  const {
+    isActionLoading,
+    isPaused,
+    elapsedTime,
+    startAction,
+    endAction,
+    togglePause,
+    incrementReviewCount,
+    addEncounteredCard,
+    setElapsedTime,
+    startTimer,
+    stopTimer,
+    reset,
+  } = useLiveSessionStore()
+
+  const progressData = useProgressData(session)
+
+  // Effect for managing the session timer via the store
   useEffect(() => {
     if (!isPaused && session?.status === "IN_PROGRESS") {
-      const interval = setInterval(() => {
-        setElapsedTime((prev) => prev + 1)
-      }, 1000)
-      return () => clearInterval(interval)
+      startTimer()
+    } else {
+      stopTimer()
     }
-  }, [isPaused, session?.status])
+    // This should only re-run when pause or session status changes
+  }, [isPaused, session?.status, startTimer, stopTimer])
 
-  // Initialize elapsed time based on session start time
+  // Effect for initializing elapsed time from server state
   useEffect(() => {
     if (session?.startTime) {
       const startTime = new Date(session.startTime).getTime()
       const now = new Date().getTime()
       setElapsedTime(Math.floor((now - startTime) / 1000))
     }
-  }, [session?.startTime])
+  }, [session?.startTime, setElapsedTime])
 
-  // Track cards encountered during session for accurate statistics
+  // Effect for tracking encountered cards via the store
   useEffect(() => {
     if (session?.progress?.type === 'VOCABULARY_DECK') {
       const progress = session.progress as VocabularyDeckProgress
       if (progress.payload.currentCardData) {
-        setEncounteredCards(prev => new Set(prev).add(progress.payload.currentCardData!.id))
+        addEncounteredCard(progress.payload.currentCardData.id)
       }
     }
-  }, [session?.progress])
+  }, [session?.progress, addEncounteredCard])
+
+  // Effect for resetting the store on component unmount
+  useEffect(() => {
+    return () => {
+      reset()
+    }
+  }, [reset])
 
   const handleRevealAnswer = async () => {
     if (!session) return
 
-    setIsActionLoading(true)
+    startAction()
     try {
       const payload: AnswerPayload = {
         action: 'REVEAL_ANSWER',
@@ -245,22 +266,22 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
         variant: "destructive",
       })
     } finally {
-      setIsActionLoading(false)
+      endAction()
     }
   }
 
   const handleRating = async (rating: Rating) => {
     if (!session) return
 
-    setIsActionLoading(true)
+    startAction()
     try {
       const payload: AnswerPayload = {
         action: 'SUBMIT_RATING',
         data: { rating }
       }
 
-      const result = await submitAnswer(sessionId, payload)
-      setReviewCount(prev => prev + 1) // Increment review count
+      await submitAnswer(sessionId, payload)
+      incrementReviewCount()
       await mutate() // Refresh session state
 
       toast({
@@ -274,7 +295,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
         variant: "destructive",
       })
     } finally {
-      setIsActionLoading(false)
+      endAction()
     }
   }
 
@@ -297,67 +318,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     }
   }
 
-  // Enhanced progress calculation for dynamic queues
-  const getProgressData = () => {
-    if (!session?.progress || !session.currentUnitItem) {
-      return { 
-        current: 0, 
-        total: 1, 
-        percentage: 0,
-        reviewsCompleted: reviewCount,
-        uniqueCardsEncountered: encounteredCards.size,
-        queueAnalysis: { newCards: 0, learningCards: 0, reviewCards: 0, totalInQueue: 0 }
-      }
-    }
-
-    if (session.progress.type === 'VOCABULARY_DECK') {
-      const progress = session.progress as VocabularyDeckProgress
-      const initialCardCount = progress.payload.initialCardIds.length
-      const currentQueueLength = progress.payload.queue.length
-      
-      // Analyze queue composition
-      const newCards = progress.payload.queue.filter(item => item.state === 'NEW').length
-      const learningCards = progress.payload.queue.filter(item => item.state === 'LEARNING' || item.state === 'RELEARNING').length
-      const reviewCards = progress.payload.queue.filter(item => item.state === 'REVIEW').length
-      
-      // More accurate progress based on queue depletion, not completion
-      const cardsProcessedFromQueue = Math.max(0, initialCardCount - currentQueueLength)
-      const progressPercentage = initialCardCount > 0 ? (cardsProcessedFromQueue / initialCardCount) * 100 : 0
-
-      return {
-        current: cardsProcessedFromQueue,
-        total: initialCardCount,
-        percentage: progressPercentage,
-        reviewsCompleted: reviewCount,
-        uniqueCardsEncountered: encounteredCards.size,
-        queueAnalysis: {
-          newCards,
-          learningCards,
-          reviewCards,
-          totalInQueue: currentQueueLength
-        }
-      }
-    }
-
-    // Fallback for other exercise types
-    const currentItemIndex = session.unit.items.findIndex(
-      item => item.id === session.currentUnitItemId
-    )
-    const current = currentItemIndex + 1
-    const total = session.unit.items.length
-    const percentage = (current / total) * 100
-
-    return { 
-      current, 
-      total, 
-      percentage,
-      reviewsCompleted: reviewCount,
-      uniqueCardsEncountered: encounteredCards.size,
-      queueAnalysis: { newCards: 0, learningCards: 0, reviewCards: 0, totalInQueue: 0 }
-    }
-  }
-
-  const progressData = getProgressData()
+  const progressData = useProgressData(session)
 
   // Error state
   if (isError) {
@@ -477,7 +438,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
               <Clock className="h-4 w-4" />
               <span>{formatTime(elapsedTime)}</span>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setIsPaused(!isPaused)}>
+            <Button variant="outline" size="sm" onClick={togglePause}>
               {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
             </Button>
           </div>
