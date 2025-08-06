@@ -39,8 +39,16 @@ export function useSession(sessionId: string) {
   }
 }
 
-export async function startSession(studentId: string, unitId: string) {
-  return mutateWithOptimistic<FullSessionState>("/api/sessions/start", "POST", { studentId, unitId })
+export async function startSession(
+  studentId: string,
+  unitId: string,
+  configOverrides?: { [key: string]: any }
+) {
+  return mutateWithOptimistic<FullSessionState>("/api/sessions/start", "POST", {
+    studentId,
+    unitId,
+    configOverrides,
+  });
 }
 
 export async function submitAnswer(sessionId: string, payload: AnswerPayload) {

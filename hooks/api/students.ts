@@ -190,18 +190,14 @@ export async function assignDeck(studentId: string, deckId: string) {
   return mutateWithOptimistic<{ studentDeck: any; job: Job }>(`/api/students/${studentId}/decks`, "POST", { deckId })
 }
 
-// ============================================================================
-// BULK IMPORT HOOKS
-// ============================================================================
-
-export async function bulkImportStudents(csvData: any[]) {
+export async function bulkImportStudents(students: any[]) {
   return mutateWithOptimistic<Job>("/api/bulk-import/students", "POST", {
-    csvData,
+    students,
   });
 }
 
-export async function bulkImportSchedules(csvData: any[]) {
+export async function bulkImportSchedules(schedules: any[]) {
   return mutateWithOptimistic<Job>("/api/bulk-import/schedules", "POST", {
-    csvData,
+    schedules,
   });
 }
