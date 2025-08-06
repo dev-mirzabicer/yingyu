@@ -136,7 +136,6 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
     name: "",
     description: "",
     isPublic: false,
-    estimatedDuration: 60,
   })
 
   const [unitItems, setUnitItems] = useState<DraggableUnitItem[]>([])
@@ -156,7 +155,6 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
           name: existingUnit.name,
           description: existingUnit.description || "",
           isPublic: existingUnit.isPublic,
-          estimatedDuration: 60, // This would be calculated from items
         })
 
         // Convert unit items to draggable format
@@ -821,7 +819,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
                     <Clock className="h-4 w-4 text-slate-500" />
                     <span className="text-sm text-slate-600">Duration</span>
                   </div>
-                  <Badge variant="outline">{calculateTotalDuration()} min</Badge>
+                  <Badge variant="outline">
+                    {unitData.estimatedMinimumDuration} - {unitData.estimatedMaximumDuration} min
+                  </Badge>
                 </div>
               </div>
             </CardContent>

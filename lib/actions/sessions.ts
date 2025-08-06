@@ -58,7 +58,8 @@ export const SessionService = {
   async startSession(
     teacherId: string,
     studentId: string,
-    unitId: string
+    unitId: string,
+    configOverrides?: { [key: string]: any }
   ): Promise<FullSessionState> {
     await authorizeTeacherForStudent(teacherId, studentId, {
       checkIsActive: true,
@@ -73,6 +74,17 @@ export const SessionService = {
       throw new Error(
         'Cannot start a session with an empty or non-existent unit.'
       );
+    }
+
+    if (configOverrides) {
+      unit.items.forEach(item => {
+        if (configOverrides[item.id]) {
+          item.exerciseConfig = {
+            ...item.exerciseConfig as any,
+            ...configOverrides[item.id],
+          };
+        }
+      });
     }
 
     const firstItem = unit.items[0];

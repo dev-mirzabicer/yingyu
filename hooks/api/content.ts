@@ -163,13 +163,9 @@ export async function updateUnitItemConfig(unitItemId: string, config: Vocabular
   return mutateWithOptimistic<any>(`/api/items/${unitItemId}/config`, "PUT", config)
 }
 
-// ============================================================================
-// BULK IMPORT HOOKS
-// ============================================================================
-
-export async function bulkImportVocabulary(deckId: string, csvData: any[]) {
+export async function bulkImportVocabulary(deckId: string, cards: any[]) {
   return mutateWithOptimistic<Job>("/api/bulk-import/vocabulary", "POST", {
     deckId,
-    csvData,
+    cards,
   });
 }

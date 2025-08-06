@@ -619,7 +619,13 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
                           placeholder="https://example.com/audio.mp3"
                           disabled={isSubmitting}
                         />
-                        <Button type="button" variant="outline" size="icon">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => formData.audioUrl && new Audio(formData.audioUrl).play()}
+                          disabled={!formData.audioUrl}
+                        >
                           <Volume2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -635,7 +641,13 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
                           placeholder="https://example.com/image.jpg"
                           disabled={isSubmitting}
                         />
-                        <Button type="button" variant="outline" size="icon">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => formData.imageUrl && window.open(formData.imageUrl, "_blank")}
+                          disabled={!formData.imageUrl}
+                        >
                           <ImageIcon className="h-4 w-4" />
                         </Button>
                       </div>
@@ -651,7 +663,13 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
                           placeholder="https://example.com/video.mp4"
                           disabled={isSubmitting}
                         />
-                        <Button type="button" variant="outline" size="icon">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => formData.videoUrl && window.open(formData.videoUrl, "_blank")}
+                          disabled={!formData.videoUrl}
+                        >
                           <Video className="h-4 w-4" />
                         </Button>
                       </div>
@@ -834,7 +852,13 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
                           placeholder="https://example.com/audio.mp3"
                           disabled={isSubmitting}
                         />
-                        <Button type="button" variant="outline" size="icon">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => formData.audioUrl && new Audio(formData.audioUrl).play()}
+                          disabled={!formData.audioUrl}
+                        >
                           <Volume2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -850,7 +874,13 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
                           placeholder="https://example.com/image.jpg"
                           disabled={isSubmitting}
                         />
-                        <Button type="button" variant="outline" size="icon">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => formData.imageUrl && window.open(formData.imageUrl, "_blank")}
+                          disabled={!formData.imageUrl}
+                        >
                           <ImageIcon className="h-4 w-4" />
                         </Button>
                       </div>
@@ -866,7 +896,13 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
                           placeholder="https://example.com/video.mp4"
                           disabled={isSubmitting}
                         />
-                        <Button type="button" variant="outline" size="icon">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => formData.videoUrl && window.open(formData.videoUrl, "_blank")}
+                          disabled={!formData.videoUrl}
+                        >
                           <Video className="h-4 w-4" />
                         </Button>
                       </div>

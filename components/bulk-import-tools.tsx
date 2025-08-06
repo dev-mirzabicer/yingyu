@@ -301,6 +301,7 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
               description: "No deck selected.",
               variant: "destructive",
             });
+            setIsProcessing(false);
             return;
           }
           job = await bulkImportVocabulary(deckId, previewData);

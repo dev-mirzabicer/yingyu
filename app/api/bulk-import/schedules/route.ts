@@ -1,24 +1,24 @@
+import { NextResponse } from 'next/server';
 import { JobService } from '@/lib/actions/jobs';
-import { BulkImportSchedulesPayloadSchema } from '@/lib/schemas/bulk-import';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
-import { authorize } from '@/lib/auth';
+import { getAuth } from '@clerk/nextjs/server';
+import { NextApiRequest } from 'next';
 
-export async function POST(req: Request) {
+export async function POST(req: NextApiRequest) {
   try {
-    const teacherId = await authorize();
+    const { userId: teacherId } = getAuth(req);
+    if (!teacherId) {
+      return apiResponse({
+        status: 401,
+        message: 'Unauthorized',
+      });
+    }
     const payload = await req.json();
-
-    const validatedPayload = BulkImportSchedulesPayloadSchema.parse(payload);
-
     const job = await JobService.createBulkImportSchedulesJob(
       teacherId,
-      validatedPayload as any
+      payload
     );
-
-    return apiResponse({
-      data: job,
-      message: 'Successfully created bulk import job for schedules.',
-    });
+    return apiResponse({ data: job });
   } catch (error) {
     return handleApiError(error);
   }

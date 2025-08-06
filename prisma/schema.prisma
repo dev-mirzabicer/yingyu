@@ -144,14 +144,16 @@ model Student {
 // ================================================================= //
 
 model Unit {
-  id          String     @id @default(uuid()) @db.Uuid
-  creatorId   String?    @db.Uuid
-  name        String
-  description String?
-  isPublic    Boolean    @default(false)
-  isArchived  Boolean    @default(false)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id                       String     @id @default(uuid()) @db.Uuid
+  creatorId                String?    @db.Uuid
+  name                     String
+  description              String?
+  isPublic                 Boolean    @default(false)
+  isArchived               Boolean    @default(false)
+  estimatedMinimumDuration Int?
+  estimatedMaximumDuration Int?
+  createdAt                DateTime   @default(now())
+  updatedAt                DateTime   @updatedAt
 
   creator  Teacher?   @relation(fields: [creatorId], references: [id], onDelete: SetNull)
   items    UnitItem[]
@@ -410,6 +412,8 @@ model ClassSchedule {
   studentId     String      @db.Uuid
   scheduledTime DateTime
   status        ClassStatus @default(SCHEDULED)
+  duration      Int?
+  notes         String?
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }

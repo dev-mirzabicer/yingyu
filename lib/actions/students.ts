@@ -467,16 +467,16 @@ export const StudentService = {
    * [INTERNAL METHOD] Bulk adds students to a teacher's account.
    *
    * @param teacherId The UUID of the teacher.
-   * @param payload The job payload, containing the csvData.
+   * @param payload The job payload, containing the students data.
    * @returns A result object indicating the number of students created.
    */
   async _bulkAddStudents(
     teacherId: string,
     payload: z.infer<typeof BulkImportStudentsPayloadSchema>
   ) {
-    const { csvData } = payload;
+    const { students } = payload;
 
-    const studentsToCreate = csvData.map((student) => ({
+    const studentsToCreate = students.map((student) => ({
       ...student,
       teacherId,
     }));
@@ -492,16 +492,16 @@ export const StudentService = {
   /**
    * [INTERNAL METHOD] Bulk adds schedules for students.
    *
-   * @param payload The job payload, containing the csvData.
+   * @param payload The job payload, containing the schedules data.
    * @returns A result object indicating the number of schedules created.
    */
   async _bulkAddSchedules(
     payload: z.infer<typeof BulkImportSchedulesPayloadSchema>
   ) {
-    const { csvData } = payload;
+    const { schedules } = payload;
 
     const schedulesToCreate = await Promise.all(
-      csvData.map(async (schedule) => {
+      schedules.map(async (schedule) => {
         const student = await prisma.student.findUnique({
           where: { email: schedule.studentEmail },
         });
@@ -513,7 +513,8 @@ export const StudentService = {
         return {
           studentId: student.id,
           scheduledTime: new Date(schedule.scheduledTime),
-          // duration and notes are not in the schema yet
+          duration: schedule.duration,
+          notes: schedule.notes,
         };
       })
     );

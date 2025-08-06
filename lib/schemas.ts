@@ -141,7 +141,7 @@ export const UpdateTeacherSettingsSchema = z.object({
 
 export const BulkImportVocabularyPayloadSchema = z.object({
   deckId: z.string().uuid(),
-  csvData: z.array(
+  cards: z.array(
     z.object({
       englishWord: z.string(),
       chineseTranslation: z.string(),
@@ -158,7 +158,7 @@ export const BulkImportVocabularyPayloadSchema = z.object({
 });
 
 export const BulkImportStudentsPayloadSchema = z.object({
-  csvData: z.array(
+  students: z.array(
     z.object({
       name: z.string(),
       email: z.string().email(),
@@ -170,7 +170,7 @@ export const BulkImportStudentsPayloadSchema = z.object({
 });
 
 export const BulkImportSchedulesPayloadSchema = z.object({
-  csvData: z.array(
+  schedules: z.array(
     z.object({
       studentEmail: z.string().email(),
       scheduledTime: z.string(),

@@ -16,12 +16,15 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-  Target
+  Target,
+  Settings,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { useAvailableUnits, startSession } from "@/hooks/use-api-enhanced"
 import { UnitItemType } from "@prisma/client"
+import { Input } from "./ui/input"
+import { Label } from "./ui/label"
 
 interface SessionStartDialogProps {
   studentId: string
@@ -63,11 +66,23 @@ export function SessionStartDialog({
   const { units, isLoading, isError } = useAvailableUnits(studentId)
   const [selectedUnit, setSelectedUnit] = useState<any>(null)
   const [isStarting, setIsStarting] = useState(false)
+  const [configOverrides, setConfigOverrides] = useState<{ [key: string]: any }>({})
   const router = useRouter()
   const { toast } = useToast()
 
   const handleUnitSelect = (unit: any) => {
     setSelectedUnit(selectedUnit?.id === unit.id ? null : unit)
+    setConfigOverrides({}) // Reset overrides when unit changes
+  }
+
+  const handleConfigChange = (itemId: string, newConfig: any) => {
+    setConfigOverrides(prev => ({
+      ...prev,
+      [itemId]: {
+        ...prev[itemId],
+        ...newConfig,
+      },
+    }))
   }
 
   const handleStartSession = async () => {
@@ -75,7 +90,7 @@ export function SessionStartDialog({
 
     setIsStarting(true)
     try {
-      const result = await startSession(studentId, selectedUnit.id)
+      const result = await startSession(studentId, selectedUnit.id, configOverrides)
 
       toast({
         title: "Session started successfully",
@@ -259,7 +274,7 @@ export function SessionStartDialog({
           {/* Unit Preview Panel */}
           <div className="space-y-4">
             <h3 className="font-semibold text-slate-900">
-              {selectedUnit ? 'Unit Preview' : 'Select a unit to preview'}
+              {selectedUnit ? 'Unit Preview & Configuration' : 'Select a unit to preview'}
             </h3>
 
             {selectedUnit ? (
@@ -289,32 +304,40 @@ export function SessionStartDialog({
                       </div>
 
                       <div className="space-y-3">
-                        <h4 className="font-medium text-sm text-slate-700">Exercise Breakdown:</h4>
-                        {selectedUnit.items.map((item: any, index: number) => {
-                          const typeInfo = exerciseTypeInfo[item.type as keyof typeof exerciseTypeInfo] || {
-                            label: "Unknown",
-                            icon: FileText,
-                            color: "bg-gray-100 text-gray-700 border-gray-200"
+                        <h4 className="font-medium text-sm text-slate-700 flex items-center space-x-2">
+                          <Settings className="h-4 w-4" />
+                          <span>Session Configuration</span>
+                        </h4>
+                        {selectedUnit.items.map((item: any) => {
+                          if (item.type !== UnitItemType.VOCABULARY_DECK) {
+                            return null;
                           }
-                          const Icon = typeInfo.icon
-
                           return (
-                            <div key={item.id} className="flex items-center space-x-3 p-2 rounded-lg bg-slate-50">
-                              <div className="text-xs text-slate-500 w-6">
-                                #{index + 1}
-                              </div>
-                              <div className={`p-1.5 rounded ${typeInfo.color}`}>
-                                <Icon className="h-3 w-3" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-slate-900 truncate">
-                                  {item.vocabularyDeck?.name ||
-                                    item.grammarExercise?.title ||
-                                    item.listeningExercise?.title ||
-                                    item.vocabFillInBlankExercise?.title ||
-                                    'Unnamed Exercise'}
-                                </p>
-                                <p className="text-xs text-slate-500">{typeInfo.label}</p>
+                            <div key={item.id} className="p-3 rounded-lg bg-slate-50 space-y-3">
+                              <p className="text-sm font-medium text-slate-900">
+                                {item.vocabularyDeck?.name}
+                              </p>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <Label htmlFor={`newCards-${item.id}`} className="text-xs">New Cards</Label>
+                                  <Input
+                                    id={`newCards-${item.id}`}
+                                    type="number"
+                                    defaultValue={item.exerciseConfig?.newCards || 10}
+                                    onChange={(e) => handleConfigChange(item.id, { newCards: parseInt(e.target.value) })}
+                                    className="h-8"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label htmlFor={`maxDue-${item.id}`} className="text-xs">Max Due</Label>
+                                  <Input
+                                    id={`maxDue-${item.id}`}
+                                    type="number"
+                                    defaultValue={item.exerciseConfig?.maxDue || 50}
+                                    onChange={(e) => handleConfigChange(item.id, { maxDue: parseInt(e.target.value) })}
+                                    className="h-8"
+                                  />
+                                </div>
                               </div>
                             </div>
                           )
