@@ -31,21 +31,150 @@ import { VocabularyExerciseConfig, VocabularyQueueItem } from '../types';
 const LISTENING_CANDIDATE_RETRIEVABILITY_THRESHOLD = 0.36;
 
 /**
+ * Default learning steps for new cards: 3 minutes, 15 minutes, 30 minutes.
+ * These steps are used when no custom learning steps are configured.
+ */
+const DEFAULT_LEARNING_STEPS = ['3m', '15m', '30m'];
+
+/**
+ * Parses a learning step duration string (e.g., '3m', '15m', '1h', '2d') into milliseconds.
+ * @param step The duration string to parse.
+ * @returns The duration in milliseconds.
+ */
+function parseLearningStepDuration(step: string): number {
+  const match = step.match(/^(\d+)([smhd])$/);
+  if (!match) {
+    throw new Error(`Invalid learning step format: ${step}. Expected format like '3m', '15m', '1h', '2d'.`);
+  }
+  
+  const [, value, unit] = match;
+  const num = parseInt(value, 10);
+  
+  switch (unit) {
+    case 's': return num * 1000; // seconds to ms
+    case 'm': return num * 60 * 1000; // minutes to ms  
+    case 'h': return num * 60 * 60 * 1000; // hours to ms
+    case 'd': return num * 24 * 60 * 60 * 1000; // days to ms
+    default: throw new Error(`Invalid time unit: ${unit}`);
+  }
+}
+
+/**
  * The definitive, re-engineered FSRS Service. This service is the scientific core
  * of the application, leveraging the full power of the `fsrs-rs-nodejs` engine
  * and our "History as Source of Truth" architectural principle.
  */
 export const FSRSService = {
   /**
-   * [PERFECTED IMPLEMENTATION]
-   * Records a student's review of a single card. This function is now architecturally sound,
-   * using a single, unified logic path that correctly leverages the FSRS engine for all reviews
-   * (both initial and subsequent), ensuring mathematical integrity.
+   * Determines if a card should use learning steps instead of FSRS scheduling.
+   * FSRS-compliant logic: NEW or RELEARNING cards that haven't completed learning steps.
+   * 
+   * @param studentId The student's UUID
+   * @param cardId The card's UUID  
+   * @param learningSteps The configured learning steps array
+   * @param tx Optional transaction client
+   * @returns Promise<boolean> - true if learning steps should be used
+   */
+  async _shouldUseLearningSteps(
+    studentId: string,
+    cardId: string,
+    learningSteps: string[],
+    tx?: any
+  ): Promise<boolean> {
+    const client = tx || prisma;
+    
+    // Get current card state
+    const cardState = await client.studentCardState.findUnique({
+      where: { studentId_cardId: { studentId, cardId } },
+      select: { state: true }
+    });
+    
+    // Only NEW or RELEARNING cards use learning steps
+    if (!cardState || (cardState.state !== 'NEW' && cardState.state !== 'RELEARNING')) {
+      return false;
+    }
+    
+    // Count learning step reviews (not FSRS reviews)
+    const learningStepReviews = await client.reviewHistory.count({
+      where: { 
+        studentId, 
+        cardId, 
+        isLearningStep: true 
+      }
+    });
+    
+    // Use learning steps if we haven't completed all steps yet
+    return learningStepReviews < learningSteps.length;
+  },
+
+  /**
+   * Implements the simple Anki-like learning steps logic:
+   * - If rating != "Again": advance to next step or graduate
+   * - If rating == "Again": reset to step 0
+   * 
+   * @param studentId The student's UUID
+   * @param cardId The card's UUID
+   * @param rating The submitted rating (1-4)
+   * @param learningSteps The configured learning steps array
+   * @param tx Optional transaction client
+   * @returns Promise<{shouldGraduate: boolean, newDueDate: Date}> - graduation flag and due date
+   */
+  async _calculateLearningStepsDue(
+    studentId: string,
+    cardId: string,
+    rating: FsrsRating,
+    learningSteps: string[],
+    tx?: any
+  ): Promise<{ shouldGraduate: boolean; newDueDate: Date }> {
+    const client = tx || prisma;
+    const now = new Date();
+    
+    // Count current learning step reviews to determine current step
+    const currentStepReviews = await client.reviewHistory.count({
+      where: { 
+        studentId, 
+        cardId, 
+        isLearningStep: true 
+      }
+    });
+    
+    if (rating === 1) {
+      // "Again" rating: reset to step 0
+      const firstStepDuration = parseLearningStepDuration(learningSteps[0]);
+      return {
+        shouldGraduate: false,
+        newDueDate: new Date(now.getTime() + firstStepDuration)
+      };
+    }
+    
+    // Rating >= 2: advance to next step
+    const nextStep = currentStepReviews; // After this review, we'll be at this step
+    
+    if (nextStep >= learningSteps.length) {
+      // Graduate to FSRS - this review will be the first FSRS review
+      return {
+        shouldGraduate: true,
+        newDueDate: now // FSRS will calculate the actual due date
+      };
+    }
+    
+    // Stay in learning steps - advance to next step
+    const nextStepDuration = parseLearningStepDuration(learningSteps[nextStep]);
+    return {
+      shouldGraduate: false,
+      newDueDate: new Date(now.getTime() + nextStepDuration)
+    };
+  },
+  /**
+   * [PERFECTED IMPLEMENTATION WITH SIMPLE LEARNING STEPS]
+   * Records a student's review with Anki-like learning steps logic.
+   * Pure approach: learning step reviews stay separate from FSRS history.
    *
    * @param studentId The UUID of the student.
    * @param cardId The UUID of the card being reviewed.
    * @param rating The student's performance rating (1-4).
    * @param reviewType The context of the review (e.g., VOCABULARY, LISTENING).
+   * @param sessionId Optional session ID to retrieve learning steps configuration.
    * @returns A promise that resolves to the updated StudentCardState.
    */
   async recordReview(
@@ -55,17 +184,31 @@ export const FSRSService = {
     reviewType: ReviewType,
     sessionId?: string
   ): Promise<StudentCardState> {
-    // The entire operation is atomic, ensuring data consistency.
     return prisma.$transaction(async (tx) => {
-      // 1. Get the student's current FSRS parameters (or defaults).
-      const studentParams = await tx.studentFsrsParams.findFirst({
-        where: { studentId, isActive: true },
-      });
-      const w = (studentParams?.w as number[]) ?? FSRS_DEFAULT_PARAMETERS;
-      const engine = new FSRS(w);
       const now = new Date();
-
-      // 2. Get the card's current state from the cache. This is our starting point.
+      
+      // 1. Get learning steps configuration from session (if available)
+      let learningSteps = DEFAULT_LEARNING_STEPS;
+      if (sessionId) {
+        try {
+          const session = await tx.session.findUnique({
+            where: { id: sessionId },
+            select: { progress: true }
+          });
+          
+          if (session?.progress) {
+            const progress = session.progress as any;
+            const config = progress?.payload?.config;
+            if (config?.learningSteps && Array.isArray(config.learningSteps)) {
+              learningSteps = config.learningSteps;
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to fetch session config for learning steps, using defaults:', error);
+        }
+      }
+      
+      // 2. Get current card state
       const previousCardState = await tx.studentCardState.findUnique({
         where: { studentId_cardId: { studentId, cardId } },
       });
@@ -75,11 +218,93 @@ export const FSRSService = {
           `FSRSService Integrity Error: Cannot record review for a card that has no initial state. StudentId: ${studentId}, CardId: ${cardId}`
         );
       }
+      
+      // 3. Check if this card should use learning steps
+      const shouldUseLearningSteps = await this._shouldUseLearningSteps(
+        studentId, 
+        cardId, 
+        learningSteps, 
+        tx
+      );
+      
+      if (shouldUseLearningSteps) {
+        // ============= LEARNING STEPS LOGIC =============
+        console.log('Learning steps DEBUG:', {
+          cardId: cardId.substring(0, 8),
+          rating,
+          learningSteps,
+          message: 'Using learning steps logic'
+        });
+        
+        const { shouldGraduate, newDueDate } = await this._calculateLearningStepsDue(
+          studentId,
+          cardId,
+          rating,
+          learningSteps,
+          tx
+        );
+        
+        if (shouldGraduate) {
+          // ========= GRADUATION: First FSRS Review =========
+          console.log('Learning steps GRADUATION:', {
+            cardId: cardId.substring(0, 8),
+            message: 'Graduating to FSRS scheduling'
+          });
+          
+          // This review becomes the FIRST FSRS review - fall through to FSRS logic
+          // Don't return here, let FSRS handle this review
+        } else {
+          // ========= STAY IN LEARNING STEPS =========
+          
+          // Determine appropriate state for learning steps
+          const newState = previousCardState.state === 'REVIEW' || previousCardState.state === 'RELEARNING'
+            ? 'RELEARNING'  // Failed cards use RELEARNING state
+            : 'NEW';        // Truly new cards stay NEW during learning
+          
+          // Update card state with learning step due date
+          const updatedState = await tx.studentCardState.update({
+            where: { studentId_cardId: { studentId, cardId } },
+            data: {
+              due: newDueDate,
+              lastReview: now,
+              // DON'T increment reps during learning steps - keep it at 0
+              lapses: rating === 1 ? { increment: 1 } : undefined,
+              state: newState,
+            },
+          });
+          
+          // Record as learning step review (NOT an FSRS review)
+          await tx.reviewHistory.create({
+            data: {
+              studentId,
+              cardId,
+              rating,
+              reviewType,
+              sessionId,
+              reviewedAt: now,
+              previousState: previousCardState.state,
+              previousDifficulty: previousCardState.difficulty,
+              previousStability: previousCardState.stability,
+              previousDue: previousCardState.due,
+              isLearningStep: true, // Mark as learning step review
+            },
+          });
+          
+          return updatedState;
+        }
+      }
+      
+      // ============= FSRS LOGIC =============
+      // (Either not in learning steps, or graduating from learning steps)
+      
+      // 4. Get student's FSRS parameters
+      const studentParams = await tx.studentFsrsParams.findFirst({
+        where: { studentId, isActive: true },
+      });
+      const w = (studentParams?.w as number[]) ?? FSRS_DEFAULT_PARAMETERS;
+      const engine = new FSRS(w);
 
-      // 3. Determine the current memory state for the engine.
-      //    According to the FSRS algorithm, the first review of a card has no prior memory state.
-      //    The library expects `undefined` in this case. For all subsequent reviews, we construct
-      //    the memory state from our cached values.
+      // 5. Determine memory state (NEW cards or graduated cards have no prior memory)
       const currentMemory =
         previousCardState.state === CardState.NEW
           ? undefined
@@ -88,23 +313,34 @@ export const FSRSService = {
             previousCardState.difficulty
           );
 
-      // 4. Calculate days elapsed since the last review. This is a critical input for the engine.
-      const daysSinceLastReview = previousCardState.lastReview
-        ? Math.round(
+      // 6. Calculate days since last FSRS review (not learning step review)
+      // For graduated cards, this should be 0 since it's their first FSRS review
+      const daysSinceLastReview = (previousCardState.state === CardState.NEW || !previousCardState.lastReview)
+        ? 0
+        : Math.round(
           (now.getTime() - previousCardState.lastReview.getTime()) /
           (1000 * 60 * 60 * 24)
-        )
-        : 0;
+        );
 
-      // 5. UNIFIED LOGIC: Use the FSRS engine to get the next states for ALL possible ratings.
-      //    This is the single, correct path for both NEW and existing cards.
+      // 7. Get next states from FSRS engine
       const nextStates = engine.nextStates(
         currentMemory,
         DEFAULT_DESIRED_RETENTION,
         daysSinceLastReview
       );
+      
+      console.log('FSRS Intervals DEBUG:', {
+        cardState: previousCardState.state,
+        daysSinceLastReview,
+        intervals: {
+          again: nextStates.again.interval,
+          hard: nextStates.hard.interval, 
+          good: nextStates.good.interval,
+          easy: nextStates.easy.interval
+        }
+      });
 
-      // 6. Select the specific next state based on the user's rating.
+      // 8. Select state based on rating
       let newState;
       switch (rating) {
         case 1:
@@ -123,12 +359,12 @@ export const FSRSService = {
           throw new Error(`Invalid FSRS rating: ${rating}`);
       }
 
-      // 7. Calculate the new due date based on the interval returned by the engine.
+      // 9. Calculate new due date
       const newDueDate = new Date(
         now.getTime() + newState.interval * 24 * 60 * 60 * 1000
       );
 
-      // 8. Update the card state cache in the database with the engine's results.
+      // 10. Update card state with FSRS results
       const updatedState = await tx.studentCardState.update({
         where: { studentId_cardId: { studentId, cardId } },
         data: {
@@ -136,14 +372,13 @@ export const FSRSService = {
           difficulty: newState.memory.difficulty,
           due: newDueDate,
           lastReview: now,
-          reps: { increment: 1 },
+          reps: { increment: 1 }, // NOW we increment reps for FSRS
           lapses: rating === 1 ? { increment: 1 } : undefined,
-          // A card is in 'REVIEW' state after any review, unless it was 'Again', which puts it in 'RELEARNING'.
           state: rating === 1 ? 'RELEARNING' : 'REVIEW',
         },
       });
 
-      // 9. Append to the immutable review history log for future analysis and optimization.
+      // 11. Record as FSRS review (NOT a learning step)
       await tx.reviewHistory.create({
         data: {
           studentId,
@@ -156,6 +391,7 @@ export const FSRSService = {
           previousDifficulty: previousCardState.difficulty,
           previousStability: previousCardState.stability,
           previousDue: previousCardState.due,
+          isLearningStep: false, // Mark as FSRS review
         },
       });
 
@@ -178,14 +414,18 @@ export const FSRSService = {
       throw new Error('Invalid payload: studentId is required.');
     }
 
+    // Only get FSRS reviews (exclude learning step reviews) for optimization
     const allHistory = await prisma.reviewHistory.findMany({
-      where: { studentId },
+      where: { 
+        studentId,
+        isLearningStep: false // Only FSRS reviews for parameter optimization
+      },
       orderBy: { reviewedAt: 'asc' },
     });
 
-    // FSRS optimization requires a meaningful amount of data.
+    // FSRS optimization requires a meaningful amount of FSRS data.
     if (allHistory.length < 50) {
-      const message = `Skipping optimization for student ${studentId}: insufficient review history (${allHistory.length} reviews). At least 50 are recommended.`;
+      const message = `Skipping optimization for student ${studentId}: insufficient FSRS review history (${allHistory.length} reviews). At least 50 FSRS reviews are recommended.`;
       console.log(message);
       return { message };
     }
@@ -229,7 +469,8 @@ export const FSRSService = {
 
   /**
    * Assembles the initial review queue for a unified vocabulary session based on student
-   * status and session configuration.
+   * status and session configuration. Properly distinguishes between truly new cards
+   * and relearning cards.
    * @param studentId The ID of the student.
    * @param config The configuration for this specific session.
    * @returns An object containing separate arrays for due and new card queue items.
@@ -271,6 +512,7 @@ export const FSRSService = {
       dueCards = [...dueCards, ...supplementalCards];
     }
 
+    // Get truly NEW cards (never reviewed)
     const newCards = await prisma.studentCardState.findMany({
       where: { studentId, state: 'NEW' },
       take: finalConfig.newCards,
@@ -278,14 +520,19 @@ export const FSRSService = {
       select: { cardId: true, due: true },
     });
 
-    const dueItems: VocabularyQueueItem[] = dueCards.map((c) => ({
-      ...c,
-      isNew: false,
-    }));
-    const newItems: VocabularyQueueItem[] = newCards.map((c) => ({
-      ...c,
-      isNew: true,
-    }));
+    // Get RELEARNING cards (failed cards in learning steps)
+    const relearningCards = await prisma.studentCardState.findMany({
+      where: { studentId, state: 'RELEARNING', due: { lte: now } },
+      orderBy: { due: 'asc' },
+      select: { cardId: true, due: true },
+    });
+
+    const dueItems: VocabularyQueueItem[] = [
+      ...dueCards.map((c) => ({ ...c, isNew: false })),
+      ...relearningCards.map((c) => ({ ...c, isNew: false })) // Relearning cards are not "new"
+    ];
+
+    const newItems: VocabularyQueueItem[] = newCards.map((c) => ({ ...c, isNew: true }));
 
     return { dueItems, newItems };
   },
@@ -383,10 +630,9 @@ export const FSRSService = {
   },
 
   /**
-   * [PERFECTED IMPLEMENTATION]
-   * The internal method for rebuilding the FSRS cache. It now correctly fetches and
-   * utilizes the student's specific FSRS parameters, ensuring the cache is rebuilt
-   * with the correct weights.
+   * [PERFECTED IMPLEMENTATION WITH LEARNING STEPS]
+   * The internal method for rebuilding the FSRS cache. It now correctly handles both
+   * FSRS scheduling and learning steps, ensuring accurate reconstruction of card states.
    */
   async _rebuildCacheForStudent(
     payload: Prisma.JsonValue
@@ -411,6 +657,7 @@ export const FSRSService = {
       studentDecks.flatMap((sd) => sd.deck.cards.map((c) => c.id))
     );
 
+    // Get ALL history (learning steps + FSRS) for complete reconstruction
     const allHistory = await prisma.reviewHistory.findMany({
       where: { studentId },
       orderBy: { reviewedAt: 'asc' },
@@ -431,10 +678,57 @@ export const FSRSService = {
     for (const cardId in historyByCard) {
       reviewedCardIds.add(cardId);
       const cardHistory = historyByCard[cardId];
-      const fsrsReviews = this._mapHistoryToFsrsReviews(cardHistory);
+      const lastReview = cardHistory[cardHistory.length - 1];
+      
+      // Check if this card should still be in learning steps
+      // Count only learning step reviews (not FSRS reviews)
+      const learningSteps = DEFAULT_LEARNING_STEPS;
+      const learningStepReviews = cardHistory.filter(h => h.isLearningStep).length;
+      const shouldBeInLearningSteps = learningStepReviews < learningSteps.length && 
+                                     cardHistory.some(h => h.isLearningStep); // Has learning step history
+      
+      if (shouldBeInLearningSteps) {
+        // Reconstruct learning steps state
+        let currentStepIndex = learningStepReviews - 1; // 0-based index of current step
+        let dueDate: Date;
+        
+        if (lastReview.rating === 1 && lastReview.isLearningStep) {
+          // If last rating was "Again" in learning steps, reset to first step
+          currentStepIndex = 0;
+        }
+        
+        // Calculate due date based on learning step
+        if (currentStepIndex >= 0 && currentStepIndex < learningSteps.length) {
+          const stepDuration = parseLearningStepDuration(learningSteps[currentStepIndex]);
+          dueDate = new Date(lastReview.reviewedAt.getTime() + stepDuration);
+        } else {
+          // Should have graduated - treat as FSRS
+          dueDate = new Date(); // Will be recalculated below
+        }
+        
+        if (currentStepIndex >= 0 && currentStepIndex < learningSteps.length) {
+          // Still in learning steps
+          statesFromHistory.push({
+            studentId,
+            cardId,
+            stability: 1.0, // Default stability for learning cards
+            difficulty: 5.0, // Default difficulty for learning cards  
+            due: dueDate,
+            lastReview: lastReview.reviewedAt,
+            reps: cardHistory.filter(h => !h.isLearningStep).length, // Only count FSRS reviews
+            lapses: cardHistory.filter((h) => h.rating === 1).length,
+            state: cardHistory.some(h => !h.isLearningStep) ? 'RELEARNING' : 'NEW', // NEW if never graduated, RELEARNING if failed
+          });
+          continue; // Skip FSRS calculation
+        }
+      }
+      
+      // Use FSRS calculation for graduated or non-learning cards
+      // Only use FSRS reviews (exclude learning step reviews)
+      const fsrsOnlyHistory = cardHistory.filter(h => !h.isLearningStep);
+      const fsrsReviews = this._mapHistoryToFsrsReviews(fsrsOnlyHistory);
       const fsrsItem = new FSRSItem(fsrsReviews);
       const finalMemoryState = engine.memoryState(fsrsItem);
-      const lastReview = cardHistory[cardHistory.length - 1];
 
       const nextStates = engine.nextStates(
         finalMemoryState,
@@ -471,7 +765,7 @@ export const FSRSService = {
         difficulty: finalMemoryState.difficulty,
         due: accurateDueDate,
         lastReview: lastReview.reviewedAt,
-        reps: cardHistory.length,
+        reps: fsrsOnlyHistory.length, // Only count FSRS reviews for reps
         lapses: cardHistory.filter((h) => h.rating === 1).length,
         state: lastReview.rating === 1 ? 'RELEARNING' : 'REVIEW',
       });

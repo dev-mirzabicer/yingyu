@@ -230,7 +230,7 @@ export const SessionService = {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { startTime: 'desc' },
     });
 
     // Transform the sessions to match the expected format for the frontend

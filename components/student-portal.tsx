@@ -321,7 +321,9 @@ export function StudentPortal({ studentId }: StudentPortalProps) {
                                   ? "secondary"
                                   : cardState.state === "REVIEW"
                                     ? "outline"
-                                    : "destructive"
+                                    : cardState.state === "RELEARNING"
+                                      ? "destructive"
+                                      : "destructive"
                             }
                             className="text-xs"
                           >

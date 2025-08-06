@@ -63,22 +63,80 @@ class SubmitRatingOperator implements ProgressOperator {
       services.sessionId // Pass the sessionId
     );
 
-    const allSessionStates = await services.tx.studentCardState.findMany({
-      where: {
-        studentId: services.studentId,
-        cardId: { in: currentProgress.payload.initialCardIds },
-      },
-      select: { cardId: true, due: true, state: true },
+    // FIXED: Query all cards from the current deck, not just initialCardIds
+    // This allows truly dynamic queue expansion during the session
+    const currentDeckId = currentProgress.payload.config.deckId;
+    
+    // DEBUG: Verify deck-based querying is working
+    console.log('Session Queue Rebuild:', {
+      deckId: currentDeckId,
+      studentId: services.studentId.substring(0, 8)
+    });
+    
+    let cardStatesQuery;
+    if (currentDeckId) {
+      // If we have a specific deck ID, query only that deck
+      cardStatesQuery = services.tx.studentCardState.findMany({
+        where: {
+          studentId: services.studentId,
+          card: { deckId: currentDeckId },
+        },
+        select: { cardId: true, due: true, state: true },
+      });
+    } else {
+      // Fallback: use initial card IDs (preserves existing behavior for mixed units)
+      cardStatesQuery = services.tx.studentCardState.findMany({
+        where: {
+          studentId: services.studentId,
+          cardId: { in: currentProgress.payload.initialCardIds },
+        },
+        select: { cardId: true, due: true, state: true },
+      });
+    }
+
+    const allSessionStates = await cardStatesQuery;
+
+    // DEBUG: Log query results
+    console.log('Query results DEBUG:', {
+      foundStates: allSessionStates.length,
+      stateDetails: allSessionStates.map(s => ({
+        cardId: s.cardId.substring(0, 8),
+        due: s.due,
+        state: s.state,
+        isDueNow: s.due <= new Date()
+      }))
     });
 
+    // Build the new queue with all due cards (new cards + review cards)
+    const now = new Date();
+    
+    // DEBUG: Check timezone handling
+    console.log('TIMEZONE DEBUG:', {
+      serverTime: now.toISOString(),
+      serverTimeUTC: now.getTime(),
+      serverTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      firstRelearningDue: allSessionStates.find(s => s.state === 'RELEARNING')?.due?.toISOString(),
+      timeDiffMinutes: allSessionStates.find(s => s.state === 'RELEARNING') 
+        ? Math.round((allSessionStates.find(s => s.state === 'RELEARNING')!.due.getTime() - now.getTime()) / (1000 * 60))
+        : 'no relearning cards'
+    });
+    // Build the new queue with simple state-based isNew classification
     const newQueue: VocabularyQueueItem[] = allSessionStates
-      .filter((state) => state.due <= new Date())
+      .filter((state) => state.due <= now)
       .map((state) => ({
         cardId: state.cardId,
         due: state.due,
-        isNew: state.state === 'NEW',
+        isNew: state.state === 'NEW', // Simple: only NEW cards are "new"
       }))
       .sort((a, b) => a.due.getTime() - b.due.getTime());
+
+    // DEBUG: Log the final queue
+    console.log('Final queue DEBUG:', {
+      totalFound: allSessionStates.length,
+      queueLength: newQueue.length,
+      newCards: newQueue.filter(q => q.isNew).length,
+      reviewCards: newQueue.filter(q => !q.isNew).length
+    });
 
     let nextCardData = undefined;
     if (newQueue.length > 0) {

@@ -52,6 +52,8 @@ export type VocabularyExerciseConfig = {
   newCards?: number;
   maxDue?: number;
   minDue?: number;
+  deckId?: string; // Added to support dynamic queue expansion
+  learningSteps?: string[]; // Added to support configurable learning steps (e.g., ['3m', '15m', '30m'])
 };
 
 /**

@@ -94,6 +94,10 @@ export const VocabularyExerciseConfigSchema = z
     newCards: z.number().int().min(0).optional(),
     maxDue: z.number().int().min(0).optional(),
     minDue: z.number().int().min(0).optional(),
+    deckId: z.string().uuid().optional(), // Added to support dynamic queue expansion
+    learningSteps: z.array(
+      z.string().regex(/^\d+[smhd]$/, 'Learning step must be in format like "3m", "15m", "1h", "2d"')
+    ).optional(), // Added to support configurable learning steps
   })
   .optional();
 

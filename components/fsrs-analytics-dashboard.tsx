@@ -49,6 +49,7 @@ interface AnalyticsData {
   dueToday: number
   newCards: number
   reviewCards: number
+  relearningCards: number
   averageRetention: number
   totalReviews: number
   averageResponseTime: number
@@ -91,6 +92,7 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
     dueToday: dueCards.filter((card) => startOfDay(card.due) <= startOfDay(new Date())).length,
     newCards: dueCards.filter((card) => card.state === "NEW").length,
     reviewCards: dueCards.filter((card) => card.state === "REVIEW").length,
+    relearningCards: dueCards.filter((card) => card.state === "RELEARNING").length,
     averageRetention:
       dueCards.length > 0
         ? (dueCards.reduce((sum, card) => sum + (card.retrievability || 0), 0) / dueCards.length) * 100
@@ -328,6 +330,19 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
                   <span className="text-sm font-medium">{analyticsData.reviewCards}</span>
                   <div className="w-24">
                     <Progress value={(analyticsData.reviewCards / analyticsData.totalCards) * 100} className="h-2" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 bg-orange-500 rounded-full" />
+                  <span className="text-sm text-slate-600">Relearning Cards</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-medium">{analyticsData.relearningCards}</span>
+                  <div className="w-24">
+                    <Progress value={(analyticsData.relearningCards / analyticsData.totalCards) * 100} className="h-2" />
                   </div>
                 </div>
               </div>

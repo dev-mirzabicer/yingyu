@@ -15,16 +15,8 @@ import {
   VocabularyQueueItem,
 } from '@/lib/types';
 import { fullSessionStateInclude } from '@/lib/prisma-includes';
-import { z } from 'zod';
+import { VocabularyExerciseConfigSchema } from '@/lib/schemas';
 import { TransactionClient } from './operators/base';
-
-const exerciseConfigSchema = z
-  .object({
-    newCards: z.number().int().min(0).optional(),
-    maxDue: z.number().int().min(0).optional(),
-    minDue: z.number().int().min(0).optional(),
-  })
-  .optional();
 
 class VocabularyDeckHandler implements ExerciseHandler {
   private operators = {
@@ -58,14 +50,29 @@ class VocabularyDeckHandler implements ExerciseHandler {
     tx?: TransactionClient
   ): Promise<FullSessionState> {
     const db = tx || prisma;
-    const config =
-      exerciseConfigSchema.parse(
+    const config = 
+      VocabularyExerciseConfigSchema.parse(
         sessionState.currentUnitItem?.exerciseConfig ?? {}
       ) ?? {};
 
+    // FIXED: Get the deck ID from the current unit item to enable proper dynamic queue
+    const currentUnitItem = sessionState.currentUnitItem;
+    const deckId = currentUnitItem?.vocabularyDeck?.id;
+    
+    if (!deckId) {
+      throw new Error('No vocabulary deck found for this unit item.');
+    }
+
+    // Include deck ID and default learning steps in config for the SubmitRatingOperator
+    const enhancedConfig: VocabularyExerciseConfig = { 
+      ...config, 
+      deckId,
+      learningSteps: config?.learningSteps || ['3m', '15m', '30m'] // Default learning steps
+    };
+
     const { dueItems, newItems } = await FSRSService.getInitialReviewQueue(
       sessionState.studentId,
-      config
+      enhancedConfig
     );
 
     const initialQueue = this.interleave(dueItems, newItems);
@@ -75,7 +82,7 @@ class VocabularyDeckHandler implements ExerciseHandler {
       const emptyProgress: VocabularyDeckProgress = {
         type: 'VOCABULARY_DECK',
         stage: 'PRESENTING_CARD',
-        payload: { queue: [], config, initialCardIds },
+        payload: { queue: [], config: enhancedConfig, initialCardIds },
       };
       const updatedSession = await db.session.update({
         where: { id: sessionState.id },
@@ -99,7 +106,7 @@ class VocabularyDeckHandler implements ExerciseHandler {
       payload: {
         queue: initialQueue,
         currentCardData: firstCardData,
-        config,
+        config: enhancedConfig,
         initialCardIds,
       },
     };

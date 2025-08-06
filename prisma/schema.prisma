@@ -364,12 +364,14 @@ model ReviewHistory {
   previousDifficulty Float?
   previousDue        DateTime?
   previousState      CardState?
+  isLearningStep     Boolean    @default(false)
   reviewedAt         DateTime   @default(now())
 
   student Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   session Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
   @@index([studentId, cardId])
+  @@index([studentId, cardId, isLearningStep])
   @@index([reviewedAt])
   @@index([sessionId])
 }
