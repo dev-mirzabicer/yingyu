@@ -111,7 +111,7 @@ export default function DecksPage() {
           </div>
           <div>
             <div className="font-medium text-slate-900">{value}</div>
-            <div className="text-sm text-slate-500">0 cards</div>
+            <div className="text-sm text-slate-500">{row._count?.cards || 0} cards</div>
           </div>
         </div>
       ),
@@ -162,7 +162,7 @@ export default function DecksPage() {
 
   // Calculate stats
   const publicDecks = decks.filter(d => d.isPublic)
-  const totalCards = 0 // TODO: Would be calculated from deck card counts when available
+  const totalCards = decks.reduce((sum, deck) => sum + (deck._count?.cards || 0), 0)
 
   return (
     <div className="space-y-6">

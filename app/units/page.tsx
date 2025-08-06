@@ -79,7 +79,7 @@ export default function UnitsPage() {
             <Link href={`/units/${row.id}`} className="font-medium text-blue-600 hover:text-blue-800">
               {value}
             </Link>
-            <div className="text-sm text-slate-500">0 exercises</div>
+            <div className="text-sm text-slate-500">{row._count?.items || 0} exercises</div>
           </div>
         </div>
       ),
@@ -126,7 +126,7 @@ export default function UnitsPage() {
 
   // Calculate stats
   const publicUnits = units.filter(u => u.isPublic)
-  const totalExercises = 0 // TODO: Would be calculated from unit item counts when available
+  const totalExercises = units.reduce((sum, unit) => sum + (unit._count?.items || 0), 0)
 
   return (
     <div className="space-y-6">

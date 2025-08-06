@@ -88,7 +88,7 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
 
   // Calculate analytics data
   const analyticsData: AnalyticsData = {
-    totalCards: student.studentDecks.reduce((sum, deck) => sum + (deck.deck.cards?.length || 0), 0),
+    totalCards: student.studentDecks.reduce((sum, deck) => sum + (deck.deck._count?.cards || 0), 0),
     dueToday: dueCards.filter((card) => startOfDay(card.due) <= startOfDay(new Date())).length,
     newCards: dueCards.filter((card) => card.state === "NEW").length,
     reviewCards: dueCards.filter((card) => card.state === "REVIEW").length,
@@ -159,9 +159,9 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
       render: (value: number) => (
         <div className="flex items-center space-x-2">
           <div className="w-16 bg-slate-200 rounded-full h-2">
-            <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${(value / 10) * 100}%` }} />
+            <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${value * 100}%` }} />
           </div>
-          <span className="text-sm text-slate-600">{value.toFixed(1)}</span>
+          <span className="text-sm text-slate-600">{value.toFixed(2)}</span>
         </div>
       ),
     },
@@ -211,11 +211,6 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
           Level {value}
         </Badge>
       ),
-    },
-    {
-      key: "frequencyRank",
-      header: "Frequency",
-      render: (value: number | null) => <div className="text-sm text-slate-600">{value ? `#${value}` : "N/A"}</div>,
     },
     {
       key: "audioUrl",

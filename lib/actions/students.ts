@@ -105,7 +105,17 @@ export const StudentService = {
         payments: { orderBy: { paymentDate: 'desc' } },
         studentDecks: {
           where: { deck: { isArchived: false } },
-          include: { deck: true },
+          include: {
+            deck: {
+              include: {
+                _count: {
+                  select: {
+                    cards: true,
+                  },
+                },
+              },
+            },
+          },
           orderBy: { assignedAt: 'desc' },
         },
         classSchedules: {

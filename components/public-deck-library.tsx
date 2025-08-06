@@ -1,29 +1,6 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Separator } from "@/components/ui/separator"
-import {
-  Search,
-  Star,
-  Download,
-  Eye,
-  BookOpen,
-  Tag,
-  Award,
-  Globe,
-  Copy,
-} from "lucide-react"
-import { format } from "date-fns"
-import { useToast } from "@/hooks/use-toast"
-import { forkDeck } from "@/hooks/use-api-enhanced"
+import { usePublicDecks, forkDeck } from "@/hooks/use-api-enhanced"
 import type { VocabularyDeck } from "@prisma/client"
 
 interface PublicDeckLibraryProps {
@@ -48,93 +25,6 @@ interface PublicDeck extends VocabularyDeck {
   lastUpdated: Date
   featured: boolean
 }
-
-
-// Mock data for public decks
-const mockPublicDecks: PublicDeck[] = [
-  {
-    id: "deck-1",
-    name: "Business English Essentials",
-    description: "Essential vocabulary for professional communication in business settings",
-    isPublic: true,
-    createdAt: new Date("2024-01-15"),
-    updatedAt: new Date("2024-01-20"),
-    creatorId: "author-1",
-    isArchived: false,
-    originExerciseId: null,
-    cards: Array(150).fill(null), // Mock cards array for count
-    author: {
-      id: "author-1",
-      name: "Sarah Chen",
-      avatar: "/placeholder.svg?height=40&width=40",
-      verified: true,
-    },
-    stats: {
-      downloads: 2847,
-      forks: 23,
-    },
-    tags: ["business", "professional", "workplace", "communication"],
-    difficulty: "INTERMEDIATE",
-    category: "Business",
-    lastUpdated: new Date("2024-01-20"),
-    featured: true,
-  },
-  {
-    id: "deck-2",
-    name: "HSK Level 4 Vocabulary",
-    description: "Complete vocabulary list for HSK Level 4 Chinese proficiency test",
-    isPublic: true,
-    createdAt: new Date("2024-01-10"),
-    updatedAt: new Date("2024-01-18"),
-    creatorId: "author-2",
-    isArchived: false,
-    originExerciseId: null,
-    cards: Array(600).fill(null),
-    author: {
-      id: "author-2",
-      name: "Michael Zhang",
-      avatar: "/placeholder.svg?height=40&width=40",
-      verified: true,
-    },
-    stats: {
-      downloads: 1923,
-      forks: 45,
-    },
-    tags: ["hsk", "chinese", "test-prep", "intermediate"],
-    difficulty: "INTERMEDIATE",
-    category: "Test Preparation",
-    lastUpdated: new Date("2024-01-18"),
-    featured: false,
-  },
-  {
-    id: "deck-3",
-    name: "Daily Conversation Starters",
-    description: "Common phrases and expressions for everyday English conversations",
-    isPublic: true,
-    createdAt: new Date("2024-01-05"),
-    updatedAt: new Date("2024-01-15"),
-    creatorId: "author-3",
-    isArchived: false,
-    originExerciseId: null,
-    cards: Array(80).fill(null),
-    author: {
-      id: "author-3",
-      name: "Emma Johnson",
-      avatar: "/placeholder.svg?height=40&width=40",
-      verified: false,
-    },
-    stats: {
-      downloads: 3421,
-      forks: 67,
-    },
-    tags: ["conversation", "daily", "beginner", "phrases"],
-    difficulty: "BEGINNER",
-    category: "Conversation",
-    lastUpdated: new Date("2024-01-15"),
-    featured: true,
-  },
-]
-
 
 const categories = [
   "All Categories",
@@ -175,14 +65,24 @@ export function PublicDeckLibrary({ onDeckImported }: PublicDeckLibraryProps) {
   const [isImporting, setIsImporting] = useState(false)
 
   const { toast } = useToast()
+  const { publicDecks, isLoading, isError } = usePublicDecks()
 
   // Filter and sort decks
-  const filteredDecks = mockPublicDecks
+  const filteredDecks = publicDecks
+    .map(deck => ({
+      ...deck,
+      author: deck.creator,
+      stats: { downloads: 0, forks: 0 },
+      tags: [],
+      difficulty: "INTERMEDIATE",
+      category: "Business",
+      lastUpdated: deck.updatedAt,
+      featured: false,
+    }))
     .filter((deck) => {
       const matchesSearch =
         deck.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (deck.description?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-        deck.tags.some((tag) => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+        (deck.description?.toLowerCase() || "").includes(searchTerm.toLowerCase())
 
       const matchesCategory = selectedCategory === "All Categories" || deck.category === selectedCategory
       const matchesDifficulty = selectedDifficulty === "ALL" || deck.difficulty === selectedDifficulty
@@ -256,11 +156,11 @@ export function PublicDeckLibrary({ onDeckImported }: PublicDeckLibraryProps) {
           {/* Author */}
           <div className="flex items-center space-x-2 mb-3">
             <Avatar className="h-6 w-6">
-              <AvatarImage src={deck.author.avatar || "/placeholder.svg"} />
-              <AvatarFallback>{deck.author.name.charAt(0)}</AvatarFallback>
+              <AvatarImage src={deck.author?.avatar || "/placeholder.svg"} />
+              <AvatarFallback>{deck.author?.name.charAt(0)}</AvatarFallback>
             </Avatar>
-            <span className="text-sm text-slate-600">{deck.author.name}</span>
-            {deck.author.verified && (
+            <span className="text-sm text-slate-600">{deck.author?.name}</span>
+            {deck.author?.verified && (
               <Badge variant="outline" className="text-xs px-1 py-0">
                 <Award className="h-3 w-3" />
               </Badge>
@@ -286,7 +186,7 @@ export function PublicDeckLibrary({ onDeckImported }: PublicDeckLibraryProps) {
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-1">
                 <BookOpen className="h-4 w-4" />
-                <span>{deck.cards?.length || 0}</span>
+                <span>{deck._count?.cards || 0}</span>
               </div>
               <div className="flex items-center space-x-1">
                 <Download className="h-4 w-4" />
@@ -514,7 +414,7 @@ export function PublicDeckLibrary({ onDeckImported }: PublicDeckLibraryProps) {
                             <BookOpen className="h-4 w-4 text-slate-500" />
                             <span className="text-sm text-slate-600">Cards</span>
                           </div>
-                          <span className="font-medium">{selectedDeck.cards?.length || 0}</span>
+                          <span className="font-medium">{selectedDeck._count?.cards || 0}</span>
                         </div>
 
                         <div className="flex items-center justify-between">

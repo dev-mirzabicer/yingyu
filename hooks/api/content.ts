@@ -53,6 +53,18 @@ export function useDecks() {
   }
 }
 
+export function usePublicDecks() {
+  const { data, error, isLoading, mutate } = useSWR<VocabularyDeck[]>("/api/public-decks", fetcher)
+
+  return {
+    publicDecks: data || [],
+    isLoading,
+    isError: error,
+    mutate,
+    error: error as ApiError | undefined,
+  }
+}
+
 export function useDeck(deckId: string) {
   const { data, error, isLoading, mutate } = useSWR<VocabularyDeck>(
     deckId ? `/api/decks/${deckId}` : null,

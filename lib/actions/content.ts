@@ -69,6 +69,13 @@ export const ContentService = {
         creatorId: teacherId,
         isArchived: false
       },
+      include: {
+        _count: {
+          select: {
+            items: true,
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
   },
@@ -91,6 +98,29 @@ export const ContentService = {
             cards: true,
           },
         },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  /**
+   * Retrieves all public vocabulary decks.
+   * 
+   * @returns A promise that resolves to an array of public vocabulary decks.
+   */
+  async getPublicDecks(): Promise<VocabularyDeck[]> {
+    return prisma.vocabularyDeck.findMany({
+      where: {
+        isPublic: true,
+        isArchived: false
+      },
+      include: {
+        _count: {
+          select: {
+            cards: true,
+          },
+        },
+        creator: true,
       },
       orderBy: { createdAt: 'desc' },
     });
