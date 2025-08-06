@@ -257,9 +257,9 @@ export const FSRSService = {
           // ========= STAY IN LEARNING STEPS =========
           
           // Determine appropriate state for learning steps
-          const newState = previousCardState.state === 'REVIEW' || previousCardState.state === 'RELEARNING'
-            ? 'RELEARNING'  // Failed cards use RELEARNING state
-            : 'NEW';        // Truly new cards stay NEW during learning
+          const newState = (previousCardState.state === 'REVIEW' || previousCardState.state === 'RELEARNING')
+            ? 'RELEARNING'
+            : 'LEARNING';
           
           // Update card state with learning step due date
           const updatedState = await tx.studentCardState.update({
@@ -517,22 +517,22 @@ export const FSRSService = {
       where: { studentId, state: 'NEW' },
       take: finalConfig.newCards,
       orderBy: { card: { createdAt: 'asc' } },
-      select: { cardId: true, due: true },
+      select: { cardId: true, due: true, state: true },
     });
 
     // Get RELEARNING cards (failed cards in learning steps)
     const relearningCards = await prisma.studentCardState.findMany({
-      where: { studentId, state: 'RELEARNING', due: { lte: now } },
+      where: { studentId, state: { in: ['LEARNING', 'RELEARNING'] }, due: { lte: now } },
       orderBy: { due: 'asc' },
-      select: { cardId: true, due: true },
+      select: { cardId: true, due: true, state: true },
     });
 
     const dueItems: VocabularyQueueItem[] = [
-      ...dueCards.map((c) => ({ ...c, isNew: false })),
-      ...relearningCards.map((c) => ({ ...c, isNew: false })) // Relearning cards are not "new"
+      ...dueCards.map((c) => ({ cardId: c.cardId, due: c.due, state: c.state as any, })),
+      ...relearningCards.map((c) => ({ cardId: c.cardId, due: c.due, state: c.state as any, }))
     ];
 
-    const newItems: VocabularyQueueItem[] = newCards.map((c) => ({ ...c, isNew: true }));
+    const newItems: VocabularyQueueItem[] = newCards.map((c) => ({ cardId: c.cardId, due: c.due, state: c.state as any, }));
 
     return { dueItems, newItems };
   },

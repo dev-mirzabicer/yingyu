@@ -310,7 +310,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
         percentage: 0,
         reviewsCompleted: reviewCount,
         uniqueCardsEncountered: encounteredCards.size,
-        queueAnalysis: { newCards: 0, reviewCards: 0, totalInQueue: 0 }
+        queueAnalysis: { newCards: 0, learningCards: 0, reviewCards: 0, totalInQueue: 0 }
       }
     }
 
@@ -320,8 +320,9 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
       const currentQueueLength = progress.payload.queue.length
       
       // Analyze queue composition
-      const newCards = progress.payload.queue.filter(item => item.isNew).length
-      const reviewCards = progress.payload.queue.filter(item => !item.isNew).length
+      const newCards = progress.payload.queue.filter(item => item.state === 'NEW').length
+      const learningCards = progress.payload.queue.filter(item => item.state === 'LEARNING' || item.state === 'RELEARNING').length
+      const reviewCards = progress.payload.queue.filter(item => item.state === 'REVIEW').length
       
       // More accurate progress based on queue depletion, not completion
       const cardsProcessedFromQueue = Math.max(0, initialCardCount - currentQueueLength)
@@ -335,6 +336,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
         uniqueCardsEncountered: encounteredCards.size,
         queueAnalysis: {
           newCards,
+          learningCards,
           reviewCards,
           totalInQueue: currentQueueLength
         }
@@ -355,7 +357,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
       percentage,
       reviewsCompleted: reviewCount,
       uniqueCardsEncountered: encounteredCards.size,
-      queueAnalysis: { newCards: 0, reviewCards: 0, totalInQueue: 0 }
+      queueAnalysis: { newCards: 0, learningCards: 0, reviewCards: 0, totalInQueue: 0 }
     }
   }
 
@@ -514,10 +516,14 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
                   <span className="font-medium">{progressData.queueAnalysis.totalInQueue}</span>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="grid grid-cols-3 gap-2 text-xs">
                   <div className="bg-blue-50 rounded p-2 text-center">
                     <div className="font-medium text-blue-700">{progressData.queueAnalysis.newCards}</div>
                     <div className="text-blue-600">New</div>
+                  </div>
+                  <div className="bg-yellow-50 rounded p-2 text-center">
+                    <div className="font-medium text-yellow-700">{progressData.queueAnalysis.learningCards}</div>
+                    <div className="text-yellow-600">Learning</div>
                   </div>
                   <div className="bg-orange-50 rounded p-2 text-center">
                     <div className="font-medium text-orange-700">{progressData.queueAnalysis.reviewCards}</div>

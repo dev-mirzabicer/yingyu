@@ -63,8 +63,8 @@ export type VocabularyQueueItem = {
   cardId: string;
   /** The timestamp when the card is due. Used for sorting. */
   due: Date;
-  /** A flag to differentiate new cards from review cards for potential UI differences. */
-  isNew: boolean;
+  /** The FSRS state of the card, which dictates its behavior and UI representation. */
+  state: 'NEW' | 'LEARNING' | 'REVIEW' | 'RELEARNING';
 };
 
 /**

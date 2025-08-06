@@ -126,7 +126,7 @@ class SubmitRatingOperator implements ProgressOperator {
       .map((state) => ({
         cardId: state.cardId,
         due: state.due,
-        isNew: state.state === 'NEW', // Simple: only NEW cards are "new"
+        state: state.state as any,
       }))
       .sort((a, b) => a.due.getTime() - b.due.getTime());
 
