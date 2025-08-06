@@ -16,7 +16,11 @@ import {
   VocabularyCard,
 } from '@prisma/client';
 import { AuthorizationError } from '../auth';
-import { VocabularyExerciseConfigSchema } from '../schemas';
+import {
+  BulkImportVocabularyPayloadSchema,
+  VocabularyExerciseConfigSchema,
+} from '../schemas';
+import { z } from 'zod';
 
 type Exercise =
   | VocabularyDeck
@@ -158,21 +162,6 @@ export const ContentService = {
   },
 
   /**
-   * Creates a new, empty VocabularyDeck.
-   *
-   * @param data An object containing the necessary data to create the deck.
-   * @returns A promise that resolves to the newly created VocabularyDeck object.
-   */
-  async createDeck(data: {
-    creatorId: string;
-    name: string;
-    description?: string;
-    isPublic?: boolean;
-  }): Promise<VocabularyDeck> {
-    return prisma.vocabularyDeck.create({ data });
-  },
-
-  /**
    * Adds a new exercise to a specified Unit. This is a critical atomic operation.
    * It uses a transaction to first create the exercise entity (e.g., a GrammarExercise)
    * and then create the UnitItem that links it to the parent Unit. If any step fails,
@@ -253,23 +242,23 @@ export const ContentService = {
       switch (itemData.type) {
         case 'VOCABULARY_DECK': {
           let deckId: string;
-          
+
           if (itemData.mode === 'existing') {
             // Link existing deck
             const existingDeck = await tx.vocabularyDeck.findUnique({
               where: { id: itemData.existingDeckId },
               select: { id: true, creatorId: true, isPublic: true },
             });
-            
+
             if (!existingDeck) {
               throw new Error('Selected deck not found.');
             }
-            
+
             // Check if the teacher has access to this deck
             if (!existingDeck.isPublic && existingDeck.creatorId !== creatorId) {
               throw new AuthorizationError('You do not have permission to use this deck.');
             }
-            
+
             deckId = existingDeck.id;
           } else {
             // Create new deck
@@ -278,7 +267,7 @@ export const ContentService = {
             });
             deckId = deck.id;
           }
-          
+
           newUnitItem = await tx.unitItem.create({
             data: {
               unitId,
@@ -551,11 +540,35 @@ export const ContentService = {
     }
 
     const validatedConfig = VocabularyExerciseConfigSchema.parse(config);
-
     return prisma.unitItem.update({
       where: { id: unitItemId },
       data: { exerciseConfig: validatedConfig ?? Prisma.JsonNull },
     });
+  },
+
+  /**
+   * Internal method to bulk add vocabulary cards to a deck.
+   * This method is called by the worker and is not exposed through the API.
+   *
+   * @param payload The payload from the job, containing the deckId and csvData.
+   * @returns A promise that resolves to an object with the count of created cards.
+   */
+  async _bulkAddVocabularyCards(
+    payload: z.infer<typeof BulkImportVocabularyPayloadSchema>
+  ) {
+    const { deckId, csvData } = payload;
+
+    const cardsToCreate = csvData.map((card) => ({
+      ...card,
+      deckId,
+    }));
+
+    const result = await prisma.vocabularyCard.createMany({
+      data: cardsToCreate,
+      skipDuplicates: true,
+    });
+
+    return { createdCount: result.count };
   },
 };
 

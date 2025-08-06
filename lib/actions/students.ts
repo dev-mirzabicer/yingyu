@@ -19,6 +19,10 @@ import {
   UpdateStudentSchema,
 } from '../schemas';
 import { z } from 'zod';
+import {
+  BulkImportSchedulesPayloadSchema,
+  BulkImportStudentsPayloadSchema,
+} from '../schemas';
 
 type CreateStudentInput = z.infer<typeof CreateStudentSchema>;
 type RecordPaymentInput = z.infer<typeof RecordPaymentSchema>;
@@ -457,6 +461,73 @@ export const StudentService = {
       skipDuplicates: true,
     });
     return { cardsInitialized: result.count };
+  },
+
+  /**
+   * [INTERNAL METHOD] Bulk adds students to a teacher's account.
+   *
+   * @param teacherId The UUID of the teacher.
+   * @param payload The job payload, containing the csvData.
+   * @returns A result object indicating the number of students created.
+   */
+  async _bulkAddStudents(
+    teacherId: string,
+    payload: z.infer<typeof BulkImportStudentsPayloadSchema>
+  ) {
+    const { csvData } = payload;
+
+    const studentsToCreate = csvData.map((student) => ({
+      ...student,
+      teacherId,
+    }));
+
+    const result = await prisma.student.createMany({
+      data: studentsToCreate,
+      skipDuplicates: true,
+    });
+
+    return { createdCount: result.count };
+  },
+
+  /**
+   * [INTERNAL METHOD] Bulk adds schedules for students.
+   *
+   * @param payload The job payload, containing the csvData.
+   * @returns A result object indicating the number of schedules created.
+   */
+  async _bulkAddSchedules(
+    payload: z.infer<typeof BulkImportSchedulesPayloadSchema>
+  ) {
+    const { csvData } = payload;
+
+    const schedulesToCreate = await Promise.all(
+      csvData.map(async (schedule) => {
+        const student = await prisma.student.findUnique({
+          where: { email: schedule.studentEmail },
+        });
+
+        if (!student) {
+          return null;
+        }
+
+        return {
+          studentId: student.id,
+          scheduledTime: new Date(schedule.scheduledTime),
+          // duration and notes are not in the schema yet
+        };
+      })
+    );
+
+    const validSchedules = schedulesToCreate.filter(
+      (schedule) => schedule !== null
+    ) as Prisma.ClassScheduleCreateManyInput[];
+
+    const result = await prisma.classSchedule.createMany({
+      data: validSchedules,
+      skipDuplicates: true,
+    });
+
+    return { createdCount: result.count };
   },
 };
 

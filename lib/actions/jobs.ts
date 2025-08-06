@@ -1,5 +1,10 @@
 import { prisma } from '@/lib/db';
 import { Job, JobType, Prisma } from '@prisma/client';
+import {
+  BulkImportSchedulesPayloadSchema,
+  BulkImportStudentsPayloadSchema,
+  BulkImportVocabularyPayloadSchema,
+} from '../schemas';
 
 /**
  * Service responsible for managing asynchronous jobs.
@@ -32,6 +37,42 @@ export const JobService = {
         payload,
       },
     });
+  },
+
+  async createBulkImportVocabularyJob(
+    ownerId: string,
+    payload: Prisma.InputJsonValue
+  ) {
+    const validatedPayload = BulkImportVocabularyPayloadSchema.parse(payload);
+    return this.createJob(
+      ownerId,
+      JobType.BULK_IMPORT_VOCABULARY,
+      validatedPayload as any
+    );
+  },
+
+  async createBulkImportStudentsJob(
+    ownerId: string,
+    payload: Prisma.InputJsonValue
+  ) {
+    const validatedPayload = BulkImportStudentsPayloadSchema.parse(payload);
+    return this.createJob(
+      ownerId,
+      JobType.BULK_IMPORT_STUDENTS,
+      validatedPayload as any
+    );
+  },
+
+  async createBulkImportSchedulesJob(
+    ownerId: string,
+    payload: Prisma.InputJsonValue
+  ) {
+    const validatedPayload = BulkImportSchedulesPayloadSchema.parse(payload);
+    return this.createJob(
+      ownerId,
+      JobType.BULK_IMPORT_SCHEDULES,
+      validatedPayload as any
+    );
   },
 
   /**

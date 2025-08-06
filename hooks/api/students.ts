@@ -189,3 +189,19 @@ export async function rebuildFsrsCache(studentId: string) {
 export async function assignDeck(studentId: string, deckId: string) {
   return mutateWithOptimistic<{ studentDeck: any; job: Job }>(`/api/students/${studentId}/decks`, "POST", { deckId })
 }
+
+// ============================================================================
+// BULK IMPORT HOOKS
+// ============================================================================
+
+export async function bulkImportStudents(csvData: any[]) {
+  return mutateWithOptimistic<Job>("/api/bulk-import/students", "POST", {
+    csvData,
+  });
+}
+
+export async function bulkImportSchedules(csvData: any[]) {
+  return mutateWithOptimistic<Job>("/api/bulk-import/schedules", "POST", {
+    csvData,
+  });
+}

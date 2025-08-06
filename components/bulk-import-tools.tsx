@@ -1,16 +1,8 @@
-"use client"
-
-import type React from "react"
-
-import { useState, useRef } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Separator } from "@/components/ui/separator"
+import {
+  bulkImportSchedules,
+  bulkImportStudents,
+} from "@/hooks/api/students"
+import { bulkImportVocabulary } from "@/hooks/api/content"
 import {
   Upload,
   Download,
@@ -28,6 +20,7 @@ import { DataTable } from "@/components/data-table"
 
 interface BulkImportToolsProps {
   onImportComplete?: (data: ImportedData) => void
+  deckId?: string
 }
 
 interface ImportedData {
@@ -160,7 +153,7 @@ const importTemplates = {
   },
 }
 
-export function BulkImportTools({ onImportComplete }: BulkImportToolsProps) {
+export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsProps) {
   const [selectedTemplate, setSelectedTemplate] = useState<keyof typeof importTemplates>("vocabulary")
   const [importedData, setImportedData] = useState<ImportedData | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -292,52 +285,50 @@ export function BulkImportTools({ onImportComplete }: BulkImportToolsProps) {
         title: "Cannot import",
         description: "Please fix all errors before importing.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
-    setIsProcessing(true)
-    setProcessingProgress(0)
+    setIsProcessing(true);
 
     try {
-      // Simulate processing with progress updates
-      const totalRows = previewData.length
-      for (let i = 0; i < totalRows; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 100)) // Simulate processing time
-        setProcessingProgress(((i + 1) / totalRows) * 100)
+      let job;
+      switch (selectedTemplate) {
+        case "vocabulary":
+          if (!deckId) {
+            toast({
+              title: "Cannot import vocabulary",
+              description: "No deck selected.",
+              variant: "destructive",
+            });
+            return;
+          }
+          job = await bulkImportVocabulary(deckId, previewData);
+          break;
+        case "students":
+          job = await bulkImportStudents(previewData);
+          break;
+        case "schedules":
+          job = await bulkImportSchedules(previewData);
+          break;
+        default:
+          throw new Error("Invalid template selected");
       }
-
-      const summary: ImportSummary = {
-        totalRows: previewData.length,
-        successfulRows: previewData.length - errors.filter((e) => e.severity === "error").length,
-        errorRows: errors.filter((e) => e.severity === "error").length,
-        warningRows: errors.filter((e) => e.severity === "warning").length,
-      }
-
-      const importResult: ImportedData = {
-        type: selectedTemplate as "vocabulary" | "students" | "schedules",
-        items: previewData,
-        errors,
-        summary,
-      }
-
-      setImportedData(importResult)
-      onImportComplete?.(importResult)
 
       toast({
-        title: "Import completed",
-        description: `Successfully imported ${summary.successfulRows} of ${summary.totalRows} rows.`,
-      })
+        title: "Import job started",
+        description: `Job ${job.data.id} has been created and is now processing.`,
+      });
     } catch (error) {
       toast({
         title: "Import failed",
         description: "An error occurred during import. Please try again.",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsProcessing(false)
+      setIsProcessing(false);
     }
-  }
+  };
 
   const downloadTemplate = () => {
     const template = importTemplates[selectedTemplate]

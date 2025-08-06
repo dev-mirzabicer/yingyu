@@ -10,6 +10,7 @@ import type {
   Unit,
   VocabularyDeck,
   VocabularyCard,
+  Job,
 } from "@prisma/client"
 import { fetcher, mutateWithOptimistic, ApiError } from "./utils"
 
@@ -160,4 +161,15 @@ export async function removeUnitItem(unitId: string, itemId: string) {
 
 export async function updateUnitItemConfig(unitItemId: string, config: VocabularyExerciseConfig) {
   return mutateWithOptimistic<any>(`/api/items/${unitItemId}/config`, "PUT", config)
+}
+
+// ============================================================================
+// BULK IMPORT HOOKS
+// ============================================================================
+
+export async function bulkImportVocabulary(deckId: string, csvData: any[]) {
+  return mutateWithOptimistic<Job>("/api/bulk-import/vocabulary", "POST", {
+    deckId,
+    csvData,
+  });
 }

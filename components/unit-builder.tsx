@@ -136,9 +136,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
     name: "",
     description: "",
     isPublic: false,
-    difficulty: "INTERMEDIATE",
     estimatedDuration: 60,
-    tags: [] as string[],
   })
 
   const [unitItems, setUnitItems] = useState<DraggableUnitItem[]>([])
@@ -146,7 +144,6 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
   const [editingItem, setEditingItem] = useState<DraggableUnitItem | null>(null)
   const [isPreviewMode, setIsPreviewMode] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [newTag, setNewTag] = useState("")
 
   const { toast } = useToast()
 
@@ -159,9 +156,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
           name: existingUnit.name,
           description: existingUnit.description || "",
           isPublic: existingUnit.isPublic,
-          difficulty: "INTERMEDIATE", // This would come from unit metadata
           estimatedDuration: 60, // This would be calculated from items
-          tags: [], // This would come from unit metadata
         })
 
         // Convert unit items to draggable format
@@ -329,23 +324,6 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
     } finally {
       setIsSaving(false)
     }
-  }
-
-  const addTag = () => {
-    if (newTag && !unitData.tags.includes(newTag)) {
-      setUnitData((prev) => ({
-        ...prev,
-        tags: [...prev.tags, newTag],
-      }))
-      setNewTag("")
-    }
-  }
-
-  const removeTag = (tagToRemove: string) => {
-    setUnitData((prev) => ({
-      ...prev,
-      tags: prev.tags.filter((tag) => tag !== tagToRemove),
-    }))
   }
 
   const calculateTotalDuration = () => {
@@ -815,25 +793,6 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="difficulty">Difficulty Level</Label>
-                <Select
-                  value={unitData.difficulty}
-                  onValueChange={(value) => setUnitData((prev) => ({ ...prev, difficulty: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {difficultyLevels.map((level) => (
-                      <SelectItem key={level.value} value={level.value}>
-                        {level.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <Label>Public Unit</Label>
@@ -863,31 +822,6 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
                     <span className="text-sm text-slate-600">Duration</span>
                   </div>
                   <Badge variant="outline">{calculateTotalDuration()} min</Badge>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Tags */}
-              <div className="space-y-2">
-                <Label>Tags</Label>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {unitData.tags.map((tag, index) => (
-                    <Badge key={index} variant="secondary" className="cursor-pointer" onClick={() => removeTag(tag)}>
-                      {tag} ×
-                    </Badge>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    value={newTag}
-                    onChange={(e) => setNewTag(e.target.value)}
-                    placeholder="Add a tag"
-                    onKeyDown={(e) => e.key === "Enter" && addTag()}
-                  />
-                  <Button type="button" onClick={addTag} variant="outline" disabled={!newTag}>
-                    <Plus className="h-4 w-4" />
-                  </Button>
                 </div>
               </div>
             </CardContent>

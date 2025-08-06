@@ -7,6 +7,12 @@ import {
   RebuildCachePayloadSchema,
   OptimizeParamsPayloadSchema, // New
 } from './schemas';
+import {
+  BulkImportSchedulesPayloadSchema,
+  BulkImportStudentsPayloadSchema,
+  BulkImportVocabularyPayloadSchema,
+} from './schemas';
+import { ContentService } from './actions/content';
 
 /**
  * Processes all currently pending jobs in the queue.
@@ -82,6 +88,24 @@ export async function processPendingJobs() {
         case JobType.OPTIMIZE_FSRS_PARAMS: {
           const payload = OptimizeParamsPayloadSchema.parse(job.payload);
           resultPayload = await FSRSService._optimizeParameters(payload);
+          break;
+        }
+        case JobType.BULK_IMPORT_VOCABULARY: {
+          const payload = BulkImportVocabularyPayloadSchema.parse(job.payload);
+          resultPayload = await ContentService._bulkAddVocabularyCards(payload);
+          break;
+        }
+        case JobType.BULK_IMPORT_STUDENTS: {
+          const payload = BulkImportStudentsPayloadSchema.parse(job.payload);
+          resultPayload = await StudentService._bulkAddStudents(
+            job.ownerId,
+            payload
+          );
+          break;
+        }
+        case JobType.BULK_IMPORT_SCHEDULES: {
+          const payload = BulkImportSchedulesPayloadSchema.parse(job.payload);
+          resultPayload = await StudentService._bulkAddSchedules(payload);
           break;
         }
         default:

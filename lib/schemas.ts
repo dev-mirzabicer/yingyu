@@ -138,3 +138,45 @@ export const UpdateTeacherSettingsSchema = z.object({
   paymentAlertThreshold: z.number().int().min(0).optional(),
   preferredLessonDuration: z.number().int().positive().optional(),
 });
+
+export const BulkImportVocabularyPayloadSchema = z.object({
+  deckId: z.string().uuid(),
+  csvData: z.array(
+    z.object({
+      englishWord: z.string(),
+      chineseTranslation: z.string(),
+      pinyin: z.string().optional(),
+      ipaPronunciation: z.string().optional(),
+      wordType: z.string().optional(),
+      difficultyLevel: z.coerce.number().min(1).max(5).optional(),
+      tags: z.string().optional(),
+      audioUrl: z.string().optional(),
+      imageUrl: z.string().optional(),
+      exampleSentences: z.string().optional(),
+    })
+  ),
+});
+
+export const BulkImportStudentsPayloadSchema = z.object({
+  csvData: z.array(
+    z.object({
+      name: z.string(),
+      email: z.string().email(),
+      phone: z.string().optional(),
+      notes: z.string().optional(),
+      initialDeckId: z.string().uuid().optional(),
+    })
+  ),
+});
+
+export const BulkImportSchedulesPayloadSchema = z.object({
+  csvData: z.array(
+    z.object({
+      studentEmail: z.string().email(),
+      scheduledTime: z.string(),
+      duration: z.coerce.number().int().positive().optional(),
+      notes: z.string().optional(),
+      type: z.string().optional(),
+    })
+  ),
+});
