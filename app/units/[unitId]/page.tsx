@@ -1,12 +1,15 @@
-import { UnitEditor } from "@/components/unit-editor"
+import { UnitBuilder } from "@/components/unit-builder";
 
-interface PageProps {
-  params: Promise<{
-    unitId: string
-  }>
+interface UnitPageProps {
+  params: {
+    unitId: string;
+  };
 }
 
-export default async function UnitPage({ params }: PageProps) {
-  const { unitId } = await params
-  return <UnitEditor unitId={unitId} />
+export default function UnitPage({ params }: UnitPageProps) {
+  return (
+    <div className="container mx-auto p-4">
+      <UnitBuilder unitId={params.unitId} />
+    </div>
+  );
 }

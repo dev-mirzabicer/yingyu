@@ -159,6 +159,10 @@ export async function removeUnitItem(unitId: string, itemId: string) {
   return mutateWithOptimistic<any>(`/api/units/${unitId}/items/${itemId}`, "DELETE")
 }
 
+export async function reorderUnitItems(unitId: string, itemIds: string[]) {
+  return mutateWithOptimistic<any>(`/api/units/${unitId}/items/reorder`, "PUT", { itemIds });
+}
+
 export async function updateUnitItemConfig(unitItemId: string, config: VocabularyExerciseConfig) {
   return mutateWithOptimistic<any>(`/api/items/${unitItemId}/config`, "PUT", config)
 }

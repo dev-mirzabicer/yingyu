@@ -34,7 +34,16 @@ import {
   Clock,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useUnits, useDecks, createUnit, updateUnit, addExerciseToUnit } from "@/hooks/use-api-enhanced"
+import {
+  useUnits,
+  useDecks,
+  createUnit,
+  updateUnit,
+  addExerciseToUnit,
+  reorderUnitItems,
+  removeUnitItem,
+  updateUnitItemConfig,
+} from "@/hooks/api/content"
 import type { FullUnit, NewUnitItemData } from "@/lib/types"
 import type { Unit, UnitItemType } from "@prisma/client"
 import { AlertTriangle } from "lucide-react"
@@ -179,8 +188,8 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
   }, [unitId, units])
 
   const handleDragEnd = useCallback(
-    (result: DropResult) => {
-      if (!result.destination) return
+    async (result: DropResult) => {
+      if (!result.destination || !unitId) return
 
       const items = Array.from(unitItems)
       const [reorderedItem] = items.splice(result.source.index, 1)
@@ -193,8 +202,26 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
       }))
 
       setUnitItems(updatedItems)
+
+      try {
+        const itemIds = updatedItems.map(item => item.id);
+        await reorderUnitItems(unitId, itemIds);
+        toast({
+          title: "Order saved",
+          description: "The new exercise order has been saved.",
+        });
+        mutateUnits();
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to save the new order. Please try again.",
+          variant: "destructive",
+        });
+        // Revert to original order on failure
+        setUnitItems(unitItems);
+      }
     },
-    [unitItems],
+    [unitItems, unitId, toast, mutateUnits],
   )
 
   const handleAddItem = (template: UnitItemTemplate) => {
@@ -217,12 +244,29 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
     setIsConfigDialogOpen(true)
   }
 
-  const handleDeleteItem = (itemId: string) => {
-    setUnitItems(unitItems.filter((item) => item.id !== itemId))
-    toast({
-      title: "Item removed",
-      description: "The exercise has been removed from the unit.",
-    })
+  const handleDeleteItem = async (itemId: string) => {
+    if (!unitId) return;
+
+    // Optimistically remove the item from the UI
+    const originalItems = unitItems;
+    setUnitItems(unitItems.filter((item) => item.id !== itemId));
+
+    try {
+      await removeUnitItem(unitId, itemId);
+      toast({
+        title: "Item removed",
+        description: "The exercise has been removed from the unit.",
+      });
+      mutateUnits();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to remove item. Please try again.",
+        variant: "destructive",
+      });
+      // Revert if the API call fails
+      setUnitItems(originalItems);
+    }
   }
 
   const handleDuplicateItem = (item: DraggableUnitItem) => {
@@ -240,10 +284,32 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
     })
   }
 
-  const handleSaveItemConfig = (updatedItem: DraggableUnitItem) => {
-    setUnitItems(unitItems.map((item) => (item.id === updatedItem.id ? updatedItem : item)))
-    setIsConfigDialogOpen(false)
-    setEditingItem(null)
+  const handleSaveItemConfig = async (updatedItem: DraggableUnitItem) => {
+    if (updatedItem.id.startsWith("temp-")) {
+      // This is a new item, just update local state
+      setUnitItems(unitItems.map((item) => (item.id === updatedItem.id ? updatedItem : item)))
+      setIsConfigDialogOpen(false)
+      setEditingItem(null)
+      return;
+    }
+
+    try {
+      await updateUnitItemConfig(updatedItem.id, updatedItem.config);
+      toast({
+        title: "Configuration Saved",
+        description: "The exercise configuration has been updated.",
+      });
+      mutateUnits();
+      setUnitItems(unitItems.map((item) => (item.id === updatedItem.id ? updatedItem : item)))
+      setIsConfigDialogOpen(false)
+      setEditingItem(null)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save configuration. Please try again.",
+        variant: "destructive",
+      });
+    }
   }
 
   const handleSaveUnit = async () => {

@@ -548,6 +548,47 @@ export const ContentService = {
   },
 
   /**
+   * Reorders the items within a unit based on a provided list of item IDs.
+   *
+   * @param unitId The UUID of the unit to reorder.
+   * @param teacherId The UUID of the teacher making the request for authorization.
+   * @param itemIds An array of UnitItem UUIDs in the desired new order.
+   * @returns A promise that resolves when the reordering is complete.
+   */
+  async reorderUnitItems(
+    unitId: string,
+    teacherId: string,
+    itemIds: string[]
+  ): Promise<void> {
+    const unit = await prisma.unit.findUnique({
+      where: { id: unitId },
+      select: { creatorId: true, items: { select: { id: true } } },
+    });
+
+    if (!unit || unit.creatorId !== teacherId) {
+      throw new AuthorizationError(
+        'Unit not found or you are not authorized to edit it.'
+      );
+    }
+
+    const currentItemIds = new Set(unit.items.map(item => item.id));
+    const providedItemIds = new Set(itemIds);
+
+    if (currentItemIds.size !== providedItemIds.size || !itemIds.every(id => currentItemIds.has(id))) {
+      throw new Error("Provided item IDs do not match the unit's current items.");
+    }
+
+    await prisma.$transaction(
+      itemIds.map((itemId, index) =>
+        prisma.unitItem.update({
+          where: { id: itemId },
+          data: { order: index },
+        })
+      )
+    );
+  },
+
+  /**
    * Updates the configuration for a specific UnitItem.
    * This allows teachers to dynamically adjust session parameters like the number of new cards.
    *
