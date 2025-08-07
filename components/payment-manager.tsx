@@ -164,7 +164,7 @@ export function PaymentManager({ studentId, studentName, classesRemaining, onPay
       key: "status",
       header: "Status",
       render: (_: any, row: Payment) => {
-        const p = row as Payment & { status: PaymentStatus }
+        const p = row as Payment & { status: "ACTIVE" | "EXPIRED" | "REFUNDED" }
         let variant: "default" | "secondary" | "destructive" | "outline" = "outline";
         let text = p.status;
         switch (p.status) {

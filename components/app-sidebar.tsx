@@ -140,7 +140,6 @@ const mockUser = {
 
 export function AppSidebar({ ...props }: AppSidebarProps) {
   const pathname = usePathname()
-  const [notifications] = useState(3) // Mock notification count
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -204,11 +203,6 @@ export function AppSidebar({ ...props }: AppSidebarProps) {
                     </div>
                   </div>
                   <div className="flex items-center space-x-1">
-                    {notifications > 0 && (
-                      <Badge variant="destructive" className="h-5 w-5 p-0 text-xs flex items-center justify-center">
-                        {notifications}
-                      </Badge>
-                    )}
                     <ChevronUp className="h-4 w-4" />
                   </div>
                 </SidebarMenuButton>
@@ -235,15 +229,6 @@ export function AppSidebar({ ...props }: AppSidebarProps) {
                 <DropdownMenuItem>
                   <User className="mr-2 h-4 w-4" />
                   <span>Profile</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Bell className="mr-2 h-4 w-4" />
-                  <span>Notifications</span>
-                  {notifications > 0 && (
-                    <Badge variant="destructive" className="ml-auto h-5 w-5 p-0 text-xs">
-                      {notifications}
-                    </Badge>
-                  )}
                 </DropdownMenuItem>
                 <DropdownMenuItem>
                   <Settings className="mr-2 h-4 w-4" />

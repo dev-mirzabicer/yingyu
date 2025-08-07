@@ -13,10 +13,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { BookOpen, FileText, Mic, GripVertical, MoreHorizontal, Plus, Settings, Trash2, Save, Edit3 } from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { useUnit, updateUnit, addExerciseToUnit, useDecks } from "@/hooks/use-api-enhanced"
+import { useUnit, updateUnit, addExerciseToUnit, useDecks, removeUnitItem, updateUnitItemConfig } from "@/hooks/use-api-enhanced"
 import { UnitItemType } from "@prisma/client"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import type { PopulatedUnitItem } from "@/lib/types"
 
 interface UnitEditorProps {
   unitId: string
@@ -49,14 +50,14 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
   const [newExerciseName, setNewExerciseName] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [isAddingExercise, setIsAddingExercise] = useState(false)
+  const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false)
+  const [editingItem, setEditingItem] = useState<PopulatedUnitItem | null>(null)
   const { toast } = useToast()
 
   // Add handlers for configure and remove actions
-  const handleConfigureExercise = (itemId: string) => {
-    toast({
-      title: "Configure Exercise",
-      description: "Exercise configuration coming soon!",
-    })
+  const handleConfigureExercise = (item: PopulatedUnitItem) => {
+    setEditingItem(item)
+    setIsConfigDialogOpen(true)
   }
 
   const handleRemoveExercise = async (itemId: string, exerciseName: string) => {
@@ -65,13 +66,7 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
     }
     
     try {
-      // Call the API to remove the unit item
-      await fetch(`/api/units/${unitId}/items/${itemId}`, {
-        method: 'DELETE',
-        headers: {
-          'X-Teacher-ID': 'teacher-1', // This should come from auth
-        },
-      })
+      await removeUnitItem(unitId, itemId)
       
       toast({
         title: "Exercise removed",
@@ -88,6 +83,25 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
       })
     }
   }
+
+  const handleSaveItemConfig = async (itemId: string, config: any) => {
+    try {
+      await updateUnitItemConfig(itemId, config);
+      toast({
+        title: "Configuration saved",
+        description: "The exercise configuration has been updated.",
+      });
+      mutate(); // Re-fetch unit data
+      setIsConfigDialogOpen(false);
+      setEditingItem(null);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save configuration. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Initialize form when unit data loads
   React.useEffect(() => {
@@ -565,6 +579,109 @@ export function UnitEditor({ unitId }: UnitEditorProps) {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Configuration Dialog */}
+        {isConfigDialogOpen && editingItem && (
+          <ItemConfigDialog
+            isOpen={isConfigDialogOpen}
+            onOpenChange={setIsConfigDialogOpen}
+            item={editingItem}
+            onSave={handleSaveItemConfig}
+            decks={decks}
+          />
+        )}
       </div>
   )
+}
+
+function ItemConfigDialog({ isOpen, onOpenChange, item, onSave, decks }: any) {
+  const [config, setConfig] = useState(item.exerciseConfig || {});
+
+  useEffect(() => {
+    setConfig(item.exerciseConfig || {});
+  }, [item]);
+
+  const handleSave = () => {
+    onSave(item.id, config);
+  };
+
+  const renderConfigContent = () => {
+    switch (item.type) {
+      case 'VOCABULARY_DECK':
+        return (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="deckId">Vocabulary Deck *</Label>
+              <Select
+                value={config.deckId || ""}
+                onValueChange={(value) => setConfig({ ...config, deckId: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a deck" />
+                </SelectTrigger>
+                <SelectContent>
+                  {decks.map((deck: any) => (
+                    <SelectItem key={deck.id} value={deck.id}>
+                      {deck.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="newCards">New Cards</Label>
+                <Input
+                  id="newCards"
+                  type="number"
+                  min="0"
+                  max="50"
+                  value={config.newCards || 10}
+                  onChange={(e) => setConfig({ ...config, newCards: Number.parseInt(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="maxDue">Max Due Cards</Label>
+                <Input
+                  id="maxDue"
+                  type="number"
+                  min="0"
+                  max="200"
+                  value={config.maxDue || 50}
+                  onChange={(e) => setConfig({ ...config, maxDue: Number.parseInt(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="minDue">Min Due Cards</Label>
+                <Input
+                  id="minDue"
+                  type="number"
+                  min="0"
+                  max="50"
+                  value={config.minDue || 10}
+                  onChange={(e) => setConfig({ ...config, minDue: Number.parseInt(e.target.value) })}
+                />
+              </div>
+            </div>
+          </div>
+        );
+      default:
+        return <p>This exercise type has no specific configuration.</p>;
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Configure {item.vocabularyDeck?.name || item.grammarExercise?.title}</DialogTitle>
+        </DialogHeader>
+        <div className="py-4">{renderConfigContent()}</div>
+        <div className="flex justify-end space-x-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700">Save Configuration</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }

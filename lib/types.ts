@@ -13,6 +13,9 @@ import {
   Prisma,
   VocabularyCard,
   Teacher,
+  StudentCardState,
+  StudentNote,
+  Deck,
 } from '@prisma/client';
 
 export type PopulatedUnitItem = UnitItem & {
@@ -34,10 +37,16 @@ export type PopulatedStudentDeck = StudentDeck & {
 };
 
 export type FullStudentProfile = Student & {
-  classesRemaining: number;
+  studentDecks: (StudentDeck & {
+    deck: Deck & {
+      _count: {
+        cards: number;
+      };
+    };
+  })[];
   payments: Payment[];
-  studentDecks: PopulatedStudentDeck[];
-  upcomingClasses: ClassSchedule[];
+  classSchedules: ClassSchedule[];
+  notes: StudentNote[];
 };
 
 // ================================================================= //
@@ -54,17 +63,6 @@ export type VocabularyExerciseConfig = {
   minDue?: number;
   deckId?: string; // Added to support dynamic queue expansion
   learningSteps?: string[]; // Added to support configurable learning steps (e.g., ['3m', '15m', '30m'])
-};
-
-/**
- * Represents a single item in the live review queue.
- */
-export type VocabularyQueueItem = {
-  cardId: string;
-  /** The timestamp when the card is due. Used for sorting. */
-  due: Date;
-  /** The FSRS state of the card, which dictates its behavior and UI representation. */
-  state: 'NEW' | 'LEARNING' | 'REVIEW' | 'RELEARNING';
 };
 
 /**
@@ -93,9 +91,9 @@ export type VocabularyDeckProgress = {
   stage: 'PRESENTING_CARD' | 'AWAITING_RATING';
   payload: {
     /** The dynamic, sorted queue of cards to be reviewed. The card at index 0 is the current card. */
-    queue: VocabularyQueueItem[];
+    queue: (StudentCardState & { card: VocabularyCard })[];
     /** The full data for the current card (queue[0]). Pre-fetched for the UI. */
-    currentCardData?: VocabularyCard;
+    currentCardData?: StudentCardState & { card: VocabularyCard };
     /** The original configuration for this session, kept for reference. */
     config: VocabularyExerciseConfig;
     /**

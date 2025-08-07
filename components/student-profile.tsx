@@ -92,21 +92,16 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
     }
   }
 
-  const handleAssignDeck = async () => {
-    if (!selectedDeckId || !student) return;
-    setIsAssigning(true);
-    try {
-      await assignDeck(student.id, selectedDeckId);
-      toast({ title: "Deck assigned successfully!" });
-      mutate(); // Re-fetch student data
-      setIsAssignDeckOpen(false);
-      setSelectedDeckId(null);
-    } catch (error) {
-      toast({ title: "Error assigning deck", description: (error as Error).message, variant: "destructive" });
-    } finally {
-      setIsAssigning(false);
-    }
-  }
+  const upcomingClasses =
+    student.classSchedules
+      ?.filter((schedule) => new Date(schedule.scheduledTime) > new Date())
+      .sort(
+        (a, b) =>
+          new Date(a.scheduledTime).getTime() -
+          new Date(b.scheduledTime).getTime()
+      ) || [];
+
+  const handleAssignDeck = async (deckId: string) => {
 
   const handleRecordPaymentClick = () => {
     setActiveTab("payments")
@@ -361,7 +356,7 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
                   <div className="flex items-center space-x-2">
                     <Calendar className="h-5 w-5 text-purple-600" />
                     <span className="text-2xl font-bold text-slate-900">
-                      {student.upcomingClasses.length}
+                      {upcomingClasses.length}
                     </span>
                   </div>
                 </CardContent>

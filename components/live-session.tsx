@@ -509,6 +509,39 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
                     </div>
                   </div>
                 )}
+
+                {/* FSRS Details for Current Card */}
+                {progressData.currentCard && (
+                  <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <h4 className="font-semibold text-sm text-slate-600 mb-2">FSRS Details</h4>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Stability:</span>
+                        <span className="font-medium text-slate-700">{progressData.currentCard.stability.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Difficulty:</span>
+                        <span className="font-medium text-slate-700">{progressData.currentCard.difficulty.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Reps:</span>
+                        <span className="font-medium text-slate-700">{progressData.currentCard.reps}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Lapses:</span>
+                        <span className="font-medium text-slate-700">{progressData.currentCard.lapses}</span>
+                      </div>
+                       <div className="flex justify-between">
+                        <span className="text-slate-500">State:</span>
+                        <Badge variant="outline" className="text-xs">{progressData.currentCard.state}</Badge>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Due:</span>
+                        <span className="font-medium text-slate-700">{format(new Date(progressData.currentCard.due), "MMM dd, yyyy")}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

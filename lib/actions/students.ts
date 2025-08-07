@@ -327,6 +327,7 @@ export const StudentService = {
         ...student,
         classesRemaining,
         upcomingClasses: student.classSchedules,
+        studentDecks: student.studentDecks as PopulatedStudentDeck[],
       };
     });
   },

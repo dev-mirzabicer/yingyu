@@ -479,8 +479,8 @@ export const FSRSService = {
     studentId: string,
     config: VocabularyExerciseConfig
   ): Promise<{
-    dueItems: VocabularyQueueItem[];
-    newItems: VocabularyQueueItem[];
+    dueItems: StudentCardState[];
+    newItems: StudentCardState[];
   }> {
     const now = new Date();
     const defaults = { newCards: 10, maxDue: 50, minDue: 10 };
@@ -490,7 +490,6 @@ export const FSRSService = {
       where: { studentId, due: { lte: now }, state: { not: 'NEW' } },
       take: finalConfig.maxDue,
       orderBy: { due: 'asc' },
-      select: { cardId: true, due: true },
     });
 
     if (dueCards.length < finalConfig.minDue) {
@@ -507,7 +506,6 @@ export const FSRSService = {
         },
         take: needed,
         orderBy: { due: 'asc' },
-        select: { cardId: true, due: true },
       });
       dueCards = [...dueCards, ...supplementalCards];
     }
@@ -517,22 +515,16 @@ export const FSRSService = {
       where: { studentId, state: 'NEW' },
       take: finalConfig.newCards,
       orderBy: { card: { createdAt: 'asc' } },
-      select: { cardId: true, due: true, state: true },
     });
 
     // Get RELEARNING cards (failed cards in learning steps)
     const relearningCards = await prisma.studentCardState.findMany({
       where: { studentId, state: { in: ['LEARNING', 'RELEARNING'] }, due: { lte: now } },
       orderBy: { due: 'asc' },
-      select: { cardId: true, due: true, state: true },
     });
 
-    const dueItems: VocabularyQueueItem[] = [
-      ...dueCards.map((c) => ({ cardId: c.cardId, due: c.due, state: c.state as any, })),
-      ...relearningCards.map((c) => ({ cardId: c.cardId, due: c.due, state: c.state as any, }))
-    ];
-
-    const newItems: VocabularyQueueItem[] = newCards.map((c) => ({ cardId: c.cardId, due: c.due, state: c.state as any, }));
+    const dueItems: StudentCardState[] = [...dueCards, ...relearningCards];
+    const newItems: StudentCardState[] = newCards;
 
     return { dueItems, newItems };
   },

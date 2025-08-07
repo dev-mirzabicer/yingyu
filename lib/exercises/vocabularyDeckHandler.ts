@@ -12,11 +12,13 @@ import {
   SessionProgress,
   VocabularyDeckProgress,
   VocabularyExerciseConfig,
-  VocabularyQueueItem,
 } from '@/lib/types';
 import { fullSessionStateInclude } from '@/lib/prisma-includes';
 import { VocabularyExerciseConfigSchema } from '@/lib/schemas';
 import { TransactionClient } from './operators/base';
+import { StudentCardState, VocabularyCard } from '@prisma/client';
+
+type EnrichedStudentCardState = StudentCardState & { card: VocabularyCard };
 
 class VocabularyDeckHandler implements ExerciseHandler {
   private operators = {
@@ -28,9 +30,9 @@ class VocabularyDeckHandler implements ExerciseHandler {
    * Interleaves new cards evenly into a sorted list of due cards.
    */
   private interleave(
-    dueItems: VocabularyQueueItem[],
-    newItems: VocabularyQueueItem[]
-  ): VocabularyQueueItem[] {
+    dueItems: EnrichedStudentCardState[],
+    newItems: EnrichedStudentCardState[]
+  ): EnrichedStudentCardState[] {
     if (newItems.length === 0) return dueItems;
     if (dueItems.length === 0) return newItems;
 
@@ -50,24 +52,22 @@ class VocabularyDeckHandler implements ExerciseHandler {
     tx?: TransactionClient
   ): Promise<FullSessionState> {
     const db = tx || prisma;
-    const config = 
+    const config =
       VocabularyExerciseConfigSchema.parse(
         sessionState.currentUnitItem?.exerciseConfig ?? {}
       ) ?? {};
 
-    // FIXED: Get the deck ID from the current unit item to enable proper dynamic queue
     const currentUnitItem = sessionState.currentUnitItem;
     const deckId = currentUnitItem?.vocabularyDeck?.id;
-    
+
     if (!deckId) {
       throw new Error('No vocabulary deck found for this unit item.');
     }
 
-    // Include deck ID and default learning steps in config for the SubmitRatingOperator
-    const enhancedConfig: VocabularyExerciseConfig = { 
-      ...config, 
+    const enhancedConfig: VocabularyExerciseConfig = {
+      ...config,
       deckId,
-      learningSteps: config?.learningSteps || ['3m', '15m', '30m'] // Default learning steps
+      learningSteps: config?.learningSteps || ['3m', '15m', '30m'],
     };
 
     const { dueItems, newItems } = await FSRSService.getInitialReviewQueue(
@@ -75,7 +75,17 @@ class VocabularyDeckHandler implements ExerciseHandler {
       enhancedConfig
     );
 
-    const initialQueue = this.interleave(dueItems, newItems);
+    const fetchCards = async (states: StudentCardState[]) => {
+      const cardIds = states.map(s => s.cardId);
+      const cards = await db.vocabularyCard.findMany({ where: { id: { in: cardIds } } });
+      const cardMap = new Map(cards.map(c => [c.id, c]));
+      return states.map(s => ({ ...s, card: cardMap.get(s.cardId)! }));
+    };
+
+    const enrichedDueItems = await fetchCards(dueItems);
+    const enrichedNewItems = await fetchCards(newItems);
+
+    const initialQueue = this.interleave(enrichedDueItems, enrichedNewItems);
     const initialCardIds = initialQueue.map((item) => item.cardId);
 
     if (initialQueue.length === 0) {
@@ -86,19 +96,13 @@ class VocabularyDeckHandler implements ExerciseHandler {
       };
       const updatedSession = await db.session.update({
         where: { id: sessionState.id },
-        data: { progress: emptyProgress },
+        data: { progress: emptyProgress as any },
         include: fullSessionStateInclude,
       });
       return updatedSession as unknown as FullSessionState;
     }
 
-    const firstCardData = await db.vocabularyCard.findUnique({
-      where: { id: initialQueue[0].cardId },
-    });
-    if (!firstCardData)
-      throw new Error(
-        `Data integrity error: Card ${initialQueue[0].cardId} not found.`
-      );
+    const firstCardData = initialQueue[0];
 
     const initialProgress: VocabularyDeckProgress = {
       type: 'VOCABULARY_DECK',
@@ -113,7 +117,7 @@ class VocabularyDeckHandler implements ExerciseHandler {
 
     const updatedSession = await db.session.update({
       where: { id: sessionState.id },
-      data: { progress: initialProgress },
+      data: { progress: initialProgress as any },
       include: fullSessionStateInclude,
     });
 

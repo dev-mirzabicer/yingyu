@@ -18,32 +18,41 @@ import { fetcher, mutateWithOptimistic, ApiError } from "./utils"
 // STUDENT MANAGEMENT HOOKS
 // ============================================================================
 
-export function useStudents() {
-  const { data, error, isLoading, mutate } = useSWR<FullStudentProfile[]>("/api/students", fetcher)
+export const useStudents = () => {
+  const { data, error, isLoading, mutate } = useSWR<FullStudentProfile[]>(
+    "/api/students",
+    fetcher
+  );
+
+  // Add a 'upcomingClasses' field to each student for easier consumption.
+  const studentsWithUpcoming = data?.map(student => ({
+    ...student,
+    upcomingClasses: student.classSchedules
+      .filter(cs => new Date(cs.scheduledTime) > new Date())
+      .sort((a, b) => new Date(a.scheduledTime).getTime() - new Date(b.scheduledTime).getTime()),
+  }));
 
   return {
-    students: data || [],
+    students: studentsWithUpcoming || [],
     isLoading,
     isError: error,
     mutate,
-    error: error as ApiError | undefined,
-  }
-}
+  };
+};
 
-export function useStudent(studentId: string) {
+export const useStudent = (studentId: string) => {
   const { data, error, isLoading, mutate } = useSWR<FullStudentProfile>(
-    studentId ? `/api/students/${studentId}` : null,
-    fetcher,
-  )
+    `/api/students/${studentId}`,
+    fetcher
+  );
 
   return {
     student: data,
     isLoading,
     isError: error,
     mutate,
-    error: error as ApiError | undefined,
-  }
-}
+  };
+};
 
 export async function createStudent(
   studentData: { name: string; email: string; notes?: string },

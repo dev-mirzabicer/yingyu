@@ -71,14 +71,27 @@ export function TeacherDashboard() {
   // Calculate stats from real data
   const activeStudents = students.filter(s => s.status === 'ACTIVE')
   const lowBalanceStudents = students.filter(s => s.classesRemaining <= 2)
-  const totalUpcomingClasses = students.reduce((sum, s) => sum + s.upcomingClasses.length, 0)
+  const totalUpcomingClasses =
+    students?.reduce((acc, student) => {
+      return (
+        acc +
+        (student.classSchedules?.filter(
+          (s) => new Date(s.scheduledTime) > new Date()
+        ).length || 0)
+      )
+    }, 0) || 0
 
   const formatNextClass = (student: any) => {
-    if (student.upcomingClasses.length === 0) {
-      return "No upcoming classes"
-    }
-    const nextClass = student.upcomingClasses[0]
-    return format(new Date(nextClass.scheduledTime), "EEEE 'at' h:mm a")
+    const upcoming =
+      student.classSchedules
+        ?.filter((s) => new Date(s.scheduledTime) > new Date())
+        .sort(
+          (a, b) =>
+            new Date(a.scheduledTime).getTime() -
+            new Date(b.scheduledTime).getTime()
+        ) || []
+    if (!upcoming || upcoming.length === 0) return "No upcoming classes"
+    return `Next: ${format(new Date(upcoming[0].scheduledTime), "MMM dd, HH:mm")}`
   }
 
   return (

@@ -153,8 +153,7 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
         </Badge>
       ),
     },
-    {
-      key: "difficulty",
+    key: "difficulty",
       header: "Difficulty",
       render: (value: number) => (
         <div className="text-sm text-slate-600">{value.toFixed(2)}</div>

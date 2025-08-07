@@ -12,7 +12,7 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "Yingyu English - Teaching Platform",
   description: "Advanced English teaching platform with FSRS-powered spaced repetition",
-  generator: 'v0.dev'
+  generator: 'Next.js'
 }
 
 export default function RootLayout({

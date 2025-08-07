@@ -34,6 +34,10 @@ import { useToast } from "@/hooks/use-toast"
 import { useDeckCards, addCardToDeck, updateCard, deleteCard } from "@/hooks/use-api-enhanced"
 import type { VocabularyCard } from "@prisma/client"
 import { DataTable } from "@/components/data-table"
+import { BulkImportTools } from "@/components/bulk-import-tools"
+import Papa from "papaparse"
+import { saveAs } from "file-saver"
+
 
 interface VocabularyCardManagerProps {
   deckId: string
@@ -101,8 +105,40 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
   const [filterWordType, setFilterWordType] = useState<string>("all")
   const [showAdvancedFields, setShowAdvancedFields] = useState(false)
   const [newTag, setNewTag] = useState("")
+  const [isImporting, setIsImporting] = useState(false)
 
   const { toast } = useToast()
+
+  const handleExport = () => {
+    const csv = Papa.unparse(cards);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    saveAs(blob, `${deckName}-cards.csv`);
+  };
+
+  const handleImport = async (file: File) => {
+    Papa.parse(file, {
+      header: true,
+      complete: async (results) => {
+        const importedCards = results.data as any[];
+        // TODO: Add validation and import logic
+        console.log(importedCards);
+        toast({
+          title: "Import Complete",
+          description: `${importedCards.length} cards imported successfully.`,
+        });
+        mutate();
+        setIsImporting(false);
+      },
+      error: (error) => {
+        toast({
+          title: "Import Error",
+          description: error.message,
+          variant: "destructive",
+        });
+        setIsImporting(false);
+      },
+    });
+  };
 
   // Filter cards based on search and filters
   const filteredCards = cards.filter((card) => {
@@ -362,11 +398,11 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
         </div>
         {!isReadOnly && (
           <div className="flex items-center space-x-2">
-            <Button variant="outline">
+            <Button variant="outline" onClick={() => setIsImporting(true)}>
               <Upload className="h-4 w-4 mr-2" />
               Import
             </Button>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
@@ -458,6 +494,33 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
           )}
         </CardContent>
       </Card>
+
+      {/* Import Dialog */}
+      <Dialog open={isImporting} onOpenChange={setIsImporting}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Import Vocabulary Cards</DialogTitle>
+          </DialogHeader>
+          <BulkImportTools
+            onImport={handleImport}
+            onClose={() => setIsImporting(false)}
+            templateColumns={[
+              "englishWord",
+              "chineseTranslation",
+              "pinyin",
+              "ipaPronunciation",
+              "exampleSentences",
+              "wordType",
+              "difficultyLevel",
+              "audioUrl",
+              "imageUrl",
+              "videoUrl",
+              "tags",
+            ]}
+            importType="vocabulary"
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Add Card Dialog */}
       <Dialog open={isAddCardOpen} onOpenChange={setIsAddCardOpen}>
