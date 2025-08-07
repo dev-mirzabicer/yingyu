@@ -1,3 +1,25 @@
+"use client"
+
+import { useState, useRef } from "react"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Separator } from "@/components/ui/separator"
 import {
   bulkImportSchedules,
   bulkImportStudents,
@@ -17,6 +39,8 @@ import {
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { DataTable } from "@/components/data-table"
+import { JobStatusIndicator } from "@/components/ui/job-status-indicator"
+import { Job } from "@prisma/client"
 
 interface BulkImportToolsProps {
   onImportComplete?: (data: ImportedData) => void
@@ -44,27 +68,6 @@ interface ImportSummary {
   warningRows: number
 }
 
-interface VocabularyCard {
-  englishWord: string
-  chineseTranslation: string
-  pinyin?: string
-  ipaPronunciation?: string
-  wordType?: string
-  difficultyLevel: number
-  tags?: string[]
-  audioUrl?: string
-  imageUrl?: string
-  exampleSentences?: string
-}
-
-interface StudentData {
-  name: string
-  email: string
-  phone?: string
-  notes?: string
-  initialDeckId?: string
-}
-
 const importTemplates = {
   vocabulary: {
     name: "Vocabulary Cards",
@@ -85,25 +88,6 @@ const importTemplates = {
         englishWord: "hello",
         chineseTranslation: "你好",
         pinyin: "nǐ hǎo",
-        ipaPronunciation: "/həˈloʊ/",
-        wordType: "interjection",
-        difficultyLevel: 1,
-        tags: "greeting,basic",
-        audioUrl: "https://example.com/hello.mp3",
-        imageUrl: "https://example.com/hello.jpg",
-        exampleSentences: '{"english": "Hello, how are you?", "chinese": "你好，你好吗？"}',
-      },
-      {
-        englishWord: "goodbye",
-        chineseTranslation: "再见",
-        pinyin: "zài jiàn",
-        ipaPronunciation: "/ɡʊdˈbaɪ/",
-        wordType: "interjection",
-        difficultyLevel: 1,
-        tags: "greeting,basic",
-        audioUrl: "",
-        imageUrl: "",
-        exampleSentences: '{"english": "Goodbye, see you later!", "chinese": "再见，回头见！"}',
       },
     ],
   },
@@ -116,16 +100,6 @@ const importTemplates = {
       {
         name: "Alice Wang",
         email: "alice.wang@example.com",
-        phone: "+1-555-0123",
-        notes: "Beginner level, prefers visual learning",
-        initialDeckId: "deck-basic-english",
-      },
-      {
-        name: "Bob Chen",
-        email: "bob.chen@example.com",
-        phone: "+1-555-0124",
-        notes: "Intermediate level, business focus",
-        initialDeckId: "deck-business-english",
       },
     ],
   },
@@ -138,26 +112,19 @@ const importTemplates = {
       {
         studentEmail: "alice.wang@example.com",
         scheduledTime: "2024-02-01T14:00:00Z",
-        duration: 60,
-        notes: "Regular conversation practice",
-        type: "vocabulary",
-      },
-      {
-        studentEmail: "bob.chen@example.com",
-        scheduledTime: "2024-02-01T16:00:00Z",
-        duration: 90,
-        notes: "Business presentation practice",
-        type: "speaking",
       },
     ],
   },
 }
 
-export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsProps) {
-  const [selectedTemplate, setSelectedTemplate] = useState<keyof typeof importTemplates>("vocabulary")
-  const [importedData, setImportedData] = useState<ImportedData | null>(null)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [processingProgress, setProcessingProgress] = useState(0)
+export function BulkImportTools({
+  onImportComplete,
+  deckId,
+}: BulkImportToolsProps) {
+  const [selectedTemplate,
+    setSelectedTemplate] = useState<keyof typeof importTemplates>("vocabulary")
+  const [jobId, setJobId] = useState<string | null>(null)
+  const [importedData, setImportedData] = useState<any | null>(null)
   const [previewData, setPreviewData] = useState<any[]>([])
   const [errors, setErrors] = useState<ImportError[]>([])
   const [csvText, setCsvText] = useState("")
@@ -202,8 +169,9 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
       const newErrors: ImportError[] = []
       const parsedData: any[] = []
 
-      // Validate headers
-      const missingRequired = template.requiredFields.filter((field) => !headers.includes(field))
+      const missingRequired = template.requiredFields.filter(
+        (field) => !headers.includes(field)
+      )
       if (missingRequired.length > 0) {
         newErrors.push({
           row: 0,
@@ -213,7 +181,6 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
         })
       }
 
-      // Parse data rows
       for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(",").map((v) => v.trim().replace(/"/g, ""))
         const rowData: any = {}
@@ -222,7 +189,6 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
           rowData[header] = values[index] || ""
         })
 
-        // Validate required fields
         template.requiredFields.forEach((field) => {
           if (!rowData[field] || rowData[field].trim() === "") {
             newErrors.push({
@@ -234,13 +200,14 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
           }
         })
 
-        // Type-specific validations
         if (selectedTemplate === "vocabulary") {
           if (
             rowData.difficultyLevel &&
-            (isNaN(Number(rowData.difficultyLevel)) ||
+            (
+              isNaN(Number(rowData.difficultyLevel)) ||
               Number(rowData.difficultyLevel) < 1 ||
-              Number(rowData.difficultyLevel) > 5)
+              Number(rowData.difficultyLevel) > 5
+            )
           ) {
             newErrors.push({
               row: i,
@@ -263,12 +230,14 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
         parsedData.push(rowData)
       }
 
-      setPreviewData(parsedData.slice(0, 10)) // Show first 10 rows for preview
+      setPreviewData(parsedData.slice(0, 10))
       setErrors(newErrors)
 
       toast({
         title: "File parsed successfully",
-        description: `Found ${parsedData.length} rows with ${newErrors.filter((e) => e.severity === "error").length} errors`,
+        description: `Found ${ 
+          parsedData.length
+        } rows with ${newErrors.filter((e) => e.severity === "error").length} errors`,
       })
     } catch (error) {
       toast({
@@ -285,14 +254,12 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
         title: "Cannot import",
         description: "Please fix all errors before importing.",
         variant: "destructive",
-      });
-      return;
+      })
+      return
     }
 
-    setIsProcessing(true);
-
     try {
-      let job;
+      let job
       switch (selectedTemplate) {
         case "vocabulary":
           if (!deckId) {
@@ -300,36 +267,43 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
               title: "Cannot import vocabulary",
               description: "No deck selected.",
               variant: "destructive",
-            });
-            setIsProcessing(false);
-            return;
+            })
+            return
           }
-          job = await bulkImportVocabulary(deckId, previewData);
-          break;
+          job = await bulkImportVocabulary(deckId, previewData)
+          break
         case "students":
-          job = await bulkImportStudents(previewData);
-          break;
+          job = await bulkImportStudents(previewData)
+          break
         case "schedules":
-          job = await bulkImportSchedules(previewData);
-          break;
+          job = await bulkImportSchedules(previewData)
+          break
         default:
-          throw new Error("Invalid template selected");
+          throw new Error("Invalid template selected")
       }
 
+      setJobId(job.id)
       toast({
         title: "Import job started",
-        description: `Job ${job.data.id} has been created and is now processing.`,
-      });
+        description: `Job ${job.id} has been created and is now processing.`,
+      })
     } catch (error) {
       toast({
         title: "Import failed",
         description: "An error occurred during import. Please try again.",
         variant: "destructive",
-      });
-    } finally {
-      setIsProcessing(false);
+      })
     }
-  };
+  }
+
+  const handleJobComplete = (job: Job) => {
+    if (job.result) {
+      setImportedData(job.result)
+      if (onImportComplete) {
+        onImportComplete(job.result as ImportedData)
+      }
+    }
+  }
 
   const downloadTemplate = () => {
     const template = importTemplates[selectedTemplate]
@@ -340,9 +314,11 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
         headers
           .map((header) => {
             const value = (row as any)[header] || ""
-            return typeof value === "string" && value.includes(",") ? `"${value}"` : value
+            return typeof value === "string" && value.includes(",")
+              ? `"${value}"`
+              : value
           })
-          .join(","),
+          .join(",")
       ),
     ].join("\n")
 
@@ -361,12 +337,12 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
   }
 
   const resetImport = () => {
+    setJobId(null)
     setImportedData(null)
     setPreviewData([])
     setErrors([])
     setCsvText("")
     setFileName("")
-    setProcessingProgress(0)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -381,7 +357,9 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
     {
       key: "field",
       header: "Field",
-      render: (value: string) => <code className="text-sm bg-slate-100 px-1 rounded">{value}</code>,
+      render: (value: string) => (
+        <code className="text-sm bg-slate-100 px-1 rounded">{value}</code>
+      ),
     },
     {
       key: "message",
@@ -390,27 +368,31 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
     {
       key: "severity",
       header: "Severity",
-      render: (value: string) => <Badge variant={value === "error" ? "destructive" : "secondary"}>{value}</Badge>,
+      render: (value: string) => (
+        <Badge variant={value === "error" ? "destructive" : "secondary"}>
+          {value}
+        </Badge>
+      ),
     },
   ]
 
   const previewColumns =
     selectedTemplate === "vocabulary"
       ? [
-        { key: "englishWord", header: "English Word" },
-        { key: "chineseTranslation", header: "Chinese Translation" },
-        { key: "pinyin", header: "Pinyin" },
-        { key: "wordType", header: "Word Type" },
-        { key: "difficultyLevel", header: "Difficulty" },
-      ]
+          { key: "englishWord", header: "English Word" },
+          { key: "chineseTranslation", header: "Chinese Translation" },
+          { key: "pinyin", header: "Pinyin" },
+          { key: "wordType", header: "Word Type" },
+          { key: "difficultyLevel", header: "Difficulty" },
+        ]
       : selectedTemplate === "students"
-        ? [
+      ? [
           { key: "name", header: "Name" },
           { key: "email", header: "Email" },
           { key: "phone", header: "Phone" },
           { key: "notes", header: "Notes" },
         ]
-        : [
+      : [
           { key: "studentEmail", header: "Student Email" },
           { key: "scheduledTime", header: "Scheduled Time" },
           { key: "duration", header: "Duration" },
@@ -419,11 +401,14 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Bulk Import Tools</h2>
-          <p className="text-slate-600">Import data from CSV files with validation and error checking</p>
+          <h2 className="text-2xl font-bold text-slate-900">
+            Bulk Import Tools
+          </h2>
+          <p className="text-slate-600">
+            Import data from CSV files with validation and error checking
+          </p>
         </div>
         <div className="flex items-center space-x-2">
           <Button variant="outline" onClick={downloadTemplate}>
@@ -440,12 +425,15 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
       <Tabs defaultValue="import" className="space-y-6">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="import">Import Data</TabsTrigger>
-          <TabsTrigger value="preview">Preview & Validate</TabsTrigger>
-          <TabsTrigger value="results">Results</TabsTrigger>
+          <TabsTrigger value="preview" disabled={previewData.length === 0}>
+            Preview & Validate
+          </TabsTrigger>
+          <TabsTrigger value="results" disabled={!importedData}>
+            Results
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="import" className="space-y-6">
-          {/* Template Selection */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
@@ -458,43 +446,23 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
                 {Object.entries(importTemplates).map(([key, template]) => (
                   <Card
                     key={key}
-                    className={`cursor-pointer transition-colors ${selectedTemplate === key ? "ring-2 ring-blue-500 bg-blue-50" : "hover:bg-slate-50"
-                      }`}
-                    onClick={() => setSelectedTemplate(key as keyof typeof importTemplates)}
+                    className={`cursor-pointer transition-colors ${ 
+                      selectedTemplate === key
+                        ? "ring-2 ring-blue-500 bg-blue-50"
+                        : "hover:bg-slate-50"
+                    }`}
+                    onClick={() =>
+                      setSelectedTemplate(key as keyof typeof importTemplates)
+                    }
                   >
                     <CardContent className="p-4">
                       <div className="flex items-center space-x-2 mb-2">
                         <FileSpreadsheet className="h-5 w-5 text-blue-600" />
                         <h3 className="font-medium">{template.name}</h3>
                       </div>
-                      <p className="text-sm text-slate-600 mb-3">{template.description}</p>
-                      <div className="space-y-2">
-                        <div>
-                          <span className="text-xs font-medium text-slate-500">Required:</span>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {template.requiredFields.map((field) => (
-                              <Badge key={field} variant="destructive" className="text-xs">
-                                {field}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-slate-500">Optional:</span>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {template.optionalFields.slice(0, 3).map((field) => (
-                              <Badge key={field} variant="outline" className="text-xs">
-                                {field}
-                              </Badge>
-                            ))}
-                            {template.optionalFields.length > 3 && (
-                              <Badge variant="outline" className="text-xs">
-                                +{template.optionalFields.length - 3} more
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                      <p className="text-sm text-slate-600 mb-3">
+                        {template.description}
+                      </p>
                     </CardContent>
                   </Card>
                 ))}
@@ -502,7 +470,6 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
             </CardContent>
           </Card>
 
-          {/* File Upload */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
@@ -514,11 +481,22 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
               <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center">
                 <FileText className="h-12 w-12 text-slate-400 mx-auto mb-4" />
                 <div className="space-y-2">
-                  <h3 className="text-lg font-medium text-slate-900">{fileName || "Choose a CSV file to upload"}</h3>
-                  <p className="text-slate-500">Upload a CSV file formatted according to the selected template</p>
+                  <h3 className="text-lg font-medium text-slate-900">
+                    {fileName || "Choose a CSV file to upload"}
+                  </h3>
+                  <p className="text-slate-500">
+                    Upload a CSV file formatted according to the selected
+                    template
+                  </p>
                 </div>
                 <div className="mt-4">
-                  <input ref={fileInputRef} type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
                   <Button onClick={() => fileInputRef.current?.click()}>
                     <Upload className="h-4 w-4 mr-2" />
                     Choose File
@@ -526,7 +504,6 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
                 </div>
               </div>
 
-              {/* Manual CSV Input */}
               <div className="space-y-2">
                 <Label htmlFor="csvText">Or paste CSV data directly:</Label>
                 <Textarea
@@ -552,13 +529,16 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
             <Card>
               <CardContent className="p-8 text-center">
                 <Eye className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-slate-900 mb-2">No Data to Preview</h3>
-                <p className="text-slate-500">Upload a CSV file to see a preview of your data</p>
+                <h3 className="text-lg font-medium text-slate-900 mb-2">
+                  No Data to Preview
+                </h3>
+                <p className="text-slate-500">
+                  Upload a CSV file to see a preview of your data
+                </p>
               </CardContent>
             </Card>
           ) : (
             <>
-              {/* Validation Summary */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
@@ -567,14 +547,19 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-slate-900">{previewData.length}</div>
+                      <div className="text-2xl font-bold text-slate-900">
+                        {previewData.length}
+                      </div>
                       <div className="text-sm text-slate-600">Total Rows</div>
                     </div>
                     <div className="text-center">
                       <div className="text-2xl font-bold text-green-600">
-                        {previewData.length - errors.filter((e) => e.severity === "error").length}
+                        {
+                          previewData.length -
+                          errors.filter((e) => e.severity === "error").length
+                        }
                       </div>
                       <div className="text-sm text-slate-600">Valid Rows</div>
                     </div>
@@ -584,45 +569,33 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
                       </div>
                       <div className="text-sm text-slate-600">Errors</div>
                     </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-yellow-600">
-                        {errors.filter((e) => e.severity === "warning").length}
-                      </div>
-                      <div className="text-sm text-slate-600">Warnings</div>
-                    </div>
                   </div>
 
-                  {errors.filter((e) => e.severity === "error").length === 0 && (
+                  {errors.filter((e) => e.severity === "error").length ===
+                    0 && (
                     <div className="mt-4 text-center">
                       <Button
                         onClick={processImport}
-                        disabled={isProcessing}
+                        disabled={!!jobId}
                         className="bg-green-600 hover:bg-green-700"
                       >
                         <Save className="h-4 w-4 mr-2" />
-                        {isProcessing ? "Processing..." : "Import Data"}
+                        {jobId ? "Processing..." : "Import Data"}
                       </Button>
                     </div>
                   )}
                 </CardContent>
               </Card>
 
-              {/* Processing Progress */}
-              {isProcessing && (
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">Processing import...</span>
-                        <span className="text-sm text-slate-500">{Math.round(processingProgress)}%</span>
-                      </div>
-                      <Progress value={processingProgress} className="h-2" />
-                    </div>
-                  </CardContent>
-                </Card>
+              {jobId && (
+                <JobStatusIndicator
+                  jobId={jobId}
+                  title="Bulk Import"
+                  description="The system is processing your data. This may take a few minutes."
+                  onComplete={handleJobComplete}
+                />
               )}
 
-              {/* Errors Table */}
               {errors.length > 0 && (
                 <Card>
                   <CardHeader>
@@ -633,12 +606,15 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <DataTable data={errors} columns={errorColumns} pageSize={10} />
+                    <DataTable
+                      data={errors}
+                      columns={errorColumns}
+                      pageSize={10}
+                    />
                   </CardContent>
                 </Card>
               )}
 
-              {/* Data Preview */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
@@ -648,7 +624,12 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <DataTable data={previewData} columns={previewColumns} pageSize={10} searchable={false} />
+                  <DataTable
+                    data={previewData}
+                    columns={previewColumns}
+                    pageSize={10}
+                    searchable={false}
+                  />
                 </CardContent>
               </Card>
             </>
@@ -658,7 +639,6 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
         <TabsContent value="results" className="space-y-6">
           {importedData ? (
             <>
-              {/* Import Summary */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
@@ -667,21 +647,23 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="text-center p-4 bg-slate-50 rounded-lg">
-                      <div className="text-2xl font-bold text-slate-900">{importedData.summary.totalRows}</div>
-                      <div className="text-sm text-slate-600">Total Processed</div>
-                    </div>
-                    <div className="text-center p-4 bg-green-50 rounded-lg">
-                      <div className="text-2xl font-bold text-green-600">{importedData.summary.successfulRows}</div>
+                      <div className="text-2xl font-bold text-slate-900">
+                        {importedData.summary.successfulRows}
+                      </div>
                       <div className="text-sm text-slate-600">Successful</div>
                     </div>
                     <div className="text-center p-4 bg-red-50 rounded-lg">
-                      <div className="text-2xl font-bold text-red-600">{importedData.summary.errorRows}</div>
+                      <div className="text-2xl font-bold text-red-600">
+                        {importedData.summary.errorRows}
+                      </div>
                       <div className="text-sm text-slate-600">Errors</div>
                     </div>
                     <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                      <div className="text-2xl font-bold text-yellow-600">{importedData.summary.warningRows}</div>
+                      <div className="text-2xl font-bold text-yellow-600">
+                        {importedData.summary.warningRows}
+                      </div>
                       <div className="text-sm text-slate-600">Warnings</div>
                     </div>
                   </div>
@@ -693,22 +675,21 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
                       <RotateCcw className="h-4 w-4 mr-2" />
                       Import More Data
                     </Button>
-                    <Button className="bg-blue-600 hover:bg-blue-700">
-                      <Eye className="h-4 w-4 mr-2" />
-                      View Imported Items
-                    </Button>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Import Details */}
               {importedData.errors.length > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle>Import Issues</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <DataTable data={importedData.errors} columns={errorColumns} pageSize={10} />
+                    <DataTable
+                      data={importedData.errors}
+                      columns={errorColumns}
+                      pageSize={10}
+                    />
                   </CardContent>
                 </Card>
               )}
@@ -717,8 +698,12 @@ export function BulkImportTools({ onImportComplete, deckId }: BulkImportToolsPro
             <Card>
               <CardContent className="p-8 text-center">
                 <Database className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-slate-900 mb-2">No Import Results</h3>
-                <p className="text-slate-500">Complete an import to see the results here</p>
+                <h3 className="text-lg font-medium text-slate-900 mb-2">
+                  No Import Results
+                </h3>
+                <p className="text-slate-500">
+                  Complete an import to see the results here
+                </p>
               </CardContent>
             </Card>
           )}

@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Brain,
@@ -30,8 +29,8 @@ import {
   useListeningCandidates,
   optimizeFsrsParameters,
   rebuildFsrsCache,
-  useAsyncOperation,
-} from "@/hooks/use-api-enhanced"
+} from "@/hooks/api/students"
+import { JobStatusIndicator } from "@/components/ui/job-status-indicator"
 import type { FullStudentProfile } from "@/lib/types"
 import type { StudentCardState, VocabularyCard } from "@prisma/client"
 import { DataTable } from "@/components/data-table"
@@ -80,9 +79,6 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
 
   const [optimizationJobId, setOptimizationJobId] = useState<string | null>(null)
   const [rebuildJobId, setRebuildJobId] = useState<string | null>(null)
-  const [isOptimizationDialogOpen, setIsOptimizationDialogOpen] = useState(false)
-
-  const { execute, isLoading: isExecuting, error: executionError } = useAsyncOperation()
 
   const { toast } = useToast()
 
@@ -103,32 +99,35 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
   }
 
   const handleOptimizeParameters = async () => {
-    const result = await execute(async () => {
-      const response = await optimizeFsrsParameters(student.id)
-      return response.data
-    })
-
-    if (result) {
-      setOptimizationJobId(result.id)
-      setIsOptimizationDialogOpen(true)
+    try {
+      const job = await optimizeFsrsParameters(student.id)
+      setOptimizationJobId(job.id)
       toast({
         title: "Parameter optimization started",
         description: "This may take a few minutes to complete.",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to start parameter optimization.",
+        variant: "destructive",
       })
     }
   }
 
   const handleRebuildCache = async () => {
-    const result = await execute(async () => {
-      const response = await rebuildFsrsCache(student.id)
-      return response.data
-    })
-
-    if (result) {
-      setRebuildJobId(result.id)
+    try {
+      const job = await rebuildFsrsCache(student.id)
+      setRebuildJobId(job.id)
       toast({
         title: "Cache rebuild started",
         description: "FSRS cache is being rebuilt in the background.",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to start cache rebuild.",
+        variant: "destructive",
       })
     }
   }
@@ -153,7 +152,8 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
         </Badge>
       ),
     },
-    key: "difficulty",
+    {
+      key: "difficulty",
       header: "Difficulty",
       render: (value: number) => (
         <div className="text-sm text-slate-600">{value.toFixed(2)}</div>
@@ -284,6 +284,57 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
           </CardContent>
         </Card>
       </div>
+
+      {/* FSRS Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Settings className="h-5 w-5" />
+            <span>FSRS Engine Actions</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div>
+              <h3 className="font-semibold">Optimize Parameters</h3>
+              <p className="text-sm text-slate-500">
+                Recalculate the optimal FSRS parameters based on the student&apos;s review history.
+              </p>
+            </div>
+            <Button onClick={handleOptimizeParameters} disabled={!!optimizationJobId}>
+              <Brain className="mr-2 h-4 w-4" />
+              Optimize
+            </Button>
+          </div>
+          {optimizationJobId && (
+            <JobStatusIndicator
+              jobId={optimizationJobId}
+              title="FSRS Parameter Optimization"
+              description="The system is analyzing the review history to find the best parameters."
+            />
+          )}
+
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div>
+              <h3 className="font-semibold">Rebuild Cache</h3>
+              <p className="text-sm text-slate-500">
+                Force a rebuild of the student&apos;s card state from their review history.
+              </p>
+            </div>
+            <Button onClick={handleRebuildCache} disabled={!!rebuildJobId}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Rebuild
+            </Button>
+          </div>
+          {rebuildJobId && (
+            <JobStatusIndicator
+              jobId={rebuildJobId}
+              title="FSRS Cache Rebuild"
+              description="The system is rebuilding the student's card states. This may take a moment."
+            />
+          )}
+        </CardContent>
+      </Card>
 
       {/* Detailed Analytics */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -461,7 +512,7 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
           <Card>
             <CardHeader>
               <CardTitle>Listening Exercise Candidates</CardTitle>
-            </CardHeader>
+            </Header>
             <CardContent>
               {isListeningLoading ? (
                 <div className="space-y-4">
@@ -487,14 +538,6 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
         </TabsContent>
 
       </Tabs>
-
-      {/* Error Display */}
-      {executionError && (
-        <Alert>
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>Operation failed: {executionError.message}</AlertDescription>
-        </Alert>
-      )}
     </div>
   )
 }

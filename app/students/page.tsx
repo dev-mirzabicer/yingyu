@@ -6,60 +6,82 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { DataTable } from "@/components/data-table"
 import { Plus, Search, Users, AlertTriangle, TrendingUp, Play } from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { useStudents, createStudent, useDecks } from "@/hooks/use-api-enhanced"
+import { useStudents, createStudent } from "@/hooks/api/students"
+import { useDecks } from "@/hooks/api/content"
 import { format } from "date-fns"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { SessionStartDialog } from "@/components/session-start-dialog"
+import { JobStatusIndicator } from "@/components/ui/job-status-indicator"
 
 export default function StudentsPage() {
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false)
-  const [newStudent, setNewStudent] = useState({ name: "", email: "", notes: "" })
+  const [newStudent, setNewStudent] = useState({
+    name: "",
+    email: "",
+    notes: "",
+  })
+  const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [sessionStudent, setSessionStudent] = useState<{ id: string; name: string } | null>(null)
+  const [sessionStudent, setSessionStudent] = useState<{
+    id: string
+    name: string
+  } | null>(null)
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
-  
+  const [addStudentJobId, setAddStudentJobId] = useState<string | null>(null)
+
   const { toast } = useToast()
   const { students, isLoading, isError, mutate } = useStudents()
-  const { decks } = useDecks()
+  const { decks, isLoading: isDecksLoading } = useDecks()
 
   const handleAddStudent = async () => {
-    if (!newStudent.name || !newStudent.email) {
+    if (!newStudent.name || !newStudent.email || !selectedDeckId) {
       toast({
         title: "Error",
-        description: "Please fill in all required fields.",
+        description: "Please fill in all required fields and select a deck.",
         variant: "destructive",
       })
       return
     }
 
-    const defaultDeck = decks.find(d => d.name === 'Default Seed Deck') || decks[0];
-    if (!defaultDeck) {
-      toast({
-        title: "Cannot Add Student",
-        description: "There are no vocabulary decks in the system. Please create a deck first before adding a student.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsSubmitting(true)
     try {
-      await createStudent(newStudent, defaultDeck.id)
-      toast({
-        title: "Student added successfully",
-        description: `${newStudent.name} has been added to your class.`,
-      })
+      const result = await createStudent(newStudent, selectedDeckId)
+      if (result.job) {
+        setAddStudentJobId(result.job.id)
+        toast({
+          title: "Student creation in progress",
+          description: `${newStudent.name} is being added. Card initialization is running in the background.`,
+        })
+      } else {
+        toast({
+          title: "Student added successfully",
+          description: `${newStudent.name} has been added to your class.`,
+        })
+        mutate()
+      }
       setNewStudent({ name: "", email: "", notes: "" })
+      setSelectedDeckId(null)
       setIsAddStudentOpen(false)
-      mutate()
     } catch (error) {
       toast({
         title: "Error",
@@ -71,11 +93,13 @@ export default function StudentsPage() {
     }
   }
 
-  // Filter students based on status and search
-  const filteredStudents = students.filter(student => {
-    const matchesStatus = filterStatus === "all" || student.status === filterStatus
-    const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (student.email && student.email.toLowerCase().includes(searchTerm.toLowerCase()))
+  const filteredStudents = students.filter((student) => {
+    const matchesStatus =
+      filterStatus === "all" || student.status === filterStatus
+    const matchesSearch =
+      student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (student.email &&
+        student.email.toLowerCase().includes(searchTerm.toLowerCase()))
     return matchesStatus && matchesSearch
   })
 
@@ -88,7 +112,10 @@ export default function StudentsPage() {
           <Avatar>
             <AvatarImage src="/placeholder.svg" alt={row.name} />
             <AvatarFallback>
-              {row.name.split(" ").map((n: string) => n[0]).join("")}
+              {row.name
+                .split(" ")
+                .map((n: string) => n[0])
+                .join("")}
             </AvatarFallback>
           </Avatar>
           <div>
@@ -111,7 +138,11 @@ export default function StudentsPage() {
       key: "classesRemaining",
       header: "Classes Remaining",
       render: (value: number) => (
-        <span className={value <= 2 ? "font-bold text-red-600" : "font-medium text-slate-900"}>
+        <span
+          className={
+            value <= 2 ? "font-bold text-red-600" : "font-medium text-slate-900"
+          }
+        >
           {value}
         </span>
       ),
@@ -151,33 +182,51 @@ export default function StudentsPage() {
     },
   ]
 
-  // Calculate stats
-  const activeStudents = students.filter(s => s.status === 'ACTIVE')
-  const lowBalanceStudents = students.filter(s => s.classesRemaining <= 2)
+  const activeStudents = students.filter((s) => s.status === "ACTIVE")
+  const lowBalanceStudents = students.filter((s) => s.classesRemaining <= 2)
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold text-slate-900">Students</h1>
-          <p className="text-slate-600">Manage your students and track their progress</p>
+          <p className="text-slate-600">
+            Manage your students and track their progress
+          </p>
         </div>
-        <Button onClick={() => setIsAddStudentOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+        <Button
+          onClick={() => setIsAddStudentOpen(true)}
+          className="bg-blue-600 hover:bg-blue-700"
+        >
           <Plus className="h-4 w-4 mr-2" />
           Add Student
         </Button>
       </div>
 
-      {/* Quick Stats */}
+      {addStudentJobId && (
+        <JobStatusIndicator
+          jobId={addStudentJobId}
+          title="Creating Student"
+          description="Initializing student and their learning materials. This may take a moment."
+          onComplete={() => {
+            setAddStudentJobId(null)
+            mutate()
+          }}
+        />
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
               <Users className="h-5 w-5 text-blue-600" />
               <div>
-                <p className="text-sm font-medium text-slate-600">Total Students</p>
-                <p className="text-2xl font-bold text-slate-900">{students.length}</p>
+                <p className="text-sm font-medium text-slate-600">
+                  Total Students
+                </p>
+                <p className="text-2xl font-bold text-slate-900">
+                  {students.length}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -188,8 +237,12 @@ export default function StudentsPage() {
             <div className="flex items-center space-x-2">
               <TrendingUp className="h-5 w-5 text-green-600" />
               <div>
-                <p className="text-sm font-medium text-slate-600">Active Students</p>
-                <p className="text-2xl font-bold text-slate-900">{activeStudents.length}</p>
+                <p className="text-sm font-medium text-slate-600">
+                  Active Students
+                </p>
+                <p className="text-2xl font-bold text-slate-900">
+                  {activeStudents.length}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -201,14 +254,15 @@ export default function StudentsPage() {
               <AlertTriangle className="h-5 w-5 text-red-600" />
               <div>
                 <p className="text-sm font-medium text-slate-600">Low Balance</p>
-                <p className="text-2xl font-bold text-slate-900">{lowBalanceStudents.length}</p>
+                <p className="text-2xl font-bold text-slate-900">
+                  {lowBalanceStudents.length}
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters */}
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center gap-4">
@@ -240,7 +294,6 @@ export default function StudentsPage() {
         </CardContent>
       </Card>
 
-      {/* Students Table */}
       <Card>
         <CardHeader>
           <CardTitle>All Students</CardTitle>
@@ -248,7 +301,9 @@ export default function StudentsPage() {
         <CardContent>
           {isError ? (
             <div className="text-center py-8">
-              <p className="text-slate-600">Failed to load students. Please try again.</p>
+              <p className="text-slate-600">
+                Failed to load students. Please try again.
+              </p>
             </div>
           ) : isLoading ? (
             <div className="space-y-4">
@@ -266,45 +321,85 @@ export default function StudentsPage() {
             <div className="text-center py-12">
               <Users className="h-12 w-12 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-500 mb-4">
-                {searchTerm || filterStatus !== "all" ? "No students match your filters" : "No students added yet"}
+                {searchTerm || filterStatus !== "all"
+                  ? "No students match your filters"
+                  : "No students added yet"}
               </p>
               {!searchTerm && filterStatus === "all" && (
-                <Button onClick={() => setIsAddStudentOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+                <Button
+                  onClick={() => setIsAddStudentOpen(true)}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
                   Add Your First Student
                 </Button>
               )}
             </div>
           ) : (
-            <DataTable data={filteredStudents} columns={studentColumns} pageSize={10} />
+            <DataTable
+              data={filteredStudents}
+              columns={studentColumns}
+              pageSize={10}
+            />
           )}
         </CardContent>
       </Card>
 
-      {/* Add Student Dialog */}
       <Dialog open={isAddStudentOpen} onOpenChange={setIsAddStudentOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add New Student</DialogTitle>
+            <DialogDescription>
+              Enter the student's details and assign an initial deck.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="student-name">Full Name</Label>
+              <Label htmlFor="student-name">Full Name *</Label>
               <Input
                 id="student-name"
                 placeholder="Enter student's full name"
                 value={newStudent.name}
-                onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })}
+                onChange={(e) =>
+                  setNewStudent({ ...newStudent, name: e.target.value })
+                }
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="student-email">Email</Label>
+              <Label htmlFor="student-email">Email *</Label>
               <Input
                 id="student-email"
                 type="email"
                 placeholder="student@example.com"
                 value={newStudent.email}
-                onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })}
+                onChange={(e) =>
+                  setNewStudent({ ...newStudent, email: e.target.value })
+                }
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="initial-deck">Initial Deck *</Label>
+              <Select onValueChange={setSelectedDeckId} value={selectedDeckId || undefined}>
+                <SelectTrigger id="initial-deck">
+                  <SelectValue placeholder="Select a deck..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {isDecksLoading ? (
+                    <SelectItem value="loading" disabled>
+                      Loading decks...
+                    </SelectItem>
+                  ) : decks.length > 0 ? (
+                    decks.map((deck) => (
+                      <SelectItem key={deck.id} value={deck.id}>
+                        {deck.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-decks" disabled>
+                      No decks available. Create one first.
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="student-notes">Notes (Optional)</Label>
@@ -312,7 +407,9 @@ export default function StudentsPage() {
                 id="student-notes"
                 placeholder="Any initial notes about the student..."
                 value={newStudent.notes}
-                onChange={(e) => setNewStudent({ ...newStudent, notes: e.target.value })}
+                onChange={(e) =>
+                  setNewStudent({ ...newStudent, notes: e.target.value })
+                }
               />
             </div>
             <div className="flex justify-end space-x-2">
@@ -335,7 +432,6 @@ export default function StudentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Quick Start Session Dialog */}
       {sessionStudent && (
         <SessionStartDialog
           studentId={sessionStudent.id}
