@@ -37,7 +37,7 @@ export type FullStudentProfile = Student & {
   classesRemaining: number;
   payments: Payment[];
   studentDecks: PopulatedStudentDeck[];
-  upcomingClasses: ClassSchedule[];
+  classSchedules: ClassSchedule[];
 };
 
 // ================================================================= //
