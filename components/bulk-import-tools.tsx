@@ -1,30 +1,28 @@
-"use client"
+"use client";
 
-import { useState, useRef } from "react"
+import { useState, useRef } from "react";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
-} from "@/components/ui/tabs"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
+} from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import {
   bulkImportSchedules,
   bulkImportStudents,
-} from "@/hooks/api/students"
-import { bulkImportVocabulary } from "@/hooks/api/content"
+} from "@/hooks/api/students";
+import { bulkImportVocabulary } from "@/hooks/api/content";
 import {
   Upload,
   Download,
@@ -36,36 +34,28 @@ import {
   RotateCcw,
   FileSpreadsheet,
   Database,
-} from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import { DataTable } from "@/components/data-table"
-import { JobStatusIndicator } from "@/components/ui/job-status-indicator"
-import { Job } from "@prisma/client"
+  XCircle,
+  FileClock,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { DataTable } from "@/components/data-table";
+import { JobStatusIndicator } from "@/components/ui/job-status-indicator";
+import { Job } from "@prisma/client";
+import { ColumnDef } from "@tanstack/react-table";
+import { BulkImportResult, BulkImportError } from "@/lib/types";
+import { BulkImportResultSchema } from "@/lib/schemas/jobs";
 
 interface BulkImportToolsProps {
-  onImportComplete?: (data: ImportedData) => void
-  deckId?: string
+  deckId?: string;
 }
 
-interface ImportedData {
-  type: "vocabulary" | "students" | "schedules"
-  items: any[]
-  errors: ImportError[]
-  summary: ImportSummary
-}
-
+// Note: Local validation types are kept for the initial parsing step.
+// The final result from the job will use the official `BulkImportResult` types.
 interface ImportError {
-  row: number
-  field: string
-  message: string
-  severity: "error" | "warning"
-}
-
-interface ImportSummary {
-  totalRows: number
-  successfulRows: number
-  errorRows: number
-  warningRows: number
+  row: number;
+  field: string;
+  message: string;
+  severity: "error" | "warning";
 }
 
 const importTemplates = {
@@ -115,79 +105,84 @@ const importTemplates = {
       },
     ],
   },
-}
+};
 
-export function BulkImportTools({
-  onImportComplete,
-  deckId,
-}: BulkImportToolsProps) {
+export function BulkImportTools({ deckId }: BulkImportToolsProps) {
   const [selectedTemplate,
-    setSelectedTemplate] = useState<keyof typeof importTemplates>("vocabulary")
-  const [jobId, setJobId] = useState<string | null>(null)
-  const [importedData, setImportedData] = useState<any | null>(null)
-  const [previewData, setPreviewData] = useState<any[]>([])
-  const [errors, setErrors] = useState<ImportError[]>([])
-  const [csvText, setCsvText] = useState("")
-  const [fileName, setFileName] = useState("")
+    setSelectedTemplate] = useState<keyof typeof importTemplates>(
+    "vocabulary"
+  );
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [importedData, setImportedData] = useState<BulkImportResult | null>(
+    null
+  );
+  const [previewData, setPreviewData] = useState<any[]>([]);
+  const [errors, setErrors] = useState<ImportError[]>([]);
+  const [csvText, setCsvText] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [activeTab, setActiveTab] = useState("import");
 
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const { toast } = useToast()
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
+  const handleFileUpload = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-    setFileName(file.name)
+    setFileName(file.name);
 
-    const reader = new FileReader()
+    const reader = new FileReader();
     reader.onload = (e) => {
-      const text = e.target?.result as string
-      setCsvText(text)
-      parseCSV(text)
-    }
+      const text = e.target?.result as string;
+      setCsvText(text);
+      parseCSV(text);
+      setActiveTab("preview");
+    };
 
     if (file.type === "text/csv" || file.name.endsWith(".csv")) {
-      reader.readAsText(file)
+      reader.readAsText(file);
     } else {
       toast({
         title: "Invalid file type",
         description: "Please upload a CSV file.",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const parseCSV = (text: string) => {
     try {
-      const lines = text.trim().split("\n")
+      const lines = text.trim().split("\n");
       if (lines.length < 2) {
-        throw new Error("CSV must have at least a header row and one data row")
+        throw new Error("CSV must have at least a header row and one data row");
       }
 
-      const headers = lines[0].split(",").map((h) => h.trim().replace(/"/g, ""))
-      const template = importTemplates[selectedTemplate]
-      const newErrors: ImportError[] = []
-      const parsedData: any[] = []
+      const headers = lines[0].split(",").map((h) => h.trim().replace(/"/g, ""));
+      const template = importTemplates[selectedTemplate];
+      const newErrors: ImportError[] = [];
+      const parsedData: any[] = [];
 
       const missingRequired = template.requiredFields.filter(
         (field) => !headers.includes(field)
-      )
+      );
       if (missingRequired.length > 0) {
         newErrors.push({
           row: 0,
           field: missingRequired.join(", "),
           message: `Missing required columns: ${missingRequired.join(", ")}`,
           severity: "error",
-        })
+        });
       }
 
       for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(",").map((v) => v.trim().replace(/"/g, ""))
-        const rowData: any = {}
+        const values = lines[i].split(",").map((v) => v.trim().replace(/"/g, ""));
+        const rowData: any = {};
 
         headers.forEach((header, index) => {
-          rowData[header] = values[index] || ""
-        })
+          rowData[header] = values[index] || "";
+        });
 
         template.requiredFields.forEach((field) => {
           if (!rowData[field] || rowData[field].trim() === "") {
@@ -196,57 +191,30 @@ export function BulkImportTools({
               field,
               message: `Required field '${field}' is empty`,
               severity: "error",
-            })
+            });
           }
-        })
+        });
 
-        if (selectedTemplate === "vocabulary") {
-          if (
-            rowData.difficultyLevel &&
-            (
-              isNaN(Number(rowData.difficultyLevel)) ||
-              Number(rowData.difficultyLevel) < 1 ||
-              Number(rowData.difficultyLevel) > 5
-            )
-          ) {
-            newErrors.push({
-              row: i,
-              field: "difficultyLevel",
-              message: "Difficulty level must be a number between 1 and 5",
-              severity: "error",
-            })
-          }
-        } else if (selectedTemplate === "students") {
-          if (rowData.email && !rowData.email.includes("@")) {
-            newErrors.push({
-              row: i,
-              field: "email",
-              message: "Invalid email format",
-              severity: "error",
-            })
-          }
-        }
-
-        parsedData.push(rowData)
+        parsedData.push(rowData);
       }
 
-      setPreviewData(parsedData.slice(0, 10))
-      setErrors(newErrors)
+      setPreviewData(parsedData.slice(0, 10));
+      setErrors(newErrors);
 
       toast({
         title: "File parsed successfully",
         description: `Found ${ 
           parsedData.length
         } rows with ${newErrors.filter((e) => e.severity === "error").length} errors`,
-      })
+      });
     } catch (error) {
       toast({
         title: "Parse error",
         description: "Failed to parse CSV file. Please check the format.",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const processImport = async () => {
     if (errors.filter((e) => e.severity === "error").length > 0) {
@@ -254,12 +222,12 @@ export function BulkImportTools({
         title: "Cannot import",
         description: "Please fix all errors before importing.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     try {
-      let job
+      let job;
       switch (selectedTemplate) {
         case "vocabulary":
           if (!deckId) {
@@ -267,137 +235,124 @@ export function BulkImportTools({
               title: "Cannot import vocabulary",
               description: "No deck selected.",
               variant: "destructive",
-            })
-            return
+            });
+            return;
           }
-          job = await bulkImportVocabulary(deckId, previewData)
-          break
+          job = await bulkImportVocabulary(deckId, previewData);
+          break;
         case "students":
-          job = await bulkImportStudents(previewData)
-          break
+          job = await bulkImportStudents(previewData);
+          break;
         case "schedules":
-          job = await bulkImportSchedules(previewData)
-          break
+          job = await bulkImportSchedules(previewData);
+          break;
         default:
-          throw new Error("Invalid template selected")
+          throw new Error("Invalid template selected");
       }
 
-      setJobId(job.id)
+      setJobId(job.id);
       toast({
         title: "Import job started",
         description: `Job ${job.id} has been created and is now processing.`,
-      })
+      });
     } catch (error) {
       toast({
         title: "Import failed",
         description: "An error occurred during import. Please try again.",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const handleJobComplete = (job: Job) => {
-    if (job.result) {
-      setImportedData(job.result)
-      if (onImportComplete) {
-        onImportComplete(job.result as ImportedData)
-      }
+    const result = BulkImportResultSchema.safeParse(job.result);
+
+    if (result.success) {
+      setImportedData(result.data);
+      setActiveTab("results");
+      toast({
+        title: "Import Complete",
+        description: `Processed ${result.data.summary.totalRows} rows.`,
+      });
+    } else {
+      setImportedData(null);
+      setActiveTab("results");
+      toast({
+        title: "Error Processing Results",
+        description:
+          "The job completed, but the results format was unexpected. Please check the job logs.",
+        variant: "destructive",
+      });
+      console.error("Failed to parse job result:", result.error);
     }
-  }
+  };
 
   const downloadTemplate = () => {
-    const template = importTemplates[selectedTemplate]
-    const headers = [...template.requiredFields, ...template.optionalFields]
+    const template = importTemplates[selectedTemplate];
+    const headers = [...template.requiredFields, ...template.optionalFields];
     const csvContent = [
       headers.join(","),
       ...template.sampleData.map((row) =>
         headers
           .map((header) => {
-            const value = (row as any)[header] || ""
+            const value = (row as any)[header] || "";
             return typeof value === "string" && value.includes(",")
               ? `"${value}"`
-              : value
+              : value;
           })
           .join(",")
       ),
-    ].join("\n")
+    ].join("\n");
 
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `${selectedTemplate}_template.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${selectedTemplate}_template.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
 
     toast({
       title: "Template downloaded",
       description: "Use this template to format your data correctly.",
-    })
-  }
+    });
+  };
 
   const resetImport = () => {
-    setJobId(null)
-    setImportedData(null)
-    setPreviewData([])
-    setErrors([])
-    setCsvText("")
-    setFileName("")
+    setJobId(null);
+    setImportedData(null);
+    setPreviewData([]);
+    setErrors([]);
+    setCsvText("");
+    setFileName("");
+    setActiveTab("import");
     if (fileInputRef.current) {
-      fileInputRef.current.value = ""
+      fileInputRef.current.value = "";
     }
-  }
+  };
 
-  const errorColumns = [
+  const resultErrorColumns: ColumnDef<BulkImportError>[] = [
     {
-      key: "row",
+      accessorKey: "rowNumber",
       header: "Row",
-      render: (value: number) => <Badge variant="outline">Row {value}</Badge>,
-    },
-    {
-      key: "field",
-      header: "Field",
-      render: (value: string) => (
-        <code className="text-sm bg-slate-100 px-1 rounded">{value}</code>
+      cell: ({ row }) => (
+        <Badge variant="outline">Row {row.original.rowNumber}</Badge>
       ),
     },
     {
-      key: "message",
+      accessorKey: "fieldName",
+      header: "Field",
+      cell: ({ row }) => (
+        <code className="text-sm bg-slate-100 px-1 rounded">
+          {row.original.fieldName}
+        </code>
+      ),
+    },
+    {
+      accessorKey: "errorMessage",
       header: "Message",
     },
-    {
-      key: "severity",
-      header: "Severity",
-      render: (value: string) => (
-        <Badge variant={value === "error" ? "destructive" : "secondary"}>
-          {value}
-        </Badge>
-      ),
-    },
-  ]
-
-  const previewColumns =
-    selectedTemplate === "vocabulary"
-      ? [
-          { key: "englishWord", header: "English Word" },
-          { key: "chineseTranslation", header: "Chinese Translation" },
-          { key: "pinyin", header: "Pinyin" },
-          { key: "wordType", header: "Word Type" },
-          { key: "difficultyLevel", header: "Difficulty" },
-        ]
-      : selectedTemplate === "students"
-      ? [
-          { key: "name", header: "Name" },
-          { key: "email", header: "Email" },
-          { key: "phone", header: "Phone" },
-          { key: "notes", header: "Notes" },
-        ]
-      : [
-          { key: "studentEmail", header: "Student Email" },
-          { key: "scheduledTime", header: "Scheduled Time" },
-          { key: "duration", header: "Duration" },
-          { key: "type", header: "Type" },
-        ]
+  ];
 
   return (
     <div className="space-y-6">
@@ -415,21 +370,21 @@ export function BulkImportTools({
             <Download className="h-4 w-4 mr-2" />
             Download Template
           </Button>
-          <Button variant="outline" onClick={resetImport}>
+          <Button variant="destructive" onClick={resetImport}>
             <RotateCcw className="h-4 w-4 mr-2" />
             Reset
           </Button>
         </div>
       </div>
 
-      <Tabs defaultValue="import" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="import">Import Data</TabsTrigger>
+          <TabsTrigger value="import">1. Import Data</TabsTrigger>
           <TabsTrigger value="preview" disabled={previewData.length === 0}>
-            Preview & Validate
+            2. Preview & Validate
           </TabsTrigger>
-          <TabsTrigger value="results" disabled={!importedData}>
-            Results
+          <TabsTrigger value="results" disabled={!jobId}>
+            3. Results
           </TabsTrigger>
         </TabsList>
 
@@ -510,9 +465,10 @@ export function BulkImportTools({
                   id="csvText"
                   value={csvText}
                   onChange={(e) => {
-                    setCsvText(e.target.value)
+                    setCsvText(e.target.value);
                     if (e.target.value.trim()) {
-                      parseCSV(e.target.value)
+                      parseCSV(e.target.value);
+                      setActiveTab("preview");
                     }
                   }}
                   placeholder="Paste your CSV data here..."
@@ -576,11 +532,11 @@ export function BulkImportTools({
                     <div className="mt-4 text-center">
                       <Button
                         onClick={processImport}
-                        disabled={!!jobId}
-                        className="bg-green-600 hover:bg-green-700"
+                        disabled={!!jobId || errors.some(e => e.severity === 'error')}
+                        className="w-full"
                       >
                         <Save className="h-4 w-4 mr-2" />
-                        {jobId ? "Processing..." : "Import Data"}
+                        {jobId ? "Processing..." : "Confirm and Start Import"}
                       </Button>
                     </div>
                   )}
@@ -608,7 +564,39 @@ export function BulkImportTools({
                   <CardContent>
                     <DataTable
                       data={errors}
-                      columns={errorColumns}
+                      columns={[
+                        {
+                          key: "row",
+                          header: "Row",
+                          render: (value: number) => (
+                            <Badge variant="outline">Row {value}</Badge>
+                          ),
+                        },
+                        {
+                          key: "field",
+                          header: "Field",
+                          render: (value: string) => (
+                            <code className="text-sm bg-slate-100 px-1 rounded">
+                              {value}
+                            </code>
+                          ),
+                        },
+                        {
+                          key: "message",
+                          header: "Message",
+                        },
+                        {
+                          key: "severity",
+                          header: "Severity",
+                          render: (value: string) => (
+                            <Badge
+                              variant={value === "error" ? "destructive" : "secondary"}
+                            >
+                              {value}
+                            </Badge>
+                          ),
+                        },
+                      ]}
                       pageSize={10}
                     />
                   </CardContent>
@@ -626,7 +614,13 @@ export function BulkImportTools({
                 <CardContent>
                   <DataTable
                     data={previewData}
-                    columns={previewColumns}
+                    columns={[
+                      { key: "englishWord", header: "English Word" },
+                      { key: "chineseTranslation", header: "Chinese Translation" },
+                      { key: "pinyin", header: "Pinyin" },
+                      { key: "wordType", header: "Word Type" },
+                      { key: "difficultyLevel", header: "Difficulty" },
+                    ]}
                     pageSize={10}
                     searchable={false}
                   />
@@ -647,25 +641,30 @@ export function BulkImportTools({
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="text-center p-4 bg-slate-50 rounded-lg">
-                      <div className="text-2xl font-bold text-slate-900">
-                        {importedData.summary.successfulRows}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                    <Card className="p-4 bg-green-50">
+                      <CheckCircle className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                      <div className="text-3xl font-bold text-slate-900">
+                        {importedData.summary.successfulImports}
                       </div>
-                      <div className="text-sm text-slate-600">Successful</div>
-                    </div>
-                    <div className="text-center p-4 bg-red-50 rounded-lg">
-                      <div className="text-2xl font-bold text-red-600">
-                        {importedData.summary.errorRows}
+                      <div className="text-sm text-slate-600">
+                        Successful Rows
                       </div>
-                      <div className="text-sm text-slate-600">Errors</div>
-                    </div>
-                    <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                      <div className="text-2xl font-bold text-yellow-600">
-                        {importedData.summary.warningRows}
+                    </Card>
+                    <Card className="p-4 bg-red-50">
+                      <XCircle className="h-8 w-8 text-red-600 mx-auto mb-2" />
+                      <div className="text-3xl font-bold text-red-600">
+                        {importedData.summary.failedImports}
                       </div>
-                      <div className="text-sm text-slate-600">Warnings</div>
-                    </div>
+                      <div className="text-sm text-slate-600">Failed Rows</div>
+                    </Card>
+                    <Card className="p-4 bg-slate-50">
+                      <FileClock className="h-8 w-8 text-slate-500 mx-auto mb-2" />
+                      <div className="text-3xl font-bold text-slate-900">
+                        {importedData.summary.totalRows}
+                      </div>
+                      <div className="text-sm text-slate-600">Total Rows</div>
+                    </Card>
                   </div>
 
                   <Separator className="my-6" />
@@ -673,22 +672,29 @@ export function BulkImportTools({
                   <div className="flex items-center justify-center space-x-4">
                     <Button onClick={resetImport} variant="outline">
                       <RotateCcw className="h-4 w-4 mr-2" />
-                      Import More Data
+                      Start New Import
                     </Button>
                   </div>
                 </CardContent>
               </Card>
 
-              {importedData.errors.length > 0 && (
+              {importedData.errors && importedData.errors.length > 0 && (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Import Issues</CardTitle>
+                    <CardTitle className="flex items-center space-x-2">
+                      <AlertTriangle className="h-5 w-5 text-orange-500" />
+                      <span>Import Errors</span>
+                      <Badge variant="destructive">
+                        {importedData.errors.length}
+                      </Badge>
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <DataTable
+                      columns={resultErrorColumns}
                       data={importedData.errors}
-                      columns={errorColumns}
-                      pageSize={10}
+                      filterColumn="errorMessage"
+                      filterPlaceholder="Filter by error message..."
                     />
                   </CardContent>
                 </Card>
@@ -702,7 +708,7 @@ export function BulkImportTools({
                   No Import Results
                 </h3>
                 <p className="text-slate-500">
-                  Complete an import to see the results here
+                  Complete an import to see the results here.
                 </p>
               </CardContent>
             </Card>
@@ -710,5 +716,5 @@ export function BulkImportTools({
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }

@@ -16,7 +16,18 @@ import {
   StudentCardState,
   StudentNote,
   Deck,
+  Job,
 } from '@prisma/client';
+import { z } from 'zod';
+import {
+  BulkImportResultSchema,
+  BulkImportErrorSchema,
+  BulkImportSummarySchema,
+} from './schemas/jobs';
+
+export type BulkImportSummary = z.infer<typeof BulkImportSummarySchema>;
+export type BulkImportError = z.infer<typeof BulkImportErrorSchema>;
+export type BulkImportResult = z.infer<typeof BulkImportResultSchema>;
 
 export type PopulatedUnitItem = UnitItem & {
   vocabularyDeck: (VocabularyDeck & { cards: { id: string }[] }) | null;
