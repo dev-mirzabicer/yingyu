@@ -56,14 +56,21 @@ export const useStudent = (studentId: string) => {
 };
 
 export async function createStudent(
-  studentData: { name: string; email: string; notes?: string },
-  initialDeckId: string,
+  studentData: {
+    name: string
+    email: string
+    notes?: string
+    proficiencyLevel?: string
+  },
+  initialDeckId: string
 ) {
-  return mutateWithOptimistic<{ student: FullStudentProfile; initializationJob: Job }>(
-    "/api/workflows/onboard-student",
-    "POST",
-    { studentData, initialDeckId },
-  )
+  return mutateWithOptimistic<{
+    student: FullStudentProfile
+    initializationJob: Job
+  }>("/api/workflows/onboard-student", "POST", {
+    studentData,
+    initialDeckId,
+  })
 }
 
 export async function updateStudentNotes(studentId: string, notes: string) {

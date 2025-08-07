@@ -38,6 +38,7 @@ export default function StudentsPage() {
     name: "",
     email: "",
     notes: "",
+    proficiencyLevel: "BEGINNER",
   })
   const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -74,24 +75,29 @@ export default function StudentsPage() {
         })
       } else {
         toast({
-          title: "Student added successfully",
-          description: `${newStudent.name} has been added to your class.`,
-        })
-        mutate()
-      }
-      setNewStudent({ name: "", email: "", notes: "" })
-      setSelectedDeckId(null)
-      setIsAddStudentOpen(false)
+        title: "Student added successfully",
+        description: `${newStudent.name} has been added to your class.`,
+      });
+      mutate();
+    }
+    setNewStudent({
+      name: "",
+      email: "",
+      notes: "",
+      proficiencyLevel: "BEGINNER",
+    });
+    setSelectedDeckId(null);
+    setIsAddStudentOpen(false);
     } catch (error) {
       toast({
         title: "Error",
         description: "Failed to add student. Please try again.",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const filteredStudents = students.filter((student) => {
     const matchesStatus =
@@ -377,8 +383,30 @@ export default function StudentsPage() {
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="proficiency-level">Proficiency Level *</Label>
+              <Select
+                onValueChange={(value) =>
+                  setNewStudent({ ...newStudent, proficiencyLevel: value })
+                }
+                value={newStudent.proficiencyLevel}
+              >
+                <SelectTrigger id="proficiency-level">
+                  <SelectValue placeholder="Select a level..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="BEGINNER">Beginner</SelectItem>
+                  <SelectItem value="ELEMENTARY">Elementary</SelectItem>
+                  <SelectItem value="INTERMEDIATE">Intermediate</SelectItem>
+                  <SelectItem value="ADVANCED">Advanced</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="initial-deck">Initial Deck *</Label>
-              <Select onValueChange={setSelectedDeckId} value={selectedDeckId || undefined}>
+              <Select
+                onValueChange={setSelectedDeckId}
+                value={selectedDeckId || undefined}
+              >
                 <SelectTrigger id="initial-deck">
                   <SelectValue placeholder="Select a deck..." />
                 </SelectTrigger>
