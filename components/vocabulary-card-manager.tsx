@@ -31,7 +31,7 @@ import {
   EyeOff,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useDeckCards, addCardToDeck, updateCard, deleteCard } from "@/hooks/use-api-enhanced"
+import { useDeckCards, addCardToDeck, updateCard, deleteCard } from "@/hooks/api/content"
 import type { VocabularyCard } from "@prisma/client"
 import { DataTable } from "@/components/data-table"
 import { BulkImportTools } from "@/components/bulk-import-tools"
@@ -110,34 +110,17 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
   const { toast } = useToast()
 
   const handleExport = () => {
+    if (!cards || cards.length === 0) {
+      toast({
+        title: "No cards to export",
+        description: "Add some cards to the deck before exporting.",
+        variant: "destructive",
+      });
+      return;
+    }
     const csv = Papa.unparse(cards);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     saveAs(blob, `${deckName}-cards.csv`);
-  };
-
-  const handleImport = async (file: File) => {
-    Papa.parse(file, {
-      header: true,
-      complete: async (results) => {
-        const importedCards = results.data as any[];
-        // TODO: Add validation and import logic
-        console.log(importedCards);
-        toast({
-          title: "Import Complete",
-          description: `${importedCards.length} cards imported successfully.`,
-        });
-        mutate();
-        setIsImporting(false);
-      },
-      error: (error) => {
-        toast({
-          title: "Import Error",
-          description: error.message,
-          variant: "destructive",
-        });
-        setIsImporting(false);
-      },
-    });
   };
 
   // Filter cards based on search and filters
@@ -499,25 +482,14 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
       <Dialog open={isImporting} onOpenChange={setIsImporting}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Import Vocabulary Cards</DialogTitle>
+            <DialogTitle>Import Vocabulary Cards to "{deckName}"</DialogTitle>
           </DialogHeader>
           <BulkImportTools
-            onImport={handleImport}
-            onClose={() => setIsImporting(false)}
-            templateColumns={[
-              "englishWord",
-              "chineseTranslation",
-              "pinyin",
-              "ipaPronunciation",
-              "exampleSentences",
-              "wordType",
-              "difficultyLevel",
-              "audioUrl",
-              "imageUrl",
-              "videoUrl",
-              "tags",
-            ]}
-            importType="vocabulary"
+            deckId={deckId}
+            onComplete={() => {
+              mutate();
+              setIsImporting(false);
+            }}
           />
         </DialogContent>
       </Dialog>

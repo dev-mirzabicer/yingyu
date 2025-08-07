@@ -182,3 +182,83 @@ export const BulkImportSchedulesPayloadSchema = z.object({
     })
   ),
 });
+
+/**
+ * Validates the payload for adding a new item to a unit.
+ * It's a discriminated union based on the `itemType`.
+ */
+export const AddItemBodySchema = z.discriminatedUnion('itemType', [
+  z.object({
+    itemType: z.literal('VOCABULARY_DECK'),
+    exerciseId: z.string().uuid().optional(),
+    exerciseData: CreateDeckSchema.optional(),
+    exerciseConfig: VocabularyExerciseConfigSchema,
+  }),
+  // Add other exercise types here as they are implemented
+  // e.g., z.object({ itemType: z.literal('GRAMMAR_EXERCISE'), ... })
+]);
+
+/**
+ * Validates the payload for forking an exercise.
+ */
+export const ForkExerciseSchema = z.object({
+  exerciseId: z.string().uuid(),
+  itemType: z.enum(['VOCABULARY_DECK']), // Add other types as they become forkable
+});
+
+/**
+ * Validates the payload for the onboarding workflow.
+ */
+export const OnboardStudentSchema = z.object({
+  studentData: CreateStudentSchema,
+  initialDeckId: z.string().uuid(),
+});
+
+/**
+ * Validates the payload for starting a new session.
+ */
+export const StartSessionSchema = z.object({
+  studentId: z.string().uuid(),
+  unitId: z.string().uuid(),
+});
+
+/**
+ * Validates the payload for submitting an answer in a session.
+ * `data` is a generic record, as its shape depends on the `action`.
+ * Specific validation will be handled by the relevant exercise operator.
+ */
+export const SubmitAnswerSchema = z.object({
+  action: z.string(),
+  data: z.record(z.any()),
+});
+
+/**
+* Validates the payload for reordering items in a unit.
+*/
+export const ReorderItemsSchema = z.object({
+  itemIds: z.array(z.string().uuid()),
+});
+
+/**
+ * Validates the payload for adding a single vocabulary card.
+ */
+export const AddCardSchema = z.object({
+  englishWord: z.string().min(1),
+  chineseTranslation: z.string().min(1),
+  pinyin: z.string().optional(),
+  ipaPronunciation: z.string().optional(),
+  exampleSentences: z.any().optional(), // Can be string or structured object
+  wordType: z.string().optional(),
+  difficultyLevel: z.number().int().min(1).max(5).optional(),
+  audioUrl: z.string().url().optional().or(z.literal('')),
+  imageUrl: z.string().url().optional().or(z.literal('')),
+  videoUrl: z.string().url().optional().or(z.literal('')),
+  frequencyRank: z.number().int().optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+/**
+ * Validates the payload for updating a single vocabulary card.
+ * All fields are optional.
+ */
+export const UpdateCardSchema = AddCardSchema.partial();
