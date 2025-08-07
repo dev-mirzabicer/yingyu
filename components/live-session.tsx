@@ -46,12 +46,18 @@ const exerciseTypeInfo = {
   },
 }
 
+import {
+  getExerciseComponent,
+  exerciseDispatcher,
+} from "@/components/exercises/dispatcher"
+import { format, formatDistanceToNowStrict } from "date-fns"
+
 // Component for handling vocabulary deck exercises - modular and focused
 function VocabularyExercise({
   sessionState,
   onRevealAnswer,
   onSubmitRating,
-  isLoading
+  isLoading,
 }: {
   sessionState: FullSessionState
   onRevealAnswer: () => void
@@ -93,8 +99,8 @@ function VocabularyExercise({
                 </p>
                 {currentCard.exampleSentences && (
                   <p className="text-slate-600">
-                    {typeof currentCard.exampleSentences === 'string' 
-                      ? currentCard.exampleSentences 
+                    {typeof currentCard.exampleSentences === "string"
+                      ? currentCard.exampleSentences
                       : JSON.stringify(currentCard.exampleSentences)}
                   </p>
                 )}
@@ -167,7 +173,11 @@ function VocabularyExercise({
 
 // Placeholder component for future exercise types - extensible architecture
 function UnsupportedExercise({ type }: { type: UnitItemType }) {
-  const typeInfo = exerciseTypeInfo[type] || { label: "Unknown", icon: FileText, color: "bg-gray-100 text-gray-700" }
+  const typeInfo = exerciseTypeInfo[type] || {
+    label: "Unknown",
+    icon: FileText,
+    color: "bg-gray-100 text-gray-700",
+  }
   const Icon = typeInfo.icon
 
   return (
@@ -176,7 +186,9 @@ function UnsupportedExercise({ type }: { type: UnitItemType }) {
         <div className={`inline-flex p-4 rounded-lg ${typeInfo.color} mb-4`}>
           <Icon className="h-8 w-8" />
         </div>
-        <h3 className="text-xl font-semibold text-slate-900 mb-2">{typeInfo.label} Exercise</h3>
+        <h3 className="text-xl font-semibold text-slate-900 mb-2">
+          {typeInfo.label} Exercise
+        </h3>
         <p className="text-slate-600">This exercise type is coming soon!</p>
       </CardContent>
     </Card>
@@ -415,8 +427,10 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     )
   }
 
-  const currentExerciseType = session.currentUnitItem?.type
-  const currentExerciseTypeInfo = currentExerciseType ? exerciseTypeInfo[currentExerciseType] : null
+  const ExerciseComponent = getExerciseComponent(session.currentUnitItem?.type)
+  const currentExerciseTypeInfo = session.currentUnitItem?.type
+    ? exerciseDispatcher[session.currentUnitItem?.type]
+    : null
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -570,22 +584,12 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="w-full max-w-2xl space-y-6">
             {/* Modular Exercise Rendering - Extensible Architecture */}
-            {currentExerciseType === UnitItemType.VOCABULARY_DECK ? (
-              <VocabularyExercise
-                sessionState={session}
-                onRevealAnswer={handleRevealAnswer}
-                onSubmitRating={handleRating}
-                isLoading={isActionLoading}
-              />
-            ) : currentExerciseType ? (
-              <UnsupportedExercise type={currentExerciseType} />
-            ) : (
-              <Card className="text-center">
-                <CardContent className="p-8">
-                  <p className="text-slate-600">No exercise loaded.</p>
-                </CardContent>
-              </Card>
-            )}
+            <ExerciseComponent
+              sessionState={session}
+              onRevealAnswer={handleRevealAnswer}
+              onSubmitRating={handleRating}
+              isLoading={isActionLoading}
+            />
           </div>
         </div>
       </div>
