@@ -592,6 +592,99 @@ export const FSRSService = {
       return new FSRSReview(review.rating, delta_t);
     });
   },
+
+  /**
+   * Retrieves aggregated FSRS statistics for a student.
+   * This is a dedicated, performant query to power the analytics dashboard.
+   * @param studentId The ID of the student.
+   * @param teacherId The ID of the teacher, for authorization.
+   * @returns An object containing various FSRS statistics.
+   */
+  async getFsrsStats(
+    studentId: string,
+    teacherId: string
+  ): Promise<FsrsStats> {
+    await authorizeTeacherForStudent(teacherId, studentId);
+
+    const now = new Date();
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+    const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const stateCountsQuery = prisma.studentCardState.groupBy({
+      by: ['state'],
+      where: { studentId },
+      _count: {
+        state: true,
+      },
+    });
+
+    const dueTodayQuery = prisma.studentCardState.count({
+      where: {
+        studentId,
+        due: { lte: endOfToday },
+        state: { not: 'NEW' },
+      },
+    });
+    
+    const dueThisWeekQuery = prisma.studentCardState.count({
+        where: {
+            studentId,
+            due: { lte: nextWeek },
+            state: { not: 'NEW' },
+        }
+    });
+
+    const overdueQuery = prisma.studentCardState.count({
+        where: {
+            studentId,
+            due: { lt: now },
+            state: { not: 'NEW' },
+        }
+    });
+
+    const aggregateStatsQuery = prisma.studentCardState.aggregate({
+      where: { studentId },
+      _sum: {
+        reps: true,
+      },
+      _avg: {
+        retrievability: true,
+        averageResponseTimeMs: true,
+      },
+      _count: {
+        _all: true,
+      },
+    });
+
+    const [stateCounts, dueToday, dueThisWeek, overdue, aggregateStats] = await prisma.$transaction([
+      stateCountsQuery,
+      dueTodayQuery,
+      dueThisWeekQuery,
+      overdueQuery,
+      aggregateStatsQuery,
+    ]);
+
+    const statsMap = stateCounts.reduce((acc, record) => {
+      acc[record.state] = record._count.state;
+      return acc;
+    }, {} as Record<CardState, number>);
+
+    return {
+      totalCards: aggregateStats._count._all,
+      newCards: statsMap.NEW ?? 0,
+      learningCards: statsMap.LEARNING ?? 0,
+      reviewCards: statsMap.REVIEW ?? 0,
+      relearningCards: statsMap.RELEARNING ?? 0,
+      dueToday: dueToday,
+      dueThisWeek: dueThisWeek,
+      overdue: overdue,
+      totalReviews: aggregateStats._sum.reps ?? 0,
+      averageRetention: (aggregateStats._avg.retrievability ?? 0) * 100,
+      averageResponseTime: aggregateStats._avg.averageResponseTimeMs ?? 0,
+    };
+  },
+
   async createRebuildCacheJob(
     studentId: string,
     teacherId: string

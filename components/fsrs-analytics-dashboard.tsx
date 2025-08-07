@@ -27,11 +27,12 @@ import { useToast } from "@/hooks/use-toast"
 import {
   useDueCards,
   useListeningCandidates,
+  useFsrsStats,
   optimizeFsrsParameters,
   rebuildFsrsCache,
 } from "@/hooks/api/students"
 import { JobStatusIndicator } from "@/components/ui/job-status-indicator"
-import type { FullStudentProfile } from "@/lib/types"
+import type { FullStudentProfile, FsrsStats } from "@/lib/types"
 import type { StudentCardState, VocabularyCard } from "@prisma/client"
 import { DataTable } from "@/components/data-table"
 
@@ -41,17 +42,6 @@ interface FSRSAnalyticsDashboardProps {
 
 interface DueCardWithCard extends StudentCardState {
   card: VocabularyCard
-}
-
-interface AnalyticsData {
-  totalCards: number
-  dueToday: number
-  newCards: number
-  reviewCards: number
-  relearningCards: number
-  averageRetention: number
-  totalReviews: number
-  averageResponseTime: number
 }
 
 const difficultyColors = {
@@ -76,27 +66,12 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
     isLoading: isListeningLoading,
     isError: isListeningError,
   } = useListeningCandidates(student.id)
+  const { stats, isLoading: isStatsLoading, isError: isStatsError } = useFsrsStats(student.id)
 
   const [optimizationJobId, setOptimizationJobId] = useState<string | null>(null)
   const [rebuildJobId, setRebuildJobId] = useState<string | null>(null)
 
   const { toast } = useToast()
-
-  // Calculate analytics data
-  const analyticsData: AnalyticsData = {
-    totalCards: student.studentDecks.reduce((sum, deck) => sum + (deck.deck._count?.cards || 0), 0),
-    dueToday: dueCards.filter((card) => startOfDay(card.due) <= startOfDay(new Date())).length,
-    newCards: dueCards.filter((card) => card.state === "NEW").length,
-    reviewCards: dueCards.filter((card) => card.state === "REVIEW").length,
-    relearningCards: dueCards.filter((card) => card.state === "RELEARNING").length,
-    averageRetention:
-      dueCards.length > 0
-        ? (dueCards.reduce((sum, card) => sum + (card.retrievability || 0), 0) / dueCards.length) * 100
-        : 0,
-    totalReviews: dueCards.reduce((sum, card) => sum + card.reps, 0),
-    averageResponseTime:
-      dueCards.length > 0 ? dueCards.reduce((sum, card) => sum + card.averageResponseTimeMs, 0) / dueCards.length : 0,
-  }
 
   const handleOptimizeParameters = async () => {
     try {
@@ -223,7 +198,7 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
     },
   ]
 
-  if (isDueCardsError || isListeningError) {
+  if (isDueCardsError || isListeningError || isStatsError) {
     return (
       <Card>
         <CardContent className="p-6">
@@ -235,6 +210,20 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
       </Card>
     )
   }
+
+  const StatCard = ({ title, value, icon: Icon }: { title: string; value: string | number; icon: React.ElementType }) => (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center space-x-2">
+          <Icon className="h-5 w-5 text-blue-600" />
+          <div>
+            <p className="text-sm font-medium text-slate-600">{title}</p>
+            {isStatsLoading ? <Skeleton className="h-8 w-16 mt-1" /> : <p className="text-2xl font-bold text-slate-900">{value}</p>}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="space-y-6">
@@ -248,41 +237,9 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <BookOpen className="h-5 w-5 text-blue-600" />
-              <div>
-                <p className="text-sm font-medium text-slate-600">Total Cards</p>
-                <p className="text-2xl font-bold text-slate-900">{analyticsData.totalCards}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <Clock className="h-5 w-5 text-orange-600" />
-              <div>
-                <p className="text-sm font-medium text-slate-600">Due Today</p>
-                <p className="text-2xl font-bold text-slate-900">{analyticsData.dueToday}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <Target className="h-5 w-5 text-green-600" />
-              <div>
-                <p className="text-sm font-medium text-slate-600">Avg Retention</p>
-                <p className="text-2xl font-bold text-slate-900">{analyticsData.averageRetention.toFixed(1)}%</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard title="Total Cards" value={stats?.totalCards ?? 0} icon={BookOpen} />
+        <StatCard title="Due Today" value={stats?.dueToday ?? 0} icon={Clock} />
+        <StatCard title="Avg Retention" value={`${stats?.averageRetention.toFixed(1) ?? 0}%`} icon={Target} />
       </div>
 
       {/* FSRS Actions */}
@@ -347,86 +304,61 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-blue-500 rounded-full" />
-                  <span className="text-sm text-slate-600">New Cards</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm font-medium">{analyticsData.newCards}</span>
-                  <div className="w-24">
-                    <Progress value={(analyticsData.newCards / analyticsData.totalCards) * 100} className="h-2" />
+            {isStatsLoading ? <Skeleton className="h-40 w-full" /> : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full" />
+                    <span className="text-sm text-slate-600">New Cards</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-medium">{stats?.newCards ?? 0}</span>
+                    <div className="w-24">
+                      <Progress value={stats ? (stats.newCards / stats.totalCards) * 100 : 0} className="h-2" />
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-green-500 rounded-full" />
-                  <span className="text-sm text-slate-600">Review Cards</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm font-medium">{analyticsData.reviewCards}</span>
-                  <div className="w-24">
-                    <Progress value={(analyticsData.reviewCards / analyticsData.totalCards) * 100} className="h-2" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-yellow-500 rounded-full" />
+                    <span className="text-sm text-slate-600">Learning</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-medium">{stats?.learningCards ?? 0}</span>
+                    <div className="w-24">
+                      <Progress value={stats ? (stats.learningCards / stats.totalCards) * 100 : 0} className="h-2" />
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-orange-500 rounded-full" />
-                  <span className="text-sm text-slate-600">Relearning Cards</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm font-medium">{analyticsData.relearningCards}</span>
-                  <div className="w-24">
-                    <Progress value={(analyticsData.relearningCards / analyticsData.totalCards) * 100} className="h-2" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-green-500 rounded-full" />
+                    <span className="text-sm text-slate-600">Review Cards</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-medium">{stats?.reviewCards ?? 0}</span>
+                    <div className="w-24">
+                      <Progress value={stats ? (stats.reviewCards / stats.totalCards) * 100 : 0} className="h-2" />
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-yellow-500 rounded-full" />
-                  <span className="text-sm text-slate-600">Learning</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm font-medium">
-                    {dueCards.filter((card) => card.state === "LEARNING").length}
-                  </span>
-                  <div className="w-24">
-                    <Progress
-                      value={
-                        (dueCards.filter((card) => card.state === "LEARNING").length / analyticsData.totalCards) * 100
-                      }
-                      className="h-2"
-                    />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-orange-500 rounded-full" />
+                    <span className="text-sm text-slate-600">Relearning Cards</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-medium">{stats?.relearningCards ?? 0}</span>
+                    <div className="w-24">
+                      <Progress value={stats ? (stats.relearningCards / stats.totalCards) * 100 : 0} className="h-2" />
+                    </div>
                   </div>
                 </div>
               </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-orange-500 rounded-full" />
-                  <span className="text-sm text-slate-600">Relearning</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm font-medium">
-                    {dueCards.filter((card) => card.state === "RELEARNING").length}
-                  </span>
-                  <div className="w-24">
-                    <Progress
-                      value={
-                        (dueCards.filter((card) => card.state === "RELEARNING").length / analyticsData.totalCards) * 100
-                      }
-                      className="h-2"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
 
@@ -439,35 +371,37 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600">Total Reviews</span>
-                <span className="text-lg font-semibold text-slate-900">
-                  {analyticsData.totalReviews.toLocaleString()}
-                </span>
-              </div>
+             {isStatsLoading ? <Skeleton className="h-24 w-full" /> : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Total Reviews</span>
+                  <span className="text-lg font-semibold text-slate-900">
+                    {stats?.totalReviews.toLocaleString() ?? 0}
+                  </span>
+                </div>
 
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600">Avg Response Time</span>
-                <span className="text-lg font-semibold text-slate-900">
-                  {(analyticsData.averageResponseTime / 1000).toFixed(1)}s
-                </span>
-              </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Avg Response Time</span>
+                  <span className="text-lg font-semibold text-slate-900">
+                    {(stats ? stats.averageResponseTime / 1000 : 0).toFixed(1)}s
+                  </span>
+                </div>
 
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600">Cards Due This Week</span>
-                <span className="text-lg font-semibold text-slate-900">
-                  {dueCards.filter((card) => new Date(card.due) <= subDays(new Date(), -7)).length}
-                </span>
-              </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Cards Due This Week</span>
+                  <span className="text-lg font-semibold text-slate-900">
+                    {stats?.dueThisWeek ?? 0}
+                  </span>
+                </div>
 
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600">Overdue Cards</span>
-                <span className="text-lg font-semibold text-red-600">
-                  {dueCards.filter((card) => new Date(card.due) < new Date()).length}
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Overdue Cards</span>
+                  <span className="text-lg font-semibold text-red-600">
+                    {stats?.overdue ?? 0}
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>

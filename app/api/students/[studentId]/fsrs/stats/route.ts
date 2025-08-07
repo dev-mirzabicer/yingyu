@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getAuth } from "@/lib/auth"
-import { getAvailableUnitsForStudent } from "@/lib/actions/students"
+import { getFsrsStats } from "@/lib/actions/fsrs"
 import { handleApiError } from "@/lib/api-utils"
 
 export async function GET(
@@ -9,8 +9,8 @@ export async function GET(
 ) {
   try {
     const { teacher } = await getAuth()
-    const units = await getAvailableUnitsForStudent(params.studentId, teacher.id)
-    return NextResponse.json(units)
+    const stats = await getFsrsStats(params.studentId, teacher.id)
+    return NextResponse.json(stats)
   } catch (error) {
     return handleApiError(error)
   }

@@ -541,5 +541,110 @@ export const StudentService = {
 
     return { createdCount: result.count };
   },
+
+  /**
+   * Retrieves all units a student can potentially start, calculating their readiness status.
+   * @param studentId The UUID of the student.
+   * @param teacherId The UUID of the teacher for authorization.
+   * @returns A promise that resolves to an array of AvailableUnit objects.
+   */
+  async getAvailableUnitsForStudent(
+    studentId: string,
+    teacherId: string
+  ): Promise<AvailableUnit[]> {
+    await authorizeTeacherForStudent(teacherId, studentId);
+
+    const now = new Date();
+
+    // 1. Get all units available to the teacher
+    const allUnits = await prisma.unit.findMany({
+      where: {
+        OR: [{ isPublic: true }, { creatorId: teacherId }],
+        isArchived: false,
+      },
+      include: {
+        items: {
+          include: {
+            vocabularyDeck: {
+              include: {
+                _count: {
+                  select: { cards: true },
+                },
+              },
+            },
+          },
+          orderBy: { order: 'asc' },
+        },
+      },
+    });
+
+    // 2. Get all decks assigned to the student
+    const studentDecks = await prisma.studentDeck.findMany({
+      where: { studentId },
+      select: { deckId: true },
+    });
+    const assignedDeckIds = new Set(studentDecks.map((sd) => sd.deckId));
+
+    // 3. Get all card states for the student to calculate readiness
+    const studentCardStates = await prisma.studentCardState.findMany({
+      where: { studentId },
+      select: {
+        state: true,
+        due: true,
+        card: { select: { deckId: true } },
+      },
+    });
+
+    // Map card states by deck for efficient lookup
+    const statesByDeck = studentCardStates.reduce((acc, state) => {
+      const deckId = state.card.deckId;
+      if (!acc[deckId]) {
+        acc[deckId] = [];
+      }
+      acc[deckId].push(state);
+      return acc;
+    }, {} as Record<string, typeof studentCardStates>);
+
+
+    const availableUnits: AvailableUnit[] = allUnits.map((unit) => {
+      const unitDecks = unit.items
+        .map((item) => item.vocabularyDeck)
+        .filter((deck): deck is NonNullable<typeof deck> => !!deck);
+
+      const missingPrerequisites: string[] = [];
+      let isAvailable = true;
+      let totalCards = 0;
+      let readyCards = 0;
+
+      for (const deck of unitDecks) {
+        totalCards += deck._count?.cards || 0;
+        if (!assignedDeckIds.has(deck.id)) {
+          isAvailable = false;
+          missingPrerequisites.push(deck.name);
+        } else {
+          const deckStates = statesByDeck[deck.id] || [];
+          const dueInDeck = deckStates.filter(
+            (s) => s.state !== 'NEW' && new Date(s.due) <= now
+          ).length;
+          const newInDeck = deckStates.filter((s) => s.state === 'NEW').length;
+          readyCards += dueInDeck + newInDeck;
+        }
+      }
+
+      return {
+        ...unit,
+        items: unit.items,
+        isAvailable,
+        missingPrerequisites,
+        cardStats: {
+          total: totalCards,
+          ready: readyCards,
+        },
+        exerciseCount: unit.items.length,
+      };
+    });
+
+    return availableUnits;
+  },
 };
 

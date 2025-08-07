@@ -4,6 +4,7 @@ import useSWR from "swr"
 import type {
   FullStudentProfile,
   AvailableUnit,
+  FsrsStats,
 } from "@/lib/types"
 import type {
   Payment,
@@ -166,6 +167,21 @@ export function useListeningCandidates(studentId: string) {
     mutate,
     error: error as ApiError | undefined,
   }
+}
+
+export function useFsrsStats(studentId: string) {
+  const { data, error, isLoading, mutate } = useSWR<FsrsStats>(
+    studentId ? `/api/students/${studentId}/fsrs/stats` : null,
+    fetcher
+  );
+
+  return {
+    stats: data,
+    isLoading,
+    isError: error,
+    mutate,
+    error: error as ApiError | undefined,
+  };
 }
 
 export function useAvailableUnits(studentId: string) {

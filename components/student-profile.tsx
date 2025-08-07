@@ -39,6 +39,7 @@ import { useToast } from "@/hooks/use-toast"
 import {
   useStudent,
   useDecks,
+  useAvailableUnits,
   assignDeck,
   updateStudent,
   archiveStudent,
@@ -56,6 +57,9 @@ import {
 import { PaymentManager } from "@/components/payment-manager"
 import { ClassScheduler } from "@/components/class-scheduler"
 import { JobStatusIndicator } from "@/components/ui/job-status-indicator"
+import type { AvailableUnit } from "@/lib/types"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+
 
 interface StudentProfileProps {
   studentId: string
@@ -367,9 +371,10 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="learning">Learning Plan</TabsTrigger>
+          <TabsTrigger value="available-units">Available Units</TabsTrigger>
           <TabsTrigger value="payments">Payment History</TabsTrigger>
           <TabsTrigger value="schedule">Class Schedule</TabsTrigger>
         </TabsList>
@@ -533,6 +538,10 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="available-units">
+          <AvailableUnitsList studentId={student.id} studentName={student.name} />
         </TabsContent>
 
         <TabsContent value="payments">
@@ -751,6 +760,118 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+function AvailableUnitsList({ studentId, studentName }: { studentId: string, studentName: string }) {
+  const { units, isLoading, isError } = useAvailableUnits(studentId)
+  const [isSessionDialogOpen, setIsSessionDialogOpen] = useState(false)
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null)
+
+  const handleStartSession = (unitId: string) => {
+    setSelectedUnitId(unitId)
+    setIsSessionDialogOpen(true)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        {[...Array(3)].map((_, i) => (
+          <Card key={i}>
+            <CardContent className="p-4">
+              <Skeleton className="h-8 w-3/4 mb-2" />
+              <Skeleton className="h-4 w-1/2 mb-4" />
+              <div className="flex justify-between items-center">
+                <Skeleton className="h-6 w-24" />
+                <Skeleton className="h-10 w-32" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center">
+          <p className="text-slate-600">
+            Failed to load available units. Please try again.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Start a New Session</CardTitle>
+          <p className="text-slate-500">
+            Choose a unit to begin a new learning session with the student.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {units.length === 0 && (
+            <p className="text-slate-500 text-center py-4">No units available.</p>
+          )}
+          {units.map((unit) => (
+            <div
+              key={unit.id}
+              className="flex items-center justify-between p-4 border rounded-lg"
+            >
+              <div>
+                <h3 className="font-semibold">{unit.name}</h3>
+                <p className="text-sm text-slate-500">
+                  {unit.exerciseCount} exercises, {unit.cardStats.total} cards
+                </p>
+                <p
+                  className={`text-sm font-medium ${
+                    unit.cardStats.ready > 0 ? "text-green-600" : "text-slate-500"
+                  }`}
+                >
+                  {unit.cardStats.ready} cards ready
+                </p>
+              </div>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="inline-block">
+                      <Button
+                        onClick={() => handleStartSession(unit.id)}
+                        disabled={!unit.isAvailable}
+                      >
+                        <Play className="h-4 w-4 mr-2" />
+                        Start Session
+                      </Button>
+                    </div>
+                  </TooltipTrigger>
+                  {!unit.isAvailable && (
+                    <TooltipContent>
+                      <p>Missing required decks:</p>
+                      <ul className="list-disc list-inside">
+                        {unit.missingPrerequisites.map((deckName) => (
+                          <li key={deckName}>{deckName}</li>
+                        ))}
+                      </ul>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+      <SessionStartDialog
+        studentId={studentId}
+        studentName={studentName}
+        open={isSessionDialogOpen}
+        onOpenChange={setIsSessionDialogOpen}
+        initialUnitId={selectedUnitId}
+      />
     </div>
   )
 }

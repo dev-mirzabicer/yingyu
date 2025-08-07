@@ -213,3 +213,17 @@ export type AvailableUnit = Unit & {
   };
   exerciseCount: number;
 };
+
+export type FsrsStats = {
+  totalCards: number;
+  newCards: number;
+  learningCards: number;
+  reviewCards: number;
+  relearningCards: number;
+  dueToday: number;
+  dueThisWeek: number;
+  overdue: number;
+  totalReviews: number;
+  averageRetention: number;
+  averageResponseTime: number;
+};
