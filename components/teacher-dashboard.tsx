@@ -9,35 +9,37 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Calendar, Clock, User, AlertTriangle, TrendingUp, Play, Plus } from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { useStudents, createStudent, useDecks } from "@/hooks/use-api-enhanced"
+import { useStudents, createStudent } from "@/hooks/api/students"
+import { useDecks } from "@/hooks/api/content"
 import { format } from "date-fns"
 import { SessionStartDialog } from "@/components/session-start-dialog"
 
 export function TeacherDashboard() {
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false)
   const [newStudent, setNewStudent] = useState({ name: "", email: "", notes: "" })
+  const [selectedDeckId, setSelectedDeckId] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [sessionStudent, setSessionStudent] = useState<{ id: string; name: string } | null>(null)
   const { toast } = useToast()
   const { students, isLoading, isError, mutate } = useStudents()
-  const { decks } = useDecks()
+  const { decks, isLoading: areDecksLoading } = useDecks()
 
   const handleAddStudent = async () => {
-    if (!newStudent.name || !newStudent.email) {
+    if (!newStudent.name || !newStudent.email || !selectedDeckId) {
       toast({
         title: "Error",
-        description: "Please fill in all required fields.",
+        description: "Please fill in all required fields, including selecting an initial deck.",
         variant: "destructive",
       })
       return
     }
 
-    const defaultDeck = decks.find(d => d.name === 'Default Seed Deck') || decks[0];
-    if (!defaultDeck) {
+    if (decks.length === 0) {
       toast({
         title: "Cannot Add Student",
         description: "There are no vocabulary decks in the system. Please create a deck first before adding a student.",
@@ -48,12 +50,13 @@ export function TeacherDashboard() {
 
     setIsSubmitting(true)
     try {
-      await createStudent(newStudent, defaultDeck.id)
+      await createStudent(newStudent, selectedDeckId)
       toast({
         title: "Student added successfully",
         description: `${newStudent.name} has been added to your class.`,
       })
       setNewStudent({ name: "", email: "", notes: "" })
+      setSelectedDeckId("")
       setIsAddStudentOpen(false)
       // Refresh the students list
       mutate()
@@ -303,6 +306,27 @@ export function TeacherDashboard() {
                   value={newStudent.email}
                   onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="initial-deck">Initial Vocabulary Deck</Label>
+                <Select value={selectedDeckId} onValueChange={setSelectedDeckId} disabled={areDecksLoading}>
+                  <SelectTrigger id="initial-deck" className="w-full">
+                    <SelectValue placeholder={areDecksLoading ? "Loading decks..." : "Select a deck"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {decks.length > 0 ? (
+                      decks.map((deck) => (
+                        <SelectItem key={deck.id} value={deck.id}>
+                          {deck.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-decks" disabled>
+                        No decks available. Create one first.
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="student-notes">Notes (Optional)</Label>
