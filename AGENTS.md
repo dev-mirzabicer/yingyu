@@ -539,7 +539,7 @@ The current frontend provides a solid foundation, but it contains several signif
 
 ### 5.1. Critical Flaw: The "Fire-and-Forget" Asynchronous Job System
 
--   **Status:** **URGENT & BLOCKING**
+-   **Status:** **COMPLETED**. The problem described above was *completely solved*, the "required action" (and further actions) were executed, and this flaw is not existent anymore. This issue was successfully fixed.
 -   **Problem Description:** The backend features a robust asynchronous job system to handle long-running tasks (FSRS optimization, bulk imports). The frontend correctly initiates these jobs by calling the appropriate API endpoints. However, it **completely discards the `Job` object returned by the API.** It makes no attempt to track the job's status.
 -   **Affected Components:**
     -   `FSRSAnalyticsDashboard.tsx` (`handleOptimizeParameters`, `handleRebuildCache`)
