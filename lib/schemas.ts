@@ -247,7 +247,10 @@ export const AddCardSchema = z.object({
   chineseTranslation: z.string().min(1),
   pinyin: z.string().optional(),
   ipaPronunciation: z.string().optional(),
-  exampleSentences: z.any().optional(), // Can be string or structured object
+  exampleSentences: z.array(z.object({
+    english: z.string(),
+    chinese: z.string(),
+  })).optional(),
   wordType: z.string().optional(),
   difficultyLevel: z.number().int().min(1).max(5).optional(),
   audioUrl: z.string().url().optional().or(z.literal('')),

@@ -46,6 +46,8 @@ import {
 } from "@/hooks/api/content"
 import type { FullUnit, NewUnitItemData } from "@/lib/types"
 import type { Unit, UnitItemType } from "@prisma/client"
+import { FillInBlankExerciseEditor } from "./fill-in-blank-exercise-editor"
+import { GrammarExerciseEditor } from "./grammar-exercise-editor"
 import { AlertTriangle } from "lucide-react"
 
 interface UnitBuilderProps {
@@ -110,7 +112,16 @@ const unitItemTemplates: UnitItemTemplate[] = [
     defaultConfig: {
       title: "Grammar Practice",
       grammarTopic: "",
-      exerciseData: {},
+      exerciseData: {
+        instructions: "Choose the correct option to complete the sentence.",
+        questions: [
+          {
+            text: "He ___ to the store every day.",
+            options: ["go", "goes", "is going"],
+            answer: "goes"
+          }
+        ]
+      },
       difficulty: "INTERMEDIATE",
     },
   },
@@ -122,8 +133,8 @@ const unitItemTemplates: UnitItemTemplate[] = [
     icon: Brain,
     defaultConfig: {
       title: "Fill in the Blank",
-      sentences: [],
-      wordBank: [],
+      sentences: ["The cat is ____ the table."],
+      wordBank: ["on", "under", "in"],
       allowWordBank: true,
     },
   },
@@ -654,27 +665,15 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
           </Select>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="exerciseData">Exercise Data (JSON)</Label>
-          <Textarea
-            id="exerciseData"
-            value={JSON.stringify(editingItem.config.exerciseData || {}, null, 2)}
-            onChange={(e) => {
-              try {
-                const data = JSON.parse(e.target.value)
-                setEditingItem({
-                  ...editingItem,
-                  config: { ...editingItem.config, exerciseData: data },
-                })
-              } catch (error) {
-                // Invalid JSON, don't update
-              }
-            }}
-            placeholder='{"questions": [], "instructions": ""}'
-            rows={6}
-            className="font-mono text-sm"
-          />
-        </div>
+        <GrammarExerciseEditor
+          value={editingItem.config.exerciseData || {}}
+          onChange={(data) => {
+            setEditingItem({
+              ...editingItem,
+              config: { ...editingItem.config, exerciseData: data },
+            })
+          }}
+        />
       </div>
     )
 
@@ -696,51 +695,24 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="sentences">Sentences (JSON Array)</Label>
-          <Textarea
-            id="sentences"
-            value={JSON.stringify(editingItem.config.sentences || [], null, 2)}
-            onChange={(e) => {
-              try {
-                const sentences = JSON.parse(e.target.value)
-                setEditingItem({
-                  ...editingItem,
-                  config: { ...editingItem.config, sentences },
-                })
-              } catch (error) {
-                // Invalid JSON, don't update
-              }
-            }}
-            placeholder='["The cat is _____ the table.", "She _____ to school every day."]'
-            rows={4}
-            className="font-mono text-sm"
-          />
-        </div>
+        <FillInBlankExerciseEditor
+          sentences={editingItem.config.sentences || []}
+          wordBank={editingItem.config.wordBank || []}
+          onSentencesChange={(sentences) => {
+            setEditingItem({
+              ...editingItem,
+              config: { ...editingItem.config, sentences },
+            })
+          }}
+          onWordBankChange={(wordBank) => {
+            setEditingItem({
+              ...editingItem,
+              config: { ...editingItem.config, wordBank },
+            })
+          }}
+        />
 
-        <div className="space-y-2">
-          <Label htmlFor="wordBank">Word Bank (JSON Array)</Label>
-          <Textarea
-            id="wordBank"
-            value={JSON.stringify(editingItem.config.wordBank || [], null, 2)}
-            onChange={(e) => {
-              try {
-                const wordBank = JSON.parse(e.target.value)
-                setEditingItem({
-                  ...editingItem,
-                  config: { ...editingItem.config, wordBank },
-                })
-              } catch (error) {
-                // Invalid JSON, don't update
-              }
-            }}
-            placeholder='["on", "under", "goes", "walks"]'
-            rows={3}
-            className="font-mono text-sm"
-          />
-        </div>
-
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between pt-4 border-t">
           <div className="space-y-1">
             <Label>Allow Word Bank</Label>
             <p className="text-sm text-slate-500">Show word bank to help students</p>

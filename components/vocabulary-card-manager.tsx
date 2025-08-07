@@ -35,6 +35,7 @@ import { useDeckCards, addCardToDeck, updateCard, deleteCard } from "@/hooks/api
 import type { VocabularyCard } from "@prisma/client"
 import { DataTable } from "@/components/data-table"
 import { BulkImportTools } from "@/components/bulk-import-tools"
+import { ExampleSentenceEditor, type ExampleSentence } from "@/components/example-sentence-editor"
 import Papa from "papaparse"
 import { saveAs } from "file-saver"
 
@@ -50,7 +51,7 @@ interface CardFormData {
   chineseTranslation: string
   pinyin: string
   ipaPronunciation: string
-  exampleSentences: string
+  exampleSentences: ExampleSentence[]
   wordType: string
   difficultyLevel: number
   audioUrl: string
@@ -64,7 +65,7 @@ const initialFormData: CardFormData = {
   chineseTranslation: "",
   pinyin: "",
   ipaPronunciation: "",
-  exampleSentences: "",
+  exampleSentences: [],
   wordType: "",
   difficultyLevel: 1,
   audioUrl: "",
@@ -150,7 +151,7 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
     try {
       const cardData = {
         ...formData,
-        exampleSentences: formData.exampleSentences ? JSON.parse(formData.exampleSentences) : null,
+        exampleSentences: formData.exampleSentences.filter(s => s.english && s.chinese),
         audioUrl: formData.audioUrl || undefined,
         imageUrl: formData.imageUrl || undefined,
         videoUrl: formData.videoUrl || undefined,
@@ -191,7 +192,7 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
     try {
       const cardData = {
         ...formData,
-        exampleSentences: formData.exampleSentences ? JSON.parse(formData.exampleSentences) : null,
+        exampleSentences: formData.exampleSentences.filter(s => s.english && s.chinese),
         audioUrl: formData.audioUrl || undefined,
         imageUrl: formData.imageUrl || undefined,
         videoUrl: formData.videoUrl || undefined,
@@ -242,12 +243,29 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
 
   const openEditDialog = (card: VocabularyCard) => {
     setEditingCard(card)
+    
+    let sentences: ExampleSentence[] = [];
+    if (card.exampleSentences) {
+      try {
+        // Handles both stringified JSON and actual JSON objects
+        const parsed = typeof card.exampleSentences === 'string' 
+          ? JSON.parse(card.exampleSentences) 
+          : card.exampleSentences;
+        if (Array.isArray(parsed)) {
+          sentences = parsed;
+        }
+      } catch (e) {
+        console.error("Failed to parse example sentences:", e);
+        // Keep sentences as empty array if parsing fails
+      }
+    }
+
     setFormData({
       englishWord: card.englishWord,
       chineseTranslation: card.chineseTranslation,
       pinyin: card.pinyin || "",
       ipaPronunciation: card.ipaPronunciation || "",
-      exampleSentences: card.exampleSentences ? JSON.stringify(card.exampleSentences, null, 2) : "",
+      exampleSentences: sentences,
       wordType: card.wordType || "",
       difficultyLevel: card.difficultyLevel,
       audioUrl: card.audioUrl || "",
@@ -632,13 +650,9 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
                   <Separator />
 
                   <div className="space-y-2">
-                    <Label htmlFor="exampleSentences">Example Sentences (JSON)</Label>
-                    <Textarea
-                      id="exampleSentences"
+                    <ExampleSentenceEditor
                       value={formData.exampleSentences}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, exampleSentences: e.target.value }))}
-                      placeholder='{"english": "This is an example.", "chinese": "这是一个例子。"}'
-                      rows={3}
+                      onChange={(sentences) => setFormData((prev) => ({ ...prev, exampleSentences: sentences }))}
                       disabled={isSubmitting}
                     />
                   </div>
@@ -865,13 +879,9 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
                   <Separator />
 
                   <div className="space-y-2">
-                    <Label htmlFor="edit-exampleSentences">Example Sentences (JSON)</Label>
-                    <Textarea
-                      id="edit-exampleSentences"
+                    <ExampleSentenceEditor
                       value={formData.exampleSentences}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, exampleSentences: e.target.value }))}
-                      placeholder='{"english": "This is an example.", "chinese": "这是一个例子。"}'
-                      rows={3}
+                      onChange={(sentences) => setFormData((prev) => ({ ...prev, exampleSentences: sentences }))}
                       disabled={isSubmitting}
                     />
                   </div>
