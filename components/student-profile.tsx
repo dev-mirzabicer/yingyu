@@ -30,6 +30,11 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
   const { student, isLoading, isError, mutate } = useStudent(studentId)
   const { decks, isLoading: decksLoading } = useDecks()
 
+  const upcomingClasses =
+    student?.classSchedules
+      ?.filter(schedule => new Date(schedule.scheduledTime) > new Date())
+      .sort((a, b) => new Date(a.scheduledTime).getTime() - new Date(b.scheduledTime).getTime()) || []
+
   const [notes, setNotes] = useState("")
   const [isEditingNotes, setIsEditingNotes] = useState(false)
   const [isSessionDialogOpen, setIsSessionDialogOpen] = useState(false)
