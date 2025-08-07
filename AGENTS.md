@@ -1,10 +1,10 @@
-# AGENTS.md: The Definitive Guide to the Ying-Yu Teaching Platform Backend
+# AGENTS.md: The Definitive Guide to the Yingyu Backend
 
 ## 0. Manifesto: Our Philosophy & Vision
 
 Welcome, agent. You are now part of a project to build not just an application, but a scientifically-backed pedagogical tool. Before you write a single line of code, you must understand our core philosophy. We are not merely building CRUD endpoints; we are engineering a system that empowers teachers, optimizes learning, and is built with a degree of resilience and architectural integrity that is absolute.
 
-> **Our Prime Directive:** To build a teacher-centric English learning platform, optimized for China, that uses a sophisticated FSRS (Free Spaced Repetition Scheduler) engine to provide unprecedented pedagogical insights and operational efficiency. Every architectural decision must serve this directive.
+> **Our Prime Directive:** To build a teacher-centric English learning platform that uses a sophisticated FSRS (Free Spaced Repetition Scheduler) engine to provide unprecedented pedagogical insights and operational efficiency. Every architectural decision must serve this directive.
 
 ### Our Guiding Principles:
 
@@ -66,6 +66,7 @@ graph TD
         J1 -- processes jobs from --> PG
         J1 -- calls internal methods --> S2
         J1 -- calls internal methods --> F1
+        J1 -- calls internal methods --> C1
     end
 
     style DB fill:#cde4ff,stroke:#333,stroke-width:2px
@@ -73,12 +74,12 @@ graph TD
     style Rust fill:#ffd8b1,stroke:#333,stroke-width:2px
 ```
 
--   **API Layer (`app/api`):** The thin, outermost layer. Its only jobs are to define routes, handle authentication (via the `X-Teacher-ID` header), validate incoming data using Zod, and delegate to the appropriate Workflow or Service. It knows nothing of business logic.
+-   **API Layer (`app/api`):** The thin, outermost layer. Its only jobs are to define routes, handle authentication, validate incoming data using Zod, and delegate to the appropriate Workflow or Service. It knows nothing of business logic.
 -   **Workflow Layer (`lib/workflows`):** Orchestrates calls across *multiple* services to accomplish a high-level user story (e.g., "Onboard a Student," which involves creating a student and assigning a deck).
 -   **Service Layer (`lib/actions`):** The heart of our business logic. Each service (`StudentService`, `SessionService`, `ContentService`, `FSRSService`) is responsible for a specific domain. They contain the core logic, enforce business rules, and interact with the database.
 -   **Exercise Handling Layer (`lib/exercises`):** The "brains" of a live session. This specialized layer uses a Dispatcher -> Handler -> Operator pattern to manage the complex state transitions of different exercise types.
 -   **Data & Engine Layer:** Contains our extended Prisma client (`lib/db.ts`), the FSRS engine bridge (`lib/fsrs/engine.ts`), and the PostgreSQL database itself.
--   **Async Processing:** A Vercel Cron job triggers our secure worker endpoint (`/api/worker`), which processes background jobs from a queue in the database. A development-only endpoint (`/api/worker/run`) allows for manual triggering during testing.
+-   **Async Processing:** A scheduler (e.g., Vercel Cron) triggers our secure worker endpoint (`/api/worker`), which processes background jobs from a queue in the database. A development-only endpoint (`/api/worker/run`) allows for manual triggering during testing.
 
 ---
 
@@ -178,53 +179,53 @@ This directory contains the application's soul. Each service is a singleton obje
 
 Manages the lifecycle of all learning materials (Units and Exercises).
 
-*   `getUnitWithDetails(unitId)`: Fetches a complete Unit with all its ordered items and exercises.
-*   `createUnit(data)` / `createDeck(data)`: Creates new, empty Units or Decks.
-*   `addExerciseToUnit(...)`: A critical transactional method. It can either create a brand new exercise or link an existing one, creating the `UnitItem` to place it within the `Unit`.
-*   `forkExercise(...)`: Implements the "copy-on-edit" pattern. It performs a deep copy of a public exercise (including all its cards, if it's a deck) to create a new, private, editable version for a teacher.
-*   `archiveExercise(...)`: Soft-deletes an exercise.
-*   `removeUnitItem(unitItemId)`: Removes an exercise from a unit (but does not archive the exercise itself).
-*   `_bulkAddVocabularyCards(payload)`: An internal method used by the worker for bulk importing cards into a deck.
+*   **`getUnitWithDetails(unitId)`**: Fetches a complete Unit with all its ordered items and exercises.
+*   **`createUnit(data)` / `createDeck(data)`**: Creates new, empty Units or Decks.
+*   **`addExerciseToUnit(...)`**: A critical transactional method. It can either create a brand new exercise or link an existing one, creating the `UnitItem` to place it within the `Unit`.
+*   **`forkExercise(...)`**: Implements the "copy-on-edit" pattern. It performs a deep copy of a public exercise (including all its cards, if it's a deck) to create a new, private, editable version for a teacher.
+*   **`archiveExercise(...)`**: Soft-deletes an exercise.
+*   **`removeUnitItem(unitItemId)`**: Removes an exercise from a unit (but does not archive the exercise itself).
+*   **`_bulkAddVocabularyCards(payload)`**: An internal method used by the worker for bulk importing cards into a deck.
 
 #### `StudentService` (`/lib/actions/students.ts`)
 
 Manages all aspects of a student's profile and their relationship with the teacher.
 
-*   `createStudent(...)` / `archiveStudent(...)` / `updateStudent(...)`: Standard CRUD operations for student profiles, all protected by `authorizeTeacherForStudent`.
-*   `getStudentProfile(studentId, teacherId)`: Fetches a rich, aggregated view of a student, including their assigned decks, upcoming classes, and payment status.
-*   `assignDeckToStudent(...)`: A key transactional method. It creates the `StudentDeck` association. Crucially, if the deck is large (>50 cards), it **creates a job** of type `INITIALIZE_CARD_STATES` to handle the creation of `StudentCardState` records asynchronously. For small decks, it does this synchronously.
-*   `recordPayment(...)` / `createSchedule(...)` / `updateSchedule(...)`: Manages student payments and class schedules.
-*   `_initializeCardStates(payload)`: Internal worker method. Creates the initial `StudentCardState` for every card in a newly assigned deck.
-*   `_bulkAddStudents(payload)` / `_bulkAddSchedules(payload)`: Internal worker methods for bulk imports.
+*   **`createStudent(...)` / `archiveStudent(...)` / `updateStudent(...)`**: Standard CRUD operations for student profiles, all protected by `authorizeTeacherForStudent`.
+*   **`getStudentProfile(studentId, teacherId)`**: Fetches a rich, aggregated view of a student, including their assigned decks, upcoming classes, and payment status.
+*   **`assignDeckToStudent(...)`**: A key transactional method. It creates the `StudentDeck` association. Crucially, if the deck is large (>50 cards), it **creates a job** of type `INITIALIZE_CARD_STATES` to handle the creation of `StudentCardState` records asynchronously. For small decks, it does this synchronously.
+*   **`recordPayment(...)` / `createSchedule(...)` / `updateSchedule(...)`**: Manages student payments and class schedules.
+*   **`_initializeCardStates(payload)`**: Internal worker method. Creates the initial `StudentCardState` for every card in a newly assigned deck.
+*   **`_bulkAddStudents(payload)` / `_bulkAddSchedules(payload)`**: Internal worker methods for bulk imports.
 
 #### `FSRSService` (`/lib/actions/fsrs.ts`)
 
 The scientific core. This service is the bridge between our application and the FSRS engine.
 
-*   `recordReview(...)`: **The Heart of FSRS.** This is the most complex method.
+*   **`recordReview(...)`**: **The Heart of FSRS.** This is the most complex method.
     1.  It first determines if a card is in "learning steps" (e.g., 1m, 10m) or is managed by the main FSRS algorithm.
     2.  If in learning steps, it applies simple interval logic.
     3.  If using FSRS, it fetches the student's FSRS parameters, calculates the next state using the FSRS engine, and updates the `StudentCardState` with the new `stability`, `difficulty`, and `due` date.
     4.  It **always** records the review in the `ReviewHistory` table.
-*   `getInitialReviewQueue(...)`: Assembles the list of cards for a new study session, intelligently combining cards that are due, cards in relearning, and a configured number of new cards.
-*   `createOptimizeParametersJob(...)`: Creates a background job to analyze a student's entire `ReviewHistory` and compute the optimal FSRS `w` parameters for their learning pattern.
-*   `createRebuildCacheJob(...)`: Creates a job to wipe and perfectly reconstruct a student's `StudentCardState` table from their `ReviewHistory`. This is a powerful maintenance tool.
-*   `_optimizeParameters(payload)` / `_rebuildCacheForStudent(payload)`: The internal worker methods that perform the actual FSRS calculations.
+*   **`getInitialReviewQueue(...)`**: Assembles the list of cards for a new study session, intelligently combining cards that are due, cards in relearning, and a configured number of new cards.
+*   **`createOptimizeParametersJob(...)`**: Creates a background job to analyze a student's entire `ReviewHistory` and compute the optimal FSRS `w` parameters for their learning pattern.
+*   **`createRebuildCacheJob(...)`**: Creates a job to wipe and perfectly reconstruct a student's `StudentCardState` table from their `ReviewHistory`. This is a powerful maintenance tool.
+*   **`_optimizeParameters(payload)` / `_rebuildCacheForStudent(payload)`**: The internal worker methods that perform the actual FSRS calculations.
 
 #### `SessionService` (`/lib/actions/sessions.ts`)
 
 Orchestrates a live teaching session. It acts as a state machine.
 
-*   `startSession(...)`: Creates the `Session` record and calls the appropriate `ExerciseHandler` to initialize the first `UnitItem`, creating the initial `progress` state.
-*   `submitAnswer(...)`:
+*   **`startSession(...)`**: Creates the `Session` record and calls the appropriate `ExerciseHandler` to initialize the first `UnitItem`, creating the initial `progress` state.
+*   **`submitAnswer(...)`**:
     1.  Receives an action from the user (e.g., `REVEAL_ANSWER`, `SUBMIT_RATING`).
     2.  Delegates to the current `ExerciseHandler` to process the action.
     3.  The handler returns the new progress state and a result.
     4.  It checks if the current `UnitItem` is complete.
     5.  If complete, it advances to the next `UnitItem` in the `Unit` and calls its `initialize` method. If the unit is finished, it marks the session as `COMPLETED`.
     6.  It saves the new state to the database.
-*   `endSession(...)`: Manually ends a session.
-*   `getFullState(...)`: The primary read-operation, fetching the entire `FullSessionState` object needed by the frontend to render the UI.
+*   **`endSession(...)`**: Manually ends a session.
+*   **`getFullState(...)`**: The primary read-operation, fetching the entire `FullSessionState` object needed by the frontend to render the UI.
 
 ---
 
@@ -245,7 +246,7 @@ This is an elegant and extensible pattern for handling different types of exerci
 
 ## 6. API Endpoints Deep Dive (`/app/api`)
 
-Each `route.ts` file defines one or more HTTP endpoints. All routes are authenticated using a temporary `X-Teacher-ID` header, which would be replaced by a proper authentication system (like Clerk, as hinted by `getAuth`) in production.
+Each `route.ts` file defines one or more HTTP endpoints. All routes are authenticated using a temporary `X-Teacher-ID` header, which would be replaced by a proper authentication system in production.
 
 #### `/bulk-import`
 
@@ -294,6 +295,7 @@ Each `route.ts` file defines one or more HTTP endpoints. All routes are authenti
 *   `GET /api/students/[studentId]/fsrs/listening-candidates`: Gets cards that are well-known and suitable for listening practice.
 *   `POST /api/students/[studentId]/fsrs/optimize-parameters`: Creates a job to optimize FSRS parameters for the student.
 *   `POST /api/students/[studentId]/fsrs/rebuild-cache`: Creates a job to rebuild the student's FSRS card state cache.
+*   `GET /api/students/[studentId]/fsrs/stats`: Gets aggregated FSRS statistics for a student.
 
 #### `/units`
 
@@ -302,6 +304,7 @@ Each `route.ts` file defines one or more HTTP endpoints. All routes are authenti
 *   `GET /api/units/[unitId]`: Gets a detailed view of a single unit.
 *   `PUT /api/units/[unitId]`: Updates a unit's details.
 *   `POST /api/units/[unitId]/items`: Adds a new exercise item to a unit.
+*   `PUT /api/units/[unitId]/items/reorder`: Reorders the items within a unit.
 *   `DELETE /api/units/[unitId]/items/[itemId]`: Removes an item from a unit.
 
 #### `/worker`
@@ -396,211 +399,253 @@ The current foundation is solid. The next phases of development will build upon 
     -   Create a new `JobType` for `GENERATE_PRACTICE_PDF`.
     -   Implement a service that uses a headless browser (e.g., Puppeteer) to render practice sheets based on a student's due cards.
 3.  **Implement Full Authentication:**
-    -   Replace the `X-Teacher-ID` header with a proper NextAuth.js or Clerk-based JWT implementation.
+    -   Replace the `X-Teacher-ID` header with a proper authentication system like Clerk or NextAuth.js.
 
 You now have the knowledge. Build with precision, resilience, and adherence to the vision.
 
-Of course. Here is the `AGENTS.md` for the frontend codebase, crafted with the requested level of detail and incorporating the deep analysis of its current state.
 
-***
+Of course. Here is the `AGENTS.md` for the frontend, crafted with the requested level of detail and incorporating the critical analysis of the codebase.
 
-# AGENTS.md: The Definitive Guide to the Ying-Yu Teaching Platform Frontend
+---
 
-Welcome, agent. You have already familiarized yourself with the robust, resilient architecture of our backend. This document is your guide to its counterpart: the frontend. Our mission here is to build a user interface that is not merely a thin client for our API, but a sophisticated, responsive, and data-rich tool that empowers the teacher at every step.
+# AGENTS.md: The Definitive Guide to the Yingyu Frontend
 
-You are expected to have read and internalized the backend `AGENTS.md`. The principles of resilience, atomicity, and data integrity are mirrored here in our approach to UI/UX and state management.
+## 0. Manifesto: Our Philosophy & Vision
 
-## 0. Manifesto: The Frontend Philosophy
+Welcome, agent. You have familiarized yourself with the backend's prime directive. The frontend is the tangible manifestation of that vision. It is the bridge between the teacher and our powerful pedagogical engine. We do not build pages; we craft precision instruments for teaching.
 
-Our backend is the engine of pedagogical precision; our frontend is the cockpit. It must be intuitive, fast, and provide the teacher with complete situational awareness of their students' learning journeys.
-
-> **Our Frontend Directive:** To build a highly interactive, component-driven user interface using Next.js and TypeScript that provides teachers with real-time insights and seamless control over their content, students, and live sessions. Every component, hook, and state transition must serve the teacher's workflow and reduce their cognitive load.
+Your mission is to translate the backend's robust, resilient logic into a user experience that is intuitive, responsive, and insightful. Every component you build, every state you manage, and every interaction you design must serve the teacher.
 
 ### Our Guiding Principles:
 
-1.  **The Component is the Contract:** We build with a modular, component-based architecture. Each component has a clear responsibility, from a simple `Button` to a complex `LiveSession` manager. Pages in the `app/` directory are primarily for routing and composing these smart components.
-2.  **Server State is King (via SWR):** All data that originates from the server is managed by SWR (`swr`). We leverage its powerful caching, revalidation, and mutation capabilities to ensure the UI is always synchronized with the backend's source of truth. We do not store server data in local component state.
-3.  **Client State is Ephemeral (via Zustand):** State that is purely client-side and/or global (e.g., the real-time status of a live session, UI toggles) is managed by our lightweight Zustand store. This creates a clean separation between server cache and UI state.
-4.  **Hooks are the Logic Layer:** Components should be declarative. The imperative logic—fetching data, mutating state, handling side effects—is encapsulated within our custom hooks in the `hooks/` directory. This makes components cleaner, more reusable, and easier to test.
-5.  **Type Safety is Non-Negotiable:** We use TypeScript rigorously. All API payloads, component props, and data structures are explicitly typed in `lib/types.ts`, ensuring a tight contract between the frontend and backend and preventing entire classes of runtime errors.
+1.  **The UI is a Tool, Not a Destination:** The frontend is a cockpit for the teacher. Its purpose is to present complex data in an understandable way, to streamline workflows, and to get out of the way. Clarity, efficiency, and low cognitive load are our primary UI/UX goals.
+2.  **State Management is Sacred:** The client-side state is a reflection of the backend's source of truth. We manage it with rigor and precision. We use dedicated, specialized stores for complex state (Zustand) and a robust caching/revalidation strategy for server state (SWR). We do not mix these concerns.
+3.  **Components are Specialized and Composable:** We adhere to a strict component hierarchy. **Page Components** (`/app`) are for routing and layout. **Smart Components** (`/components`) are stateful orchestrators that manage a specific feature (e.g., `StudentProfile`). **UI Components** (`/components/ui`) are "dumb," reusable building blocks. This separation is non-negotiable.
+4.  **Data Flows Unidirectionally:** Data is fetched at the highest necessary level (typically in Pages or Smart Components via our API hooks) and flows down to child components via props. Actions and events flow up from children via callbacks. This predictable pattern prevents bugs and makes the system understandable.
+5.  **The API Layer is the Single Gateway:** All communication with the backend happens through the custom hooks in `/hooks/api`. Components do not contain `fetch` calls. This centralizes our data-fetching logic, error handling, and optimistic update strategies, ensuring a consistent and resilient connection to the backend.
+
+Internalize these principles. They are the foundation upon which this entire user interface is built and the standard to which all new contributions will be held.
 
 ---
 
 ## 1. Frontend Architecture Overview
 
-Our frontend is a Next.js application utilizing the App Router. It is architecturally designed for a clear separation of concerns, ensuring that data fetching, state management, and UI rendering are distinct, decoupled layers.
+Our frontend is a Next.js application utilizing the App Router, built with TypeScript, Tailwind CSS, and `shadcn/ui`. It is architecturally designed for a clear separation of concerns, mirroring the layered approach of the backend.
 
 ```mermaid
 graph TD
-    subgraph "User Interaction"
-        U[Teacher] --> P[Pages (app/)]
+    subgraph "User Interface (React Components)"
+        P1[Page (`/app/.../page.tsx`)] --> C1(Smart Component)
+        C1 --> C2(Smart Component)
+        C1 --> UI1(UI Component)
+        C2 --> UI2(UI Component)
     end
 
-    subgraph "Presentation Layer (components/)"
-        P --> C1[TeacherDashboard]
-        P --> C2[StudentProfile]
-        P --> C3[LiveSession]
-        P_Units[app/units/[unitId]] --> C4[UnitEditor]
-        C_Shared[Shared Components] --> DT[DataTable]
-        C_Shared --> SD[SessionStartDialog]
+    subgraph "State & Data Management (Hooks)"
+        C1 -- uses --> H1(API Hooks `/hooks/api`)
+        C2 -- uses --> H2(Store Hooks `/hooks/stores`)
     end
 
-    subgraph "Logic & State Layer (hooks/)"
-        C1 --> H_S[useStudents]
-        C2 --> H_S
-        C2 --> H_D[useDecks]
-        C3 --> H_LS[useSession]
-        C3 --> H_Z[useLiveSessionStore]
-        C4 --> H_U[useUnit]
-
-        H_S --> A1[API Hooks (api/students.ts)]
-        H_D --> A2[API Hooks (api/content.ts)]
-        H_LS --> A3[API Hooks (api/sessions.ts)]
-        H_U --> A2
+    subgraph "API Abstraction Layer"
+        H1 -- calls --> U1(API Utils `/hooks/api/utils.ts`)
+        U1 -- `fetcher` & `mutateWithOptimistic` --> A1[Backend API Endpoints]
     end
 
-    subgraph "API Abstraction Layer (hooks/api/)"
-        A1 -- uses --> UTL[utils.ts]
-        A2 -- uses --> UTL
-        A3 -- uses --> UTL
-        UTL -- contains --> F[fetcher]
-        UTL -- contains --> M[mutateWithOptimistic]
+    subgraph "Global State (Zustand)"
+        H2 -- reads/writes --> ZS[Zustand Store]
+        UI2 -- reads from --> H2
     end
 
-    subgraph "External Services"
-        F --> BE[(Backend API)]
-    end
+    A1 -- HTTP Request/Response --> Backend(Yingyu Backend)
 
-    style BE fill:#cde4ff,stroke:#333,stroke-width:2px
+    style P1 fill:#e6f2ff
+    style C1 fill:#cde4ff
+    style C2 fill:#cde4ff
+    style H1 fill:#d4edda
+    style H2 fill:#fff3cd
+    style ZS fill:#fff3cd
+    style U1 fill:#d4edda
+    style Backend fill:#f8d7da
 ```
 
--   **Pages (`app/`):** The entry points for routing. These are server components where possible, responsible for fetching initial data via route params and composing the "smart" components that make up the UI. For example, `/app/students/[studentId]/page.tsx` simply extracts the `studentId` and passes it to the `<StudentProfile />` component.
--   **Components (`components/`):** The heart of the UI. This directory contains everything from atomic elements (`Button`, `Input`) to complex, feature-rich "smart" components like `LiveSession` or `StudentProfile`. These components are responsible for rendering the UI and calling hooks to fetch data or perform actions.
--   **Hooks (`hooks/`):** The logic layer.
-    -   **`hooks/api/*.ts`:** These files contain our custom SWR hooks, abstracting all data fetching. A component will call `useStudents()` instead of `useSWR('/api/students')`, providing a clean, domain-specific API.
-    -   **`hooks/stores/*.ts`:** This contains our Zustand global state stores, used for complex client-side state that needs to be shared across components without prop-drilling (e.g., the live state of a session).
--   **API Abstraction (`hooks/api/utils.ts`):** This is the lowest-level data fetching utility. It contains a single, configured `fetcher` function used by all SWR hooks, ensuring that headers (like the mock `X-Teacher-ID`) and error handling are centralized.
+-   **Pages (`/app`):** The entry points of the application, defined by the Next.js App Router. Their primary role is to fetch initial data required for the page using our API hooks and compose the main "Smart Components" that constitute the page's functionality.
+-   **Smart Components (`/components`):** These are the workhorses of the application (e.g., `StudentProfile`, `UnitBuilder`, `LiveSession`). They are stateful, often fetching their own data or subscribing to global stores. They orchestrate UI components and handle user interactions, calling API hooks to mutate data.
+-   **UI Components (`/components/ui`):** These are our reusable, "dumb" components, largely sourced from `shadcn/ui`. They receive all data and callbacks via props and have no knowledge of the application's business logic or data-fetching strategies.
+-   **API Hooks (`/hooks/api`):** This is the dedicated data layer for the frontend. It uses `SWR` for server state management (caching, revalidation, error handling). All API calls are encapsulated here in domain-specific files (e.g., `students.ts`, `content.ts`). This is the *only* layer that communicates with the backend.
+-   **Store Hooks (`/hooks/stores`):** This layer manages complex, global, or cross-component client-side state using `Zustand`. The prime example is `use-live-session-store.ts`, which manages the real-time state of a teaching session, decoupling the `LiveSession` component from the timer and action-locking logic.
 
 ---
 
-## 2. Directory & Component Deep Dive
+## 2. Core Concepts & Architectural Patterns
 
-### `app/` - The Routing Layer
+Mastering these patterns is essential to contributing effectively.
 
-Each directory corresponds to a URL path. The `page.tsx` file within it is the component rendered for that route.
+### The Data Fetching Layer: SWR and the API Hooks
 
--   `/app/students/[studentId]/page.tsx`: Renders the `<StudentProfile>` component for a specific student.
--   `/app/session/[sessionId]/page.tsx`: Renders the `<LiveSession>` component, the most complex interactive view in the application.
--   `/app/decks/page.tsx`: The main view for managing all of a teacher's `VocabularyDecks`.
--   `/app/units/page.tsx`: The main view for managing all `Units` (lesson plans).
--   `/app/analytics/page.tsx`: The entry point for the FSRS analytics dashboard.
+-   **Location:** `/hooks/api/*.ts`, `/hooks/api/utils.ts`
+-   **Pattern:** We use `SWR` (Stale-While-Revalidate) as our framework for all server state management. This gives us caching, automatic revalidation on focus, and a consistent way to handle loading/error states out of the box.
+-   **Implementation:**
+    1.  **`fetcher` (`utils.ts`):** A single, global `fetch` wrapper that automatically includes the (currently mock) `X-Teacher-ID` header and provides standardized error handling.
+    2.  **API Hooks (e.g., `useStudents` in `students.ts`):** Each hook is a simple wrapper around `useSWR`, providing a typed, domain-specific interface for components. For example, a component calls `useStudents()` instead of `useSWR('/api/students', fetcher)`. This abstraction makes components cleaner and decouples them from the specific API endpoint URL.
+    3.  **`mutateWithOptimistic` (`utils.ts`):** A powerful wrapper for all `POST`, `PUT`, and `DELETE` requests. It handles the API call and, crucially, can be used to provide an *optimistic update* to the SWR cache, making the UI feel instantaneous.
 
-### `components/` - The UI Building Blocks
+### The Global State Layer: Zustand for Live State
 
-These are the "smart" components that encapsulate major features.
+-   **Location:** `/hooks/stores/use-live-session-store.ts`
+-   **Problem:** A live teaching session involves rapidly changing state (timers, loading flags for actions, queue progress) that needs to be accessed and controlled by multiple components. Prop drilling would be inefficient and complex.
+-   **Solution:** We use `Zustand`, a lightweight state management library.
+    -   **The Store (`useLiveSessionStore`):** Defines the state's "shape" (e.g., `isActionLoading`, `elapsedTime`) and the actions that can modify it (e.g., `startAction`, `endAction`, `incrementReviewCount`).
+    -   **Selectors (`useProgressData`):** The store also provides selectors, which are hooks that compute *derived data* from the raw state. This is a critical performance optimization. Instead of recalculating progress percentages in a component on every render, the component subscribes to the pre-calculated value from the selector, and only re-renders when *that specific value* changes.
 
--   **`teacher-dashboard.tsx`**: The application's home page. It provides an at-a-glance summary of key metrics: active students, upcoming classes, and students with low class balances. It renders a grid of student cards for quick access.
--   **`student-profile.tsx`**: A central hub for managing a single student. It uses a tabbed interface to separate concerns:
-    -   **Overview:** Shows key stats and teacher's notes.
-    -   **Learning Plan:** Manages the student's assigned `VocabularyDecks`.
-    -   **Payment History:** Renders the `<PaymentManager>` component.
-    -   **Class Schedule:** Renders the `<ClassScheduler>` component.
--   **`live-session.tsx`**: The most complex real-time component. It orchestrates the entire teaching experience, fetching the `FullSessionState` every second. It displays the current exercise, handles user input (revealing answers, submitting ratings), and manages a sidebar with live progress stats.
--   **`unit-editor.tsx`**: The interface for building and modifying a `Unit`. It allows a teacher to add, remove, and configure exercises within a lesson plan.
--   **`vocabulary-card-manager.tsx`**: A detailed table view for managing the individual `VocabularyCard`s within a specific `VocabularyDeck`. Includes functionality for adding, editing, deleting, and bulk-importing/exporting cards.
--   **`fsrs-analytics-dashboard.tsx`**: Provides deep insights into a student's FSRS data. It visualizes card state distribution, performance metrics, and provides detailed tables of due cards and listening candidates.
--   **`data-table.tsx`**: A generic, reusable table component used throughout the application. It includes built-in support for pagination, searching, and sorting.
+### The Exercise Rendering Engine
 
-### `hooks/` - The Logic & State Layer
-
--   **`hooks/api/*.ts`**: These files provide clean abstractions over SWR. For example, `hooks/api/students.ts` exports `useStudents()` and `useStudent(id)`, which handle the underlying SWR calls. It also exports mutation functions like `createStudent` and `recordPayment`. This pattern is repeated for `content`, `sessions`, and `teacher` domains.
--   **`hooks/stores/use-live-session-store.ts`**: The Zustand store for the `LiveSession` component. It tracks state that is either purely client-side (like `isPaused`) or changes too rapidly to be persisted to the backend on every update (like `elapsedTime`). This offloads work from the server and provides a more responsive feel.
+-   **Location:** `/components/exercises/dispatcher.ts`
+-   **Problem:** A `Unit` can contain many different types of exercises (`VOCABULARY_DECK`, `GRAMMAR_EXERCISE`, etc.). The `LiveSession` component needs to render the correct UI for the current exercise without becoming a monolithic `if/else` or `switch` statement.
+-   **Solution:** The Frontend Dispatcher pattern, which perfectly mirrors the backend's `ExerciseHandler` pattern.
+    1.  **`dispatcher.ts`:** This file contains a simple map (`exerciseDispatcher`) that links a `UnitItemType` enum to a specific React component.
+    2.  **Exercise Components (`VocabularyExercise.tsx`, etc.):** Each exercise type has its own dedicated component that knows how to render its specific `progress` state and what actions (e.g., `onSubmitRating`) to emit.
+    3.  **`getExerciseComponent`:** A utility function that takes a `UnitItemType` and returns the corresponding component from the map, or a fallback `UnsupportedExercise` component.
+-   **Implication for You:** To add a new exercise UI, you create a new component that conforms to the `ExerciseProps` interface and register it in the `exerciseDispatcher` map. The `LiveSession` component does not need to be touched. *(Note: See Section 5 for a critical refactoring needed to bring the current code in line with this intended pattern).*
 
 ---
 
-## 3. Key Workflow in Action: Starting a Session
+## 3. Directory & File Deep Dive
 
-To understand how the layers interact, let's trace a critical user workflow:
+This section provides a detailed breakdown of the codebase's structure.
 
-1.  **Teacher Action:** The teacher is on the `TeacherDashboard` and clicks the "Start Session" button on a student's card.
-2.  **Component Interaction:** This action triggers the `SessionStartDialog` component to open, passing the `studentId`.
-3.  **Data Fetching:** Inside `SessionStartDialog`, the `useAvailableUnits(studentId)` hook is called. This hook, defined in `hooks/api/students.ts`, makes a `GET` request to the `/api/students/[studentId]/available-units` endpoint. SWR manages the fetching, loading state, and caching.
-4.  **UI Rendering:** The dialog displays a list of available units for the student. The teacher selects a `Unit`.
-5.  **User Action & Mutation:** The teacher clicks the final "Start Session" button. This calls the `startSession(studentId, unitId)` function from `hooks/api/sessions.ts`.
-6.  **API Call:** The `startSession` function performs a `POST` request to `/api/sessions/start`.
-7.  **Navigation:** Upon a successful response from the API, the function returns the new `Session` object. The component then uses Next.js's `useRouter` to navigate the teacher to `/session/[sessionId]`, where `[sessionId]` is the ID of the newly created session.
-8.  **Live Session Begins:** The `LiveSession` component mounts. Its `useSession(sessionId)` hook begins polling the `/api/sessions/[sessionId]` endpoint every second, keeping the UI in perfect sync with the backend state machine as the lesson progresses.
+#### `/app` - Pages & Layouts
 
----
+This is the core of the Next.js App Router. Each folder represents a URL segment.
 
-## 4. Critical Implementation Gaps & Immediate Roadmap
+-   `/app/layout.tsx`: The root layout of the entire application. It sets up the `ThemeProvider`, the `SidebarProvider`, and the main `AppSidebar`. All other pages are rendered as its children.
+-   `/app/page.tsx`: The main dashboard page, rendered at the root URL. It composes the `TeacherDashboard` component.
+-   `/app/students/[studentId]/page.tsx`: A dynamic route page for displaying a single student's profile. It extracts the `studentId` from the URL and passes it to the `StudentProfile` smart component.
+-   `/app/session/[sessionId]/page.tsx`: The page for a live teaching session. It passes the `sessionId` to the `LiveSession` component.
+-   **Other Page Files:** Each file (e.g., `/app/decks/page.tsx`, `/app/analytics/page.tsx`) serves as the entry point for a major feature, typically composing a single, primary smart component that encapsulates that feature's logic.
 
-The current frontend provides a solid foundation, but it contains several significant implementation gaps and oversimplifications that must be addressed to achieve production-grade quality. The following tasks are the highest priority for any agent working on this codebase.
+#### `/components` - Smart & UI Components
 
-### 5.1. Critical Flaw: The "Fire-and-Forget" Asynchronous Job System
+This is where the majority of the UI logic resides.
 
--   **Status:** **COMPLETED**. The problem described above was *completely solved*, the "required action" (and further actions) were executed, and this flaw is not existent anymore. This issue was successfully fixed.
--   **Problem Description:** The backend features a robust asynchronous job system to handle long-running tasks (FSRS optimization, bulk imports). The frontend correctly initiates these jobs by calling the appropriate API endpoints. However, it **completely discards the `Job` object returned by the API.** It makes no attempt to track the job's status.
--   **Affected Components:**
-    -   `FSRSAnalyticsDashboard.tsx` (`handleOptimizeParameters`, `handleRebuildCache`)
-    -   `BulkImportTools.tsx` (`processImport`)
-    -   `StudentProfile.tsx` and `StudentsPage.tsx` (when assigning large decks)
--   **Impact on User:** The teacher has zero feedback on critical, long-running operations. They cannot tell if a bulk import is pending, running, has succeeded, or has failed. The "Results" tab in the import tools is permanently non-functional. This breaks a core architectural principle of the application.
--   **Required Action:**
-    1.  **Backend Task:** Create a new API endpoint: `GET /api/jobs/[jobId]` that allows the frontend to poll for the status of a specific job.
-    2.  **Frontend Hook:** Create a new SWR hook, `useJobStatus(jobId)`, that polls the new endpoint. The polling interval should be configurable and should stop once the job status is `COMPLETED` or `FAILED`.
-    3.  **Integration:**
-        -   In `FSRSAnalyticsDashboard` and `BulkImportTools`, when a job is created, store the returned `jobId` in the component's state.
-        -   Use the `useJobStatus` hook to track the job's progress.
-        -   Update the UI dynamically based on the job's status: show a "Processing..." indicator for `PENDING`/`RUNNING`, a success message for `COMPLETED`, and an error alert for `FAILED`.
-        -   Enable the currently dead UI elements (like progress bars and results tabs) to display the final `result` or `error` from the job object.
+-   `/components/app-sidebar.tsx`: The main navigation sidebar for the application. It contains the static navigation structure and handles highlighting the active link based on the current `pathname`.
+-   `/components/student-profile.tsx`: A large, "smart" component that acts as a hub for all student-related information. It uses the `useStudent` hook to fetch data and composes other components like `PaymentManager` and `ClassScheduler` within a tabbed interface.
+-   `/components/live-session.tsx`: The component responsible for rendering a live teaching session. It uses the `useSession` hook for real-time data and the `useLiveSessionStore` for managing its complex internal state. **(Note: This component requires critical refactoring - see Section 5).**
+-   `/components/unit-builder.tsx`: A complex, stateful component for creating and editing lesson `Units`. It manages drag-and-drop functionality for `UnitItems` and handles the logic for configuring different exercise types.
+-   `/components/vocabulary-card-manager.tsx`: A dedicated component for CRUD operations on `VocabularyCard`s within a specific `VocabularyDeck`.
+-   `/components/fsrs-analytics-dashboard.tsx`: Renders the FSRS analytics for a selected student. It fetches data using multiple FSRS-specific API hooks.
+-   `/components/exercises/`: This directory is the heart of the extensible exercise engine, containing the `dispatcher.ts` and individual components for each `UnitItemType`.
 
-### 5.2. Incomplete Core Feature: The Unit Editor
+#### `/hooks` - The Logic Core
 
--   **Status:** **HIGH PRIORITY**
--   **Problem Description:** The `UnitEditor` is the primary tool for creating lesson plans, a core teacher activity. It is currently in a read-only state with several key interactions missing.
--   **Affected Components:** `UnitEditor.tsx`, `UnitBuilder.tsx`
--   **Impact on User:** Teachers can see the exercises in a unit but cannot modify the lesson plan in any meaningful way.
--   **Required Actions:**
-    1.  **Implement Drag-and-Drop:** The backend `UnitItem` model has an `order` field. Implement drag-and-drop functionality (using a library like `@hello-pangea/dnd`) in the `UnitEditor` to allow teachers to re-order exercises. On drop, the frontend must call a new backend endpoint to persist the new order for all affected `UnitItem`s in a single transaction.
-    2.  **Implement Item Removal:** The `handleRemoveExercise` function exists but is not connected to any UI. Add a "Remove" button to each exercise item in the editor. This button should call the existing `removeUnitItem` API hook.
-    3.  **Implement Item Configuration:** The `handleConfigureExercise` function is also a placeholder. Add a "Configure" button that opens a dialog (`ItemConfigDialog`) where teachers can modify the `exerciseConfig` JSON for a `UnitItem` (e.g., change the number of new cards for a vocabulary exercise). This will use the `updateUnitItemConfig` API hook.
+This directory contains all non-UI logic, cleanly separated from the components.
 
-### 5.3. Incomplete Core Feature: Student & Content Workflows
-
--   **Status:** **HIGH PRIORITY**
--   **Problem Description:** Several fundamental workflows for managing students and their learning materials are incomplete.
--   **Affected Components:** `StudentsPage.tsx`, `StudentProfile.tsx`
--   **Impact on User:** Teachers cannot properly onboard new students or assign new decks to existing students, which are primary daily tasks.
--   **Required Actions:**
-    1.  **Fix Student Onboarding:** In `StudentsPage.tsx`, replace the hardcoded `'Default Seed Deck'` logic in `handleAddStudent`. The "Add Student" dialog must be enhanced to include a `<Select>` dropdown populated with all available `VocabularyDecks`. The selected deck's ID should be passed to the `createStudent` API call, which uses the `onboard-student` workflow.
-    2.  **Implement Deck Assignment:** In `StudentProfile.tsx`, the `handleAssignDeck` function is an empty placeholder. It must be implemented to call the `assignDeck(studentId, deckId)` API hook using the `selectedDeckId` from the dialog's state.
-
-### 5.4. Missing Frontend Logic: The Exercise Dispatcher
-
--   **Status:** **MEDIUM PRIORITY**
--   **Problem Description:** The backend uses a sophisticated `Dispatcher -> Handler` pattern to manage different exercise types. The frontend `LiveSession` component lacks this, containing only a hardcoded `if` statement for `VOCABULARY_DECK`.
--   **Affected Components:** `LiveSession.tsx`
--   **Impact on User:** The platform cannot be extended with new exercise types (Grammar, Listening, etc.) without rewriting the core `LiveSession` component. The frontend does not respect the extensible architecture of the backend.
--   **Required Action:**
-    1.  Create a "dispatcher" object or function within `LiveSession.tsx`.
-    2.  This dispatcher will be a map where keys are `UnitItemType` enums and values are the corresponding React components (e.g., `{ VOCABULARY_DECK: VocabularyExercise, GRAMMAR_EXERCISE: GrammarExercise }`).
-    3.  In the main render function of `LiveSession`, use the `session.currentUnitItem.type` to look up the correct component from the dispatcher and render it dynamically. This decouples the session manager from the specific exercise implementations.
-
-### 5.5. Performance & Data Integrity Issues
-
--   **Status:** **MEDIUM PRIORITY**
--   **Problem Description:** Several components fetch more data than necessary and perform calculations on the client that should be handled by the backend, or display "hallucinated" data that doesn't exist.
--   **Affected Components:** `FSRSAnalyticsDashboard.tsx`, `PublicDeckLibrary.tsx`, `StudentProfile.tsx`
--   **Impact on User:** Potential for slow performance on large accounts, and a confusing UI that displays misleading or entirely fake information.
--   **Required Actions:**
-    1.  **Refactor FSRS Analytics:** Create new backend endpoints that perform the aggregation of FSRS statistics (e.g., `GET /api/students/[studentId]/fsrs/stats`). The `FSRSAnalyticsDashboard` should call this endpoint instead of fetching the entire list of cards and calculating stats on the client.
-    2.  **Remove Fabricated Data:** In `PublicDeckLibrary.tsx`, remove all mocked data fields (`author`, `stats`, `tags`, `difficulty`, etc.) from the component's rendering logic. The UI must be updated to only display the real data provided by the `/api/public-decks` endpoint (`name`, `description`, `card count`).
-    3.  **Utilize `available-units`:** In `StudentProfile.tsx`, call the `useAvailableUnits` hook. Display a list of units the student can start, including their readiness status (`isAvailable` and `missingPrerequisites`). This provides immense value to the teacher for planning the next session.
+-   `/hooks/api/`: The data-fetching layer.
+    -   `utils.ts`: Contains the core `fetcher` and `mutateWithOptimistic` functions. This is the foundation of the entire layer.
+    -   `students.ts`, `content.ts`, `sessions.ts`: These files group related API hooks by domain. For example, `students.ts` contains `useStudents`, `useStudent`, `createStudent`, `recordPayment`, etc. This organization keeps the API surface clean and discoverable.
+-   `/hooks/stores/`: The global client-side state layer.
+    -   `use-live-session-store.ts`: The Zustand store for managing the state of a live session. It handles timers, loading states, and progress tracking.
+-   `/hooks/use-ui-preferences.ts`: A hook for managing user-specific UI settings (like currency and date formats) that are stored in `localStorage`.
 
 ---
 
-## 6. Future Architectural Considerations
+## 4. Critical Workflows in Action
 
--   **State Management in `LiveSession`:** The current implementation uses both SWR polling and a Zustand store. While functional, this creates two sources of truth for session-related data. A future architectural discussion should be held to determine if the state can be unified, perhaps by moving more of the ephemeral state into the `Session.progress` JSON blob on the backend, making SWR the single source of truth for all session state. This is not an immediate bug, but a point for future refinement to improve maintainability.
+Let's trace two key user flows to see how these pieces connect.
 
+### Workflow 1: Starting a New Session
+
+1.  **User Action:** The teacher is on the `StudentProfile` page and clicks the "Start Session" button.
+2.  **Component (`StudentProfile.tsx`):** The `onClick` handler sets a state variable, causing the `SessionStartDialog` to render and open. The `studentId` and `studentName` are passed as props.
+3.  **Dialog (`SessionStartDialog.tsx`):**
+    a. Upon mounting, it calls the `useAvailableUnits(studentId)` hook.
+    b. **Hook (`/hooks/api/students.ts`):** `useAvailableUnits` triggers a `useSWR` call to the `/api/students/[studentId]/available-units` endpoint.
+    c. The dialog displays the list of available units, allowing the teacher to select one and configure it.
+4.  **User Action:** The teacher selects a unit and clicks the final "Start Session" button inside the dialog.
+5.  **Dialog (`SessionStartDialog.tsx`):** The `handleStartSession` function is called.
+    a. It calls the `startSession(studentId, unitId, config)` function from our API hooks.
+    b. **Hook (`/hooks/api/sessions.ts`):** `startSession` makes a `POST` request to `/api/sessions/start`.
+6.  **Backend:** The `SessionService` creates the session record and initializes the first exercise.
+7.  **Frontend:**
+    a. The `startSession` hook receives the newly created `FullSessionState` object.
+    b. The `handleStartSession` function in the dialog uses the `useRouter` hook from Next.js to navigate the user to `/session/[sessionId]`, using the ID from the API response.
+8.  **Page (`/app/session/[sessionId]/page.tsx`):** The page mounts, renders the `LiveSession` component, and the session begins.
+
+### Workflow 2: Submitting a Vocabulary Review
+
+1.  **User Action:** Inside the `LiveSession` component, the teacher clicks the "Good" (rating: 3) button.
+2.  **Component (`VocabularyExercise.tsx`):** The button's `onClick` handler calls the `onSubmitRating(3)` prop, which was passed down from `LiveSession`.
+3.  **Component (`LiveSession.tsx`):** The `handleRating(3)` function is executed.
+    a. It immediately calls `startAction()` from the `useLiveSessionStore` hook. This sets `isActionLoading` to `true` in the Zustand store, which disables all action buttons in the UI to prevent double-clicks.
+    b. It calls the `submitAnswer(sessionId, payload)` API hook, with a payload of `{ action: 'SUBMIT_RATING', data: { rating: 3 } }`.
+4.  **Hook (`/hooks/api/sessions.ts`):** The `submitAnswer` function sends a `POST` request to `/api/sessions/[sessionId]/submit`.
+5.  **Backend:** The `SessionService` processes the rating, delegates to the `FSRSService`, updates the `StudentCardState`, records the `ReviewHistory`, and advances the session state. It returns the new `FullSessionState`.
+6.  **Frontend:**
+    a. The `submitAnswer` hook's promise resolves.
+    b. `SWR` automatically revalidates the `/api/sessions/[sessionId]` endpoint, fetching the new state.
+    c. The `LiveSession` component re-renders with the new `session` prop, showing the next card.
+    d. The `handleRating` function calls `incrementReviewCount()` from the store to update session stats.
+    e. Finally, it calls `endAction()` from the store, setting `isActionLoading` back to `false` and re-enabling the UI buttons.
+
+---
+
+## 5. The Path to Production-Grade: Critical Refactoring
+
+The current frontend foundation is promising, but several areas deviate from the core architectural principles. Addressing these is our highest priority before adding new features. These are not suggestions; they are required refactors to ensure the codebase is scalable, maintainable, and robust.
+
+### **TOP PRIORITY: Architectural Integrity**
+
+These issues violate the fundamental structure of the application and must be fixed first.
+
+#### **Issue 1: Violation of the Exercise Dispatcher Pattern in `LiveSession`**
+
+-   **Location:** `/components/live-session.tsx`
+-   **Problem:** The `LiveSession` component currently defines its own local `VocabularyExercise` and `UnsupportedExercise` components. This completely bypasses the centralized, extensible exercise engine defined in `/components/exercises/dispatcher.ts`.
+-   **Analysis:** This is the most critical architectural issue. It creates a monolithic `LiveSession` component that must be modified every time a new exercise type is added. It violates the DRY (Don't Repeat Yourself) principle and negates the primary benefit of the modular exercise handler pattern that exists on both the frontend and backend.
+-   **Required Refactoring:**
+    1.  **Remove Local Definitions:** Delete the `VocabularyExercise` and `UnsupportedExercise` component definitions from `live-session.tsx`.
+    2.  **Import the Dispatcher:** In `live-session.tsx`, import the `getExerciseComponent` function from `/components/exercises/dispatcher.ts`.
+    3.  **Dynamic Component Rendering:** In the main render block of `LiveSession`, determine the current exercise component dynamically: `const ExerciseComponent = getExerciseComponent(session.currentUnitItem?.type);`.
+    4.  **Render and Pass Props:** Render the dynamic component and pass the required props: `<ExerciseComponent sessionState={session} onRevealAnswer={handleRevealAnswer} onSubmitRating={handleRating} isLoading={isActionLoading} />`.
+    5.  This will restore the intended, extensible architecture, allowing new exercise types to be added simply by creating a new exercise component and registering it in the dispatcher.
+
+#### **Issue 2: Redundant Data Fetching and State Derivation**
+
+-   **Problem:** The application contains two distinct forms of redundancy: re-fetching the same data unnecessarily and re-calculating derived state in components instead of stores.
+-   **Analysis & Required Refactoring:**
+    1.  **Redundant Data Fetching in `StudentProfile`:**
+        -   **Location:** `/components/student-profile.tsx`
+        -   **Issue:** The `AvailableUnitsList` sub-component (which is incorrectly defined inside `student-profile.tsx`) and the `SessionStartDialog` both call the `useAvailableUnits` hook, resulting in two identical network requests.
+        -   **Solution:** Lift the state. The parent component, `StudentProfile`, should be the single source for this data. It should call `useAvailableUnits` *once*. The resulting `units` data should then be passed down as a prop to both the `AvailableUnitsList` (which should be extracted into its own file) and the `SessionStartDialog`.
+    2.  **Redundant State Derivation in `LiveSession`:**
+        -   **Location:** `/components/live-session.tsx`
+        -   **Issue:** The `useLiveSessionStore` provides a `useProgressData` selector specifically to compute derived values (like queue progress). The `LiveSession` component calls this hook but then performs its own additional calculations on the raw `session` object to determine progress.
+        -   **Solution:** All derived state logic must be encapsulated in the Zustand store's selectors. The `useProgressData` selector should be expanded to provide all necessary computed values (e.g., `percentage`, `queueAnalysis`). The `LiveSession` component should then consume these values directly from the selector and remove all redundant calculation logic from its render body. Its job is to *display* data, not compute it.
+
+---
+
+### **MEDIUM PRIORITY: Enhancing Core Functionality**
+
+This issue prevents a key feature from being truly useful to the teacher.
+
+#### **Issue 3: Underdeveloped Bulk Import Feedback Loop**
+
+-   **Location:** `/components/bulk-import-tools.tsx`
+-   **Problem:** The "Results" tab of the bulk import tool is a dead end. After a job completes, the UI does not display the rich feedback that the backend job likely provides.
+-   **Analysis:** The backend `Job` model has a `result` JSON field. For a bulk import, this field is almost certainly populated with a detailed summary of successes, failures, and warnings. The current frontend ignores this, failing to deliver on the promise of "operational efficiency." A teacher cannot fix errors if they cannot see them.
+-   **Required Refactoring:**
+    1.  **Parse the Job Result:** In the `handleJobComplete` function, the `job.result` payload must be parsed. Assume it has a structure like `{ summary: {...}, errors: [...] }`.
+    2.  **Display Detailed Results:** The "Results" tab must be enhanced to display this information clearly.
+    3.  **Use a `DataTable` for Errors:** The `importedData.errors` array should be rendered in a `DataTable` component. The table columns should include the row number from the original CSV, the field that failed validation, and the specific error message.
+    4.  **Provide Actionable Feedback:** This will transform the feature from a simple uploader into a genuine productivity tool, allowing the teacher to quickly identify, fix, and re-upload problematic data.
+
+---
+
+## 6. How to Contribute
+
+1.  **Address the Critical Refactors First:** Before adding any new functionality, your priority is to work through the issues listed in Section 5. Start with the "Top Priority" items.
+2.  **Adhere to the Patterns:** All new contributions must follow the established architectural patterns for data fetching, state management, and component structure.
+3.  **Validate at the Boundary:** All user input should be validated client-side before being sent to the backend. Use Zod for complex forms if necessary.
+4.  **Type Everything:** The codebase is strictly typed. Ensure all new functions, props, and state variables have explicit TypeScript types, leveraging the shared types from `/lib/types.ts`.
+5.  **Keep Components Specialized:** Resist the urge to create monolithic components. If a component is managing multiple, distinct pieces of state or logic, break it down into smaller, more focused child components.
+
+You are now equipped with the knowledge of the frontend's architecture, its intended patterns, and its current shortcomings. Your task is to elevate this codebase to match the resilience and integrity of its backend counterpart. Build with precision.

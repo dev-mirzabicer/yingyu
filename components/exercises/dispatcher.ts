@@ -7,6 +7,32 @@ import { GrammarExercise } from "./GrammarExercise"
 import { ListeningExercise } from "./ListeningExercise"
 import { VocabFillInBlankExercise } from "./VocabFillInBlankExercise"
 import { UnsupportedExercise } from "./UnsupportedExercise"
+import { BookOpen, FileText, Mic } from "lucide-react"
+import { Card, CardContent } from "../ui/card"
+
+// Exercise type information mapping - modular and extensible
+export const exerciseTypeInfo = {
+  [UnitItemType.VOCABULARY_DECK]: {
+    label: "Vocabulary",
+    icon: BookOpen,
+    color: "bg-blue-100 text-blue-700",
+  },
+  [UnitItemType.GRAMMAR_EXERCISE]: {
+    label: "Grammar",
+    icon: FileText,
+    color: "bg-green-100 text-green-700",
+  },
+  [UnitItemType.LISTENING_EXERCISE]: {
+    label: "Listening",
+    icon: Mic,
+    color: "bg-purple-100 text-purple-700",
+  },
+  [UnitItemType.VOCAB_FILL_IN_BLANK_EXERCISE]: {
+    label: "Fill in Blank",
+    icon: FileText,
+    color: "bg-orange-100 text-orange-700",
+  },
+}
 
 export const exerciseDispatcher: Record<
   UnitItemType,

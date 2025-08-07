@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Volume2, RotateCcw, CheckCircle, XCircle, Clock, BookOpen, ArrowLeft, Pause, Play, FileText, Mic } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { useSession, submitAnswer, endSession } from "@/hooks/use-api-enhanced"
+import { useSession, submitAnswer, endSession } from "@/hooks/api/sessions"
 import { FullSessionState, VocabularyDeckProgress, AnswerPayload } from "@/lib/types"
 import { UnitItemType } from "@prisma/client"
 import { formatTime } from "@/lib/utils"
@@ -22,178 +22,11 @@ interface LiveSessionProps {
 
 type Rating = 1 | 2 | 3 | 4 // Again, Hard, Good, Easy
 
-// Exercise type information mapping - modular and extensible
-const exerciseTypeInfo = {
-  [UnitItemType.VOCABULARY_DECK]: {
-    label: "Vocabulary",
-    icon: BookOpen,
-    color: "bg-blue-100 text-blue-700",
-  },
-  [UnitItemType.GRAMMAR_EXERCISE]: {
-    label: "Grammar",
-    icon: FileText,
-    color: "bg-green-100 text-green-700",
-  },
-  [UnitItemType.LISTENING_EXERCISE]: {
-    label: "Listening",
-    icon: Mic,
-    color: "bg-purple-100 text-purple-700",
-  },
-  [UnitItemType.VOCAB_FILL_IN_BLANK_EXERCISE]: {
-    label: "Fill in Blank",
-    icon: FileText,
-    color: "bg-orange-100 text-orange-700",
-  },
-}
-
 import {
   getExerciseComponent,
-  exerciseDispatcher,
+  exerciseTypeInfo,
 } from "@/components/exercises/dispatcher"
 import { format, formatDistanceToNowStrict } from "date-fns"
-
-// Component for handling vocabulary deck exercises - modular and focused
-function VocabularyExercise({
-  sessionState,
-  onRevealAnswer,
-  onSubmitRating,
-  isLoading,
-}: {
-  sessionState: FullSessionState
-  onRevealAnswer: () => void
-  onSubmitRating: (rating: Rating) => void
-  isLoading: boolean
-}) {
-  const progress = sessionState.progress as VocabularyDeckProgress
-  const currentCard = progress.payload.currentCardData
-
-  if (!currentCard) {
-    return (
-      <Card className="text-center">
-        <CardContent className="p-8">
-          <p className="text-slate-600">No more cards to review!</p>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  return (
-    <>
-      {/* Current Card */}
-      <Card className="text-center">
-        <CardHeader>
-          <div className="flex items-center justify-center space-x-2 mb-2">
-            <BookOpen className="h-5 w-5 text-blue-600" />
-            <Badge variant="outline">Vocabulary</Badge>
-          </div>
-          <CardTitle className="text-4xl font-bold text-slate-900">
-            {currentCard.englishWord}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {progress.stage === "AWAITING_RATING" && (
-            <>
-              <div className="p-4 bg-slate-50 rounded-lg">
-                <p className="text-2xl font-medium text-slate-900 mb-2">
-                  {currentCard.chineseTranslation}
-                </p>
-                {currentCard.exampleSentences && (
-                  <p className="text-slate-600">
-                    {typeof currentCard.exampleSentences === "string"
-                      ? currentCard.exampleSentences
-                      : JSON.stringify(currentCard.exampleSentences)}
-                  </p>
-                )}
-              </div>
-              <Button variant="outline" size="sm">
-                <Volume2 className="h-4 w-4 mr-2" />
-                Play Audio
-              </Button>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Action Buttons */}
-      <div className="space-y-4">
-        {progress.stage === "PRESENTING_CARD" && (
-          <Button
-            onClick={onRevealAnswer}
-            disabled={isLoading}
-            className="w-full h-12 text-lg bg-blue-600 hover:bg-blue-700"
-          >
-            {isLoading ? "Loading..." : "Reveal Answer"}
-          </Button>
-        )}
-
-        {progress.stage === "AWAITING_RATING" && (
-          <div className="grid grid-cols-4 gap-3">
-            <Button
-              onClick={() => onSubmitRating(1)}
-              disabled={isLoading}
-              variant="outline"
-              className="h-16 flex-col space-y-1 border-red-200 hover:bg-red-50"
-            >
-              <XCircle className="h-5 w-5 text-red-600" />
-              <span className="text-sm">Again</span>
-            </Button>
-            <Button
-              onClick={() => onSubmitRating(2)}
-              disabled={isLoading}
-              variant="outline"
-              className="h-16 flex-col space-y-1 border-orange-200 hover:bg-orange-50"
-            >
-              <RotateCcw className="h-5 w-5 text-orange-600" />
-              <span className="text-sm">Hard</span>
-            </Button>
-            <Button
-              onClick={() => onSubmitRating(3)}
-              disabled={isLoading}
-              variant="outline"
-              className="h-16 flex-col space-y-1 border-blue-200 hover:bg-blue-50"
-            >
-              <CheckCircle className="h-5 w-5 text-blue-600" />
-              <span className="text-sm">Good</span>
-            </Button>
-            <Button
-              onClick={() => onSubmitRating(4)}
-              disabled={isLoading}
-              variant="outline"
-              className="h-16 flex-col space-y-1 border-green-200 hover:bg-green-50"
-            >
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <span className="text-sm">Easy</span>
-            </Button>
-          </div>
-        )}
-      </div>
-    </>
-  )
-}
-
-// Placeholder component for future exercise types - extensible architecture
-function UnsupportedExercise({ type }: { type: UnitItemType }) {
-  const typeInfo = exerciseTypeInfo[type] || {
-    label: "Unknown",
-    icon: FileText,
-    color: "bg-gray-100 text-gray-700",
-  }
-  const Icon = typeInfo.icon
-
-  return (
-    <Card className="text-center">
-      <CardContent className="p-8">
-        <div className={`inline-flex p-4 rounded-lg ${typeInfo.color} mb-4`}>
-          <Icon className="h-8 w-8" />
-        </div>
-        <h3 className="text-xl font-semibold text-slate-900 mb-2">
-          {typeInfo.label} Exercise
-        </h3>
-        <p className="text-slate-600">This exercise type is coming soon!</p>
-      </CardContent>
-    </Card>
-  )
-}
 
 export function LiveSession({ sessionId }: LiveSessionProps) {
   const { session, isLoading: sessionLoading, isError, mutate } = useSession(sessionId)
@@ -428,9 +261,6 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
   }
 
   const ExerciseComponent = getExerciseComponent(session.currentUnitItem?.type)
-  const currentExerciseTypeInfo = session.currentUnitItem?.type
-    ? exerciseDispatcher[session.currentUnitItem?.type]
-    : null
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -480,13 +310,13 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
           {session?.progress?.type === 'VOCABULARY_DECK' && (
             <div className="space-y-3 border-t pt-4">
               <h4 className="text-sm font-medium text-slate-700">Live Queue Status</h4>
-              
+
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-600">Cards Remaining</span>
                   <span className="font-medium">{progressData.queueAnalysis.totalInQueue}</span>
                 </div>
-                
+
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   <div className="bg-blue-50 rounded p-2 text-center">
                     <div className="font-medium text-blue-700">{progressData.queueAnalysis.newCards}</div>
@@ -502,7 +332,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
                   </div>
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-600">Total Reviews</span>
@@ -512,7 +342,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
                   <span className="text-slate-600">Unique Cards Seen</span>
                   <span className="font-medium">{progressData.uniqueCardsEncountered}</span>
                 </div>
-                
+
                 {progressData.reviewsCompleted > progressData.uniqueCardsEncountered && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded p-2">
                     <div className="text-xs text-yellow-700 font-medium">
@@ -545,7 +375,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
                         <span className="text-slate-500">Lapses:</span>
                         <span className="font-medium text-slate-700">{progressData.currentCard.lapses}</span>
                       </div>
-                       <div className="flex justify-between">
+                      <div className="flex justify-between">
                         <span className="text-slate-500">State:</span>
                         <Badge variant="outline" className="text-xs">{progressData.currentCard.state}</Badge>
                       </div>
@@ -563,9 +393,9 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
           <div className="space-y-3 border-t pt-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-slate-600">Current Exercise</span>
-              {currentExerciseTypeInfo && (
+              {session.currentUnitItem?.type && (
                 <Badge variant="outline" className="text-xs">
-                  {currentExerciseTypeInfo.label}
+                  {exerciseTypeInfo[session.currentUnitItem?.type]?.label}
                 </Badge>
               )}
             </div>
