@@ -21,16 +21,19 @@ import {
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { useAvailableUnits, startSession } from "@/hooks/use-api-enhanced"
+import { useAvailableUnits, startSession } from "@/hooks/api/students"
 import { UnitItemType } from "@prisma/client"
 import { Input } from "./ui/input"
 import { Label } from "./ui/label"
+import type { AvailableUnit } from "@/lib/types"
 
 interface SessionStartDialogProps {
   studentId: string
   studentName: string
   open: boolean
   onOpenChange: (open: boolean) => void
+  initialUnitId?: string | null
+  initialUnits?: AvailableUnit[]
 }
 
 // Exercise type information mapping
@@ -61,16 +64,41 @@ export function SessionStartDialog({
   studentId,
   studentName,
   open,
-  onOpenChange
+  onOpenChange,
+  initialUnitId,
+  initialUnits,
 }: SessionStartDialogProps) {
-  const { units, isLoading, isError } = useAvailableUnits(studentId)
-  const [selectedUnit, setSelectedUnit] = useState<any>(null)
+  // Use passed-in units if available, otherwise fetch them.
+  const {
+    units: fetchedUnits,
+    isLoading,
+    isError,
+  } = useAvailableUnits(studentId, {
+    skip: !!initialUnits,
+  })
+  const units = initialUnits || fetchedUnits
+
+  const [selectedUnit, setSelectedUnit] = useState<AvailableUnit | null>(() => {
+    if (initialUnitId) {
+      return units.find((u: AvailableUnit) => u.id === initialUnitId) || null
+    }
+    return null
+  })
   const [isStarting, setIsStarting] = useState(false)
   const [configOverrides, setConfigOverrides] = useState<{ [key: string]: any }>({})
   const router = useRouter()
   const { toast } = useToast()
 
-  const handleUnitSelect = (unit: any) => {
+  useState(() => {
+    if (open && initialUnitId) {
+      const unitToSelect = units.find((u: AvailableUnit) => u.id === initialUnitId)
+      if (unitToSelect) {
+        setSelectedUnit(unitToSelect)
+      }
+    }
+  }, [open, initialUnitId, units])
+
+  const handleUnitSelect = (unit: AvailableUnit) => {
     setSelectedUnit(selectedUnit?.id === unit.id ? null : unit)
     setConfigOverrides({}) // Reset overrides when unit changes
   }
@@ -90,7 +118,9 @@ export function SessionStartDialog({
 
     setIsStarting(true)
     try {
-      const result = await startSession(studentId, selectedUnit.id, configOverrides)
+      // The startSession hook is in sessions.ts, not students.ts
+      const { startSession: startSessionAction } = await import('@/hooks/api/sessions');
+      const result = await startSessionAction(studentId, selectedUnit.id, configOverrides)
 
       toast({
         title: "Session started successfully",
@@ -98,7 +128,7 @@ export function SessionStartDialog({
       })
 
       // Navigate to the live session
-      router.push(`/session/${result.data.id}`)
+      router.push(`/session/${result.id}`)
       onOpenChange(false)
     } catch (error) {
       console.error('Failed to start session:', error)
@@ -114,6 +144,7 @@ export function SessionStartDialog({
 
   const availableUnits = units.filter((unit: any) => unit.isAvailable)
   const unavailableUnits = units.filter((unit: any) => !unit.isAvailable)
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -6,27 +6,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Volume2, RotateCcw, CheckCircle, XCircle, Clock, BookOpen, ArrowLeft, Pause, Play, FileText, Mic } from "lucide-react"
+import { Clock, BookOpen, ArrowLeft, Pause, Play, CheckCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { useSession, submitAnswer, endSession } from "@/hooks/api/sessions"
-import { FullSessionState, VocabularyDeckProgress, AnswerPayload } from "@/lib/types"
-import { UnitItemType } from "@prisma/client"
+import { AnswerPayload } from "@/lib/types"
 import { formatTime } from "@/lib/utils"
 import { useLiveSessionStore, useProgressData } from "@/hooks/stores/use-live-session-store"
+import { getExerciseComponent, exerciseTypeInfo } from "@/components/exercises/dispatcher"
+import { format } from "date-fns"
 
 interface LiveSessionProps {
   sessionId: string
 }
 
-
 type Rating = 1 | 2 | 3 | 4 // Again, Hard, Good, Easy
-
-import {
-  getExerciseComponent,
-  exerciseTypeInfo,
-} from "@/components/exercises/dispatcher"
-import { format, formatDistanceToNowStrict } from "date-fns"
 
 export function LiveSession({ sessionId }: LiveSessionProps) {
   const { session, isLoading: sessionLoading, isError, mutate } = useSession(sessionId)
@@ -38,47 +32,35 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     isActionLoading,
     isPaused,
     elapsedTime,
-    startAction,
-    endAction,
-    togglePause,
+    setActionLoading,
+    pauseSession,
+    resumeSession,
     incrementReviewCount,
-    addEncounteredCard,
     setElapsedTime,
-    startTimer,
-    stopTimer,
+    startSession: startSessionInStore,
+    setProgress,
     reset,
   } = useLiveSessionStore()
 
-  const progressData = useProgressData(session)
+  const progressData = useProgressData()
 
-  // Effect for managing the session timer via the store
+  // Effect to initialize or update the store when the session data is fetched or changed
   useEffect(() => {
+    if (session) {
+      startSessionInStore(session)
+    }
+  }, [session, startSessionInStore])
+
+  // Effect for managing the session timer
+  useEffect(() => {
+    let timer: NodeJS.Timeout | undefined;
     if (!isPaused && session?.status === "IN_PROGRESS") {
-      startTimer()
-    } else {
-      stopTimer()
+      timer = setInterval(() => {
+        setElapsedTime(Math.floor((new Date().getTime() - new Date(session.startTime).getTime()) / 1000));
+      }, 1000);
     }
-    // This should only re-run when pause or session status changes
-  }, [isPaused, session?.status, startTimer, stopTimer])
-
-  // Effect for initializing elapsed time from server state
-  useEffect(() => {
-    if (session?.startTime) {
-      const startTime = new Date(session.startTime).getTime()
-      const now = new Date().getTime()
-      setElapsedTime(Math.floor((now - startTime) / 1000))
-    }
-  }, [session?.startTime, setElapsedTime])
-
-  // Effect for tracking encountered cards via the store
-  useEffect(() => {
-    if (session?.progress?.type === 'VOCABULARY_DECK') {
-      const progress = session.progress as VocabularyDeckProgress
-      if (progress.payload.currentCardData) {
-        addEncounteredCard(progress.payload.currentCardData.id)
-      }
-    }
-  }, [session?.progress, addEncounteredCard])
+    return () => clearInterval(timer);
+  }, [isPaused, session?.status, session?.startTime, setElapsedTime]);
 
   // Effect for resetting the store on component unmount
   useEffect(() => {
@@ -90,20 +72,15 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
   const handleRevealAnswer = async () => {
     if (!session) return
 
-    startAction()
+    setActionLoading(true)
     try {
       const payload: AnswerPayload = {
         action: 'REVEAL_ANSWER',
         data: {}
       }
-
-      await submitAnswer(sessionId, payload)
-      await mutate() // Refresh session state
-
-      toast({
-        title: "Answer revealed",
-        description: "Rate how well you knew this card.",
-      })
+      const result = await submitAnswer(sessionId, payload)
+      setProgress(result.progress)
+      await mutate()
     } catch (error) {
       toast({
         title: "Error",
@@ -111,28 +88,23 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
         variant: "destructive",
       })
     } finally {
-      endAction()
+      setActionLoading(false)
     }
   }
 
   const handleRating = async (rating: Rating) => {
     if (!session) return
 
-    startAction()
+    setActionLoading(true)
     try {
       const payload: AnswerPayload = {
         action: 'SUBMIT_RATING',
         data: { rating }
       }
-
-      await submitAnswer(sessionId, payload)
+      const result = await submitAnswer(sessionId, payload)
       incrementReviewCount()
-      await mutate() // Refresh session state
-
-      toast({
-        title: "Rating submitted",
-        description: `Card rated as ${['', 'Again', 'Hard', 'Good', 'Easy'][rating]}.`,
-      })
+      setProgress(result.progress)
+      await mutate()
     } catch (error) {
       toast({
         title: "Error",
@@ -140,7 +112,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
         variant: "destructive",
       })
     } finally {
-      endAction()
+      setActionLoading(false)
     }
   }
 
@@ -163,7 +135,14 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     }
   }
 
-  const progressData = useProgressData(session)
+  const togglePause = () => {
+    if (isPaused) {
+      resumeSession()
+    } else {
+      pauseSession()
+    }
+  }
+
 
   // Error state
   if (isError) {
@@ -297,7 +276,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-600">Queue Progress</span>
               <span className="font-medium">
-                {progressData.current} / {progressData.total}
+                {progressData.currentCardIndex} / {progressData.totalCards}
               </span>
             </div>
             <Progress value={progressData.percentage} className="h-2" />
