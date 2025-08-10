@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { BookOpen, Plus, Search, FileText, Users, Globe, Lock } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useDecks, createDeck, useStudents, assignDeck } from "@/hooks/use-api-enhanced"
+import { useDecks, createDeck, useStudents, assignDeck } from "@/hooks/api"
 import { format } from "date-fns"
 import Link from "next/link"
 
@@ -54,7 +54,7 @@ export default function DecksPage() {
       mutate()
     } catch (error) {
       toast({
-        title: "Error", 
+        title: "Error",
         description: "Failed to create deck. Please try again.",
         variant: "destructive",
       })
@@ -96,7 +96,7 @@ export default function DecksPage() {
   const filteredDecks = decks.filter(deck => {
     const matchesVisibility = filterVisibility === "all" || (filterVisibility === "public" ? deck.isPublic : !deck.isPublic)
     const matchesSearch = deck.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (deck.description && deck.description.toLowerCase().includes(searchTerm.toLowerCase()))
+      (deck.description && deck.description.toLowerCase().includes(searchTerm.toLowerCase()))
     return matchesVisibility && matchesSearch
   })
 
@@ -381,9 +381,9 @@ export default function DecksPage() {
             <Button variant="outline" onClick={() => setIsAssignDeckOpen(false)}>
               Cancel
             </Button>
-            <Button 
-              onClick={handleAssignDeck} 
-              disabled={!selectedStudentId || isAssigning} 
+            <Button
+              onClick={handleAssignDeck}
+              disabled={!selectedStudentId || isAssigning}
               className="bg-blue-600 hover:bg-blue-700"
             >
               {isAssigning ? "Assigning..." : "Assign Deck"}

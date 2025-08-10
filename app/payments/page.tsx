@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { DollarSign, Users, CreditCard } from "lucide-react"
 import { PaymentManager } from "@/components/payment-manager"
-import { useStudents } from "@/hooks/use-api-enhanced"
+import { useStudents } from "@/hooks/api"
 
 /**
  * Safely converts a Prisma Decimal (string) or number to a number for calculations

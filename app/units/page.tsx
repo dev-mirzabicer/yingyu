@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch"
 import { Layers, Plus, Search, FileText, Globe, Lock, Edit } from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { useUnits, createUnit } from "@/hooks/use-api-enhanced"
+import { useUnits, createUnit } from "@/hooks/api"
 import { format } from "date-fns"
 
 export default function UnitsPage() {
@@ -62,7 +62,7 @@ export default function UnitsPage() {
   const filteredUnits = units.filter(unit => {
     const matchesVisibility = filterVisibility === "all" || (filterVisibility === "public" ? unit.isPublic : !unit.isPublic)
     const matchesSearch = unit.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (unit.description && unit.description.toLowerCase().includes(searchTerm.toLowerCase()))
+      (unit.description && unit.description.toLowerCase().includes(searchTerm.toLowerCase()))
     return matchesVisibility && matchesSearch
   })
 

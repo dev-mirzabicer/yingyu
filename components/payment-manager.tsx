@@ -26,7 +26,7 @@ import {
 import { format } from "date-fns"
 import { cn, safeNumberConversion } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
-import { recordPayment, useStudentPayments } from "@/hooks/use-api-enhanced"
+import { recordPayment, useStudentPayments } from "@/hooks/api"
 import { useCurrencyFormatter } from "@/hooks/use-ui-preferences"
 import type { Payment } from "@prisma/client"
 import { DataTable } from "@/components/data-table"
@@ -190,14 +190,14 @@ export function PaymentManager({ studentId, studentName, classesRemaining, onPay
 
   if (isLoading) {
     return (
-        <Card>
-            <CardHeader>
-                <Skeleton className="h-8 w-48" />
-            </CardHeader>
-            <CardContent>
-                <Skeleton className="h-40 w-full" />
-            </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-8 w-48" />
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-40 w-full" />
+        </CardContent>
+      </Card>
     )
   }
 

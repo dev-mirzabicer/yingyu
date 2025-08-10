@@ -21,7 +21,7 @@ import {
   Monitor,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useTeacherSettings, updateTeacherSettings } from "@/hooks/use-api-enhanced"
+import { useTeacherSettings, updateTeacherSettings } from "@/hooks/api"
 import {
   loadUIPreferences,
   saveUIPreferences,
@@ -40,16 +40,16 @@ interface BackendSettingsData {
 
 export function TeacherSettingsPanel({ teacherId }: TeacherSettingsPanelProps) {
   const { settings, isLoading, isError, mutate } = useTeacherSettings()
-  
+
   // Backend settings state
   const [backendSettings, setBackendSettings] = useState<BackendSettingsData>({
     paymentAlertThreshold: 3,
     preferredLessonDuration: 60,
   })
-  
+
   // UI preferences state
   const [uiPreferences, setUIPreferences] = useState<UIPreferences>(loadUIPreferences())
-  
+
   const [isSubmittingBackend, setIsSubmittingBackend] = useState(false)
   const [hasUnsavedBackendChanges, setHasUnsavedBackendChanges] = useState(false)
   const [hasUnsavedUIChanges, setHasUnsavedUIChanges] = useState(false)
@@ -103,7 +103,7 @@ export function TeacherSettingsPanel({ teacherId }: TeacherSettingsPanelProps) {
     try {
       saveUIPreferences(uiPreferences)
       setHasUnsavedUIChanges(false)
-      
+
       toast({
         title: "Browser preferences saved",
         description: "Your UI preferences have been saved to this browser.",
@@ -219,9 +219,9 @@ export function TeacherSettingsPanel({ teacherId }: TeacherSettingsPanelProps) {
 
           {/* Account Settings Actions */}
           <div className="flex items-center justify-between pt-4 border-t">
-            <Button 
-              variant="outline" 
-              onClick={handleResetBackendSettings} 
+            <Button
+              variant="outline"
+              onClick={handleResetBackendSettings}
               disabled={!hasUnsavedBackendChanges || isSubmittingBackend}
             >
               <RotateCcw className="h-4 w-4 mr-2" />
@@ -258,8 +258,8 @@ export function TeacherSettingsPanel({ teacherId }: TeacherSettingsPanelProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label htmlFor="currency">Currency Display</Label>
-              <Select 
-                value={uiPreferences.currency} 
+              <Select
+                value={uiPreferences.currency}
                 onValueChange={(value) => handleUIPreferenceChange("currency", value)}
               >
                 <SelectTrigger>
@@ -278,8 +278,8 @@ export function TeacherSettingsPanel({ teacherId }: TeacherSettingsPanelProps) {
 
             <div className="space-y-2">
               <Label htmlFor="dateFormat">Date Format</Label>
-              <Select 
-                value={uiPreferences.dateFormat} 
+              <Select
+                value={uiPreferences.dateFormat}
                 onValueChange={(value) => handleUIPreferenceChange("dateFormat", value)}
               >
                 <SelectTrigger>
@@ -298,8 +298,8 @@ export function TeacherSettingsPanel({ teacherId }: TeacherSettingsPanelProps) {
 
             <div className="space-y-2">
               <Label htmlFor="timeFormat">Time Format</Label>
-              <Select 
-                value={uiPreferences.timeFormat} 
+              <Select
+                value={uiPreferences.timeFormat}
                 onValueChange={(value) => handleUIPreferenceChange("timeFormat", value)}
               >
                 <SelectTrigger>
@@ -318,8 +318,8 @@ export function TeacherSettingsPanel({ teacherId }: TeacherSettingsPanelProps) {
 
             <div className="space-y-2">
               <Label htmlFor="theme">Theme</Label>
-              <Select 
-                value={uiPreferences.theme} 
+              <Select
+                value={uiPreferences.theme}
                 onValueChange={(value) => handleUIPreferenceChange("theme", value)}
               >
                 <SelectTrigger>
@@ -338,8 +338,8 @@ export function TeacherSettingsPanel({ teacherId }: TeacherSettingsPanelProps) {
 
             <div className="space-y-2">
               <Label htmlFor="language">Interface Language</Label>
-              <Select 
-                value={uiPreferences.language} 
+              <Select
+                value={uiPreferences.language}
                 onValueChange={(value) => handleUIPreferenceChange("language", value)}
               >
                 <SelectTrigger>
@@ -359,9 +359,9 @@ export function TeacherSettingsPanel({ teacherId }: TeacherSettingsPanelProps) {
 
           {/* Browser Preferences Actions */}
           <div className="flex items-center justify-between pt-4 border-t">
-            <Button 
-              variant="outline" 
-              onClick={handleResetUIPreferences} 
+            <Button
+              variant="outline"
+              onClick={handleResetUIPreferences}
               disabled={!hasUnsavedUIChanges}
             >
               <RotateCcw className="h-4 w-4 mr-2" />

@@ -1,3 +1,6 @@
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
+
 /**
  * Formats a duration in seconds into a mm:ss string.
  * @param seconds The total seconds to format.
@@ -20,3 +23,7 @@ export const safeNumberConversion = (value: any, fallback = 0): number => {
   const converted = Number(value);
   return isNaN(converted) ? fallback : converted;
 };
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}

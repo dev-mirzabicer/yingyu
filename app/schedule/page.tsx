@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, Users, Clock } from "lucide-react"
 import { ClassScheduler } from "@/components/class-scheduler"
-import { useStudents } from "@/hooks/use-api-enhanced"
+import { useStudents } from "@/hooks/api"
 
 export default function SchedulePage() {
   const { students, isLoading, isError, mutate } = useStudents()

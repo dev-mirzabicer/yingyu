@@ -28,7 +28,7 @@ import {
 import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from "date-fns"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
-import { useStudentSchedules, createSchedule, updateSchedule, deleteSchedule } from "@/hooks/use-api-enhanced"
+import { useStudentSchedules, createSchedule, updateSchedule, deleteSchedule } from "@/hooks/api"
 import type { ClassSchedule, ClassStatus } from "@prisma/client"
 import { DataTable } from "@/components/data-table"
 import { Skeleton } from "@/components/ui/skeleton"

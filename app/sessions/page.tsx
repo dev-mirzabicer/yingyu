@@ -8,10 +8,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DataTable } from "@/components/data-table"
-import { 
-  Play, 
-  Search, 
-  Clock, 
+import {
+  Play,
+  Search,
+  Clock,
   BookOpen,
   CheckCircle,
   XCircle,
@@ -20,7 +20,7 @@ import {
 import Link from "next/link"
 import { format } from "date-fns"
 import { useToast } from "@/hooks/use-toast"
-import { useStudents, useSessions } from "@/hooks/use-api-enhanced"
+import { useStudents, useSessions } from "@/hooks/api"
 import type { FullStudentProfile } from "@/lib/types"
 import { SessionStartDialog } from "@/components/session-start-dialog"
 
@@ -38,7 +38,7 @@ export default function SessionsPage() {
   // Filter sessions based on search, status, and student
   const filteredSessions = sessions.filter(session => {
     const matchesSearch = session.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         session.unitName.toLowerCase().includes(searchTerm.toLowerCase())
+      session.unitName.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = statusFilter === "all" || session.status === statusFilter
     const matchesStudent = studentFilter === "all" || session.studentId === studentFilter
     return matchesSearch && matchesStatus && matchesStudent
@@ -186,7 +186,7 @@ export default function SessionsPage() {
           <h1 className="text-3xl font-bold text-slate-900">Live Sessions</h1>
           <p className="text-slate-600">Track and manage teaching sessions across all students</p>
         </div>
-        <Button 
+        <Button
           onClick={() => {
             if (students.length > 0) {
               startNewSession(students[0])
@@ -294,7 +294,7 @@ export default function SessionsPage() {
               <BarChart3 className="h-16 w-16 text-slate-300 mb-4" />
               <h3 className="text-lg font-medium text-slate-900 mb-2">No sessions found</h3>
               <p className="text-slate-500 text-center max-w-sm">
-                {sessions.length === 0 
+                {sessions.length === 0
                   ? "Start your first teaching session to see it appear here."
                   : "No sessions match your current filters. Try adjusting your search criteria."
                 }

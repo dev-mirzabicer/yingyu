@@ -2,7 +2,7 @@
 
 import React from "react"
 import { VocabularyCardManager } from "@/components/vocabulary-card-manager"
-import { useDeck } from "@/hooks/use-api-enhanced"
+import { useDeck } from "@/hooks/api"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -16,7 +16,7 @@ interface PageProps {
 
 export default function ManageDeckPage({ params }: PageProps) {
   const [deckId, setDeckId] = React.useState<string>("")
-  
+
   React.useEffect(() => {
     params.then(({ deckId }) => setDeckId(deckId))
   }, [params])
@@ -105,8 +105,8 @@ export default function ManageDeckPage({ params }: PageProps) {
       </div>
 
       {/* Card Manager Component */}
-      <VocabularyCardManager 
-        deckId={deckId} 
+      <VocabularyCardManager
+        deckId={deckId}
         deckName={deck.name}
         isReadOnly={false}
       />

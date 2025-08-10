@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Users, BarChart3 } from "lucide-react"
 import { FSRSAnalyticsDashboard } from "@/components/fsrs-analytics-dashboard"
-import { useStudents } from "@/hooks/use-api-enhanced"
+import { useStudents } from "@/hooks/api"
 
 export default function AnalyticsPage() {
   const { students, isLoading, isError } = useStudents()
