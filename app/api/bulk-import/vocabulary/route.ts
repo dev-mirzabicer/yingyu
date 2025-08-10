@@ -1,11 +1,15 @@
 import { JobService } from '@/lib/actions/jobs';
-import { BulkImportVocabularyPayloadSchema } from '@/lib/schemas/bulk-import';
+import { BulkImportVocabularyPayloadSchema } from '@/lib/schemas';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
-import { authorize } from '@/lib/auth';
+import { getAuth } from '@clerk/nextjs/server';
+import { NextRequest } from 'next/server';
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const teacherId = await authorize();
+    const { userId: teacherId } = getAuth(req);
+    if (!teacherId) {
+      return apiResponse(401, null, 'Unauthorized');
+    }
     const payload = await req.json();
 
     const validatedPayload = BulkImportVocabularyPayloadSchema.parse(payload);
@@ -15,10 +19,11 @@ export async function POST(req: Request) {
       validatedPayload as any
     );
 
-    return apiResponse({
-      data: job,
-      message: 'Successfully created bulk import job for vocabulary.',
-    });
+    return apiResponse(
+      201,
+      job,
+      'Successfully created bulk import job for vocabulary.'
+    );
   } catch (error) {
     return handleApiError(error);
   }

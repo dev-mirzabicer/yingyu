@@ -227,7 +227,7 @@ export function BulkImportTools({ deckId }: BulkImportToolsProps) {
     }
 
     try {
-      let job;
+      let response;
       switch (selectedTemplate) {
         case "vocabulary":
           if (!deckId) {
@@ -238,18 +238,19 @@ export function BulkImportTools({ deckId }: BulkImportToolsProps) {
             });
             return;
           }
-          job = await bulkImportVocabulary(deckId, previewData);
+          response = await bulkImportVocabulary(deckId, previewData);
           break;
         case "students":
-          job = await bulkImportStudents(previewData);
+          response = await bulkImportStudents(previewData);
           break;
         case "schedules":
-          job = await bulkImportSchedules(previewData);
+          response = await bulkImportSchedules(previewData);
           break;
         default:
           throw new Error("Invalid template selected");
       }
 
+      const job = response.data;
       setJobId(job.id);
       toast({
         title: "Import job started",

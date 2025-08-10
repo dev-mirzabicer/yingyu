@@ -25,6 +25,7 @@ const statusIcons = {
   [JobStatus.RUNNING]: <Loader2 className="h-4 w-4 animate-spin" />,
   [JobStatus.COMPLETED]: <CheckCircle className="h-4 w-4 text-green-500" />,
   [JobStatus.FAILED]: <AlertTriangle className="h-4 w-4 text-red-500" />,
+  [JobStatus.SKIPPED]: <Info className="h-4 w-4 text-slate-500" />,
 }
 
 const statusTitles = {
@@ -32,6 +33,7 @@ const statusTitles = {
   [JobStatus.RUNNING]: "Job is Running",
   [JobStatus.COMPLETED]: "Job Completed",
   [JobStatus.FAILED]: "Job Failed",
+  [JobStatus.SKIPPED]: "Job Skipped",
 }
 
 export function JobStatusIndicator({

@@ -43,6 +43,7 @@ interface ClassSchedulerProps {
 interface ScheduleFormData {
   scheduledTime: Date
   duration: number
+  notes: string
   recurring: boolean
   recurringPattern: string
   recurringEnd: Date | null
@@ -115,6 +116,7 @@ const statusIcons = {
 const initialFormData: ScheduleFormData = {
   scheduledTime: new Date(),
   duration: 60,
+  notes: "",
   recurring: false,
   recurringPattern: "weekly",
   recurringEnd: null,
@@ -162,6 +164,7 @@ export function ClassScheduler({ studentId, studentName, classesRemaining, onSch
       await createSchedule(studentId, {
         scheduledTime: formData.scheduledTime.toISOString(),
         duration: formData.duration,
+        notes: formData.notes,
       })
 
       toast({
@@ -194,6 +197,7 @@ export function ClassScheduler({ studentId, studentName, classesRemaining, onSch
       await updateSchedule(editingSchedule.id, {
         scheduledTime: formData.scheduledTime.toISOString(),
         duration: formData.duration,
+        notes: formData.notes,
       })
 
       toast({
@@ -268,6 +272,7 @@ export function ClassScheduler({ studentId, studentName, classesRemaining, onSch
       ...initialFormData,
       scheduledTime: new Date(schedule.scheduledTime),
       duration: schedule.duration ?? 60,
+      notes: schedule.notes ?? "",
     })
     setIsEditMode(true)
     setIsScheduleDialogOpen(true)
@@ -621,6 +626,15 @@ export function ClassScheduler({ studentId, studentName, classesRemaining, onSch
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Notes (Optional)</Label>
+              <Textarea
+                placeholder="Any notes for this class..."
+                value={formData.notes}
+                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+              />
             </div>
 
             <div className="flex justify-end space-x-2">

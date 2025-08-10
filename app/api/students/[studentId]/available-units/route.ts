@@ -1,17 +1,28 @@
-import { NextResponse } from "next/server"
-import { getAuth } from "@/lib/auth"
-import { getAvailableUnitsForStudent } from "@/lib/actions/students"
-import { handleApiError } from "@/lib/api-utils"
+import { NextRequest } from 'next/server';
+import { StudentService } from '@/lib/actions/students';
+import { apiResponse, handleApiError } from '@/lib/api-utils';
+import { getAuth } from '@clerk/nextjs/server';
 
+/**
+ * GET /api/students/{studentId}/available-units
+ * Retrieves all units a student can potentially start, calculating their readiness status.
+ */
 export async function GET(
-  req: Request,
+  req: NextRequest,
   { params }: { params: { studentId: string } }
 ) {
   try {
-    const { teacher } = await getAuth()
-    const units = await getAvailableUnitsForStudent(params.studentId, teacher.id)
-    return NextResponse.json(units)
+    const { userId: teacherId } = getAuth(req);
+    if (!teacherId) {
+      return apiResponse(401, null, 'Unauthorized');
+    }
+
+    const availableUnits = await StudentService.getAvailableUnitsForStudent(
+      params.studentId,
+      teacherId
+    );
+    return apiResponse(200, availableUnits, null);
   } catch (error) {
-    return handleApiError(error)
+    return handleApiError(error);
   }
 }

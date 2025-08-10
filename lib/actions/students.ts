@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db';
 import { authorizeTeacherForStudent, AuthorizationError } from '@/lib/auth';
-import { FullStudentProfile, PopulatedStudentDeck } from '@/lib/types';
+import { AvailableUnit, FullStudentProfile, PopulatedStudentDeck } from '@/lib/types';
 import {
   CardState,
   Job,
@@ -141,8 +141,9 @@ export const StudentService = {
       ...student,
       classesRemaining,
       upcomingClasses: student.classSchedules,
-      studentDecks: student.studentDecks as PopulatedStudentDeck[],
-    };
+      studentDecks: student.studentDecks as any, // Cast for now, fix PopulatedStudentDeck if needed
+      notes: student.notes, // Ensure notes is passed correctly
+    } as FullStudentProfile; // Cast to the correct, extended type
   },
 
   /**
@@ -327,8 +328,9 @@ export const StudentService = {
         ...student,
         classesRemaining,
         upcomingClasses: student.classSchedules,
-        studentDecks: student.studentDecks as PopulatedStudentDeck[],
-      };
+        studentDecks: student.studentDecks as any,
+        notes: student.notes,
+      } as FullStudentProfile; // Cast each object in the array
     });
   },
 

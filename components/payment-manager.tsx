@@ -170,15 +170,15 @@ export function PaymentManager({ studentId, studentName, classesRemaining, onPay
         switch (p.status) {
           case "ACTIVE":
             variant = "default";
-            text = "Active";
+            text = "ACTIVE";
             break;
           case "EXPIRED":
             variant = "secondary"; // Or a warning variant
-            text = "Expired";
+            text = "EXPIRED";
             break;
           case "REFUNDED":
             variant = "destructive";
-            text = "Refunded";
+            text = "REFUNDED";
             break;
           default:
             break;

@@ -21,7 +21,8 @@ import {
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { useAvailableUnits, startSession } from "@/hooks/api/students"
+import { useAvailableUnits } from "@/hooks/api/students"
+import { startSession } from "@/hooks/api/sessions"
 import { UnitItemType } from "@prisma/client"
 import { Input } from "./ui/input"
 import { Label } from "./ui/label"
@@ -118,9 +119,7 @@ export function SessionStartDialog({
 
     setIsStarting(true)
     try {
-      // The startSession hook is in sessions.ts, not students.ts
-      const { startSession: startSessionAction } = await import('@/hooks/api/sessions');
-      const result = await startSessionAction(studentId, selectedUnit.id, configOverrides)
+      const result = await startSession(studentId, selectedUnit.id, configOverrides)
 
       toast({
         title: "Session started successfully",
@@ -128,7 +127,7 @@ export function SessionStartDialog({
       })
 
       // Navigate to the live session
-      router.push(`/session/${result.id}`)
+      router.push(`/session/${result.data.id}`)
       onOpenChange(false)
     } catch (error) {
       console.error('Failed to start session:', error)

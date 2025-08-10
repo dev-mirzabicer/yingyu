@@ -118,6 +118,7 @@ export const CreateScheduleSchema = z.object({
     errorMap: () => ({ message: 'Invalid scheduled time format.' }),
   }),
   duration: z.number().int().positive().optional(),
+  notes: z.string().optional(),
 });
 
 /**
@@ -131,6 +132,7 @@ export const UpdateScheduleSchema = z.object({
     .optional(),
   status: z.nativeEnum(ClassStatus).optional(),
   duration: z.number().int().positive().optional(),
+  notes: z.string().optional(),
 });
 
 /**

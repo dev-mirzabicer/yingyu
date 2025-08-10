@@ -5,7 +5,7 @@ import { apiResponse, handleApiError } from '@/lib/api-utils';
 export async function GET() {
   try {
     const decks = await ContentService.getPublicDecks();
-    return apiResponse({ data: decks });
+    return apiResponse(200, decks, null);
   } catch (error) {
     return handleApiError(error);
   }

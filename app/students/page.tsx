@@ -66,20 +66,20 @@ export default function StudentsPage() {
 
     setIsSubmitting(true)
     try {
-      const result = await createStudent(newStudent, selectedDeckId)
-      if (result.job) {
-        setAddStudentJobId(result.job.id)
+      const response = await createStudent(newStudent, selectedDeckId);
+      if (response.data.initializationJob) {
+        setAddStudentJobId(response.data.initializationJob.id);
         toast({
           title: "Student creation in progress",
           description: `${newStudent.name} is being added. Card initialization is running in the background.`,
-        })
+        });
       } else {
         toast({
-        title: "Student added successfully",
-        description: `${newStudent.name} has been added to your class.`,
-      });
-      mutate();
-    }
+          title: "Student added successfully",
+          description: `${newStudent.name} has been added to your class.`,
+        });
+        mutate();
+      }
     setNewStudent({
       name: "",
       email: "",

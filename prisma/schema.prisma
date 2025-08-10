@@ -404,6 +404,7 @@ model Payment {
   classesUsed      Int           @default(0)
   paymentDate      DateTime      @db.Date
   status           PaymentStatus @default(ACTIVE)
+  notes            String?
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
@@ -414,6 +415,7 @@ model ClassSchedule {
   scheduledTime DateTime
   status        ClassStatus @default(SCHEDULED)
   duration      Int?
+  notes         String?
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }

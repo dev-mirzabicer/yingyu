@@ -3,6 +3,8 @@
 import useSWR from "swr"
 import type {
   FullUnit,
+  UnitWithCount,
+  VocabularyDeckWithCount,
   VocabularyExerciseConfig,
   NewUnitItemData,
 } from "@/lib/types"
@@ -19,7 +21,7 @@ import { fetcher, mutateWithOptimistic, ApiError } from "./utils"
 // ============================================================================
 
 export function useUnits() {
-  const { data, error, isLoading, mutate } = useSWR<Unit[]>("/api/units", fetcher)
+  const { data, error, isLoading, mutate } = useSWR<UnitWithCount[]>("/api/units", fetcher)
 
   return {
     units: data || [],
@@ -43,7 +45,7 @@ export function useUnit(unitId: string) {
 }
 
 export function useDecks() {
-  const { data, error, isLoading, mutate } = useSWR<VocabularyDeck[]>("/api/decks", fetcher)
+  const { data, error, isLoading, mutate } = useSWR<VocabularyDeckWithCount[]>("/api/decks", fetcher)
 
   return {
     decks: data || [],

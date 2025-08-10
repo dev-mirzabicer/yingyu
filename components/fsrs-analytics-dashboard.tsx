@@ -75,7 +75,8 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
 
   const handleOptimizeParameters = async () => {
     try {
-      const job = await optimizeFsrsParameters(student.id)
+      const response = await optimizeFsrsParameters(student.id)
+      const job = response.data;
       setOptimizationJobId(job.id)
       toast({
         title: "Parameter optimization started",
@@ -92,7 +93,8 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
 
   const handleRebuildCache = async () => {
     try {
-      const job = await rebuildFsrsCache(student.id)
+      const response = await rebuildFsrsCache(student.id)
+      const job = response.data;
       setRebuildJobId(job.id)
       toast({
         title: "Cache rebuild started",
@@ -446,7 +448,7 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
           <Card>
             <CardHeader>
               <CardTitle>Listening Exercise Candidates</CardTitle>
-            </Header>
+            </CardHeader>
             <CardContent>
               {isListeningLoading ? (
                 <div className="space-y-4">

@@ -1,35 +1,25 @@
-import { NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { JobService } from '@/lib/actions/jobs';
-import { getAuth } from '@/lib/auth';
+import { apiResponse, handleApiError } from '@/lib/api-utils';
+import { getAuth } from '@clerk/nextjs/server';
 
+/**
+ * GET /api/jobs/{jobId}
+ * Retrieves the status and details of a specific background job.
+ */
 export async function GET(
-  request: Request,
+  req: NextRequest,
   { params }: { params: { jobId: string } }
 ) {
-  const { jobId } = params;
-  const { teacherId } = getAuth(request);
-
-  if (!teacherId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  if (!jobId) {
-    return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
-  }
-
   try {
-    const job = await JobService.getJobStatus(jobId, teacherId);
-
-    if (!job) {
-      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+    const { userId: teacherId } = getAuth(req);
+    if (!teacherId) {
+      return apiResponse(401, null, 'Unauthorized');
     }
 
-    return NextResponse.json(job);
+    const job = await JobService.getJobStatus(params.jobId, teacherId);
+    return apiResponse(200, job, null);
   } catch (error) {
-    console.error(`[JOB_STATUS_API] Error fetching job ${jobId}:`, error);
-    return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }

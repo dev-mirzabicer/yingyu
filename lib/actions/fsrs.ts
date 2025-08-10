@@ -20,7 +20,7 @@ import {
 } from '@prisma/client';
 import { authorizeTeacherForStudent } from '../auth';
 import { JobService } from './jobs';
-import { VocabularyExerciseConfig, VocabularyQueueItem } from '../types';
+import { FsrsStats, VocabularyExerciseConfig } from '../types';
 
 /**
  * A constant representing the minimum retrievability for a card to be considered

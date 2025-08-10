@@ -79,7 +79,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
         data: {}
       }
       const result = await submitAnswer(sessionId, payload)
-      setProgress(result.progress)
+      setProgress(result.data.newState.progress)
       await mutate()
     } catch (error) {
       toast({
@@ -103,7 +103,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
       }
       const result = await submitAnswer(sessionId, payload)
       incrementReviewCount()
-      setProgress(result.progress)
+      setProgress(result.data.newState.progress)
       await mutate()
     } catch (error) {
       toast({

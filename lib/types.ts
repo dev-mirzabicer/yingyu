@@ -14,8 +14,6 @@ import {
   VocabularyCard,
   Teacher,
   StudentCardState,
-  StudentNote,
-  Deck,
   Job,
 } from '@prisma/client';
 import { z } from 'zod';
@@ -41,6 +39,22 @@ export type FullUnit = Unit & {
   items: PopulatedUnitItem[];
 };
 
+export type UnitWithItems = Unit & {
+  items: UnitItem[];
+};
+
+export type UnitWithCount = Unit & {
+  _count: {
+    items: number;
+  };
+};
+
+export type VocabularyDeckWithCount = VocabularyDeck & {
+  _count: {
+    cards: number;
+  };
+};
+
 export type PopulatedStudentDeck = StudentDeck & {
   deck: VocabularyDeck & {
     cards?: { id: string }[];
@@ -48,8 +62,9 @@ export type PopulatedStudentDeck = StudentDeck & {
 };
 
 export type FullStudentProfile = Student & {
+  classesRemaining: number;
   studentDecks: (StudentDeck & {
-    deck: Deck & {
+    deck: VocabularyDeck & {
       _count: {
         cards: number;
       };
@@ -57,7 +72,8 @@ export type FullStudentProfile = Student & {
   })[];
   payments: Payment[];
   classSchedules: ClassSchedule[];
-  notes: StudentNote[];
+  notes: string | null;
+  upcomingClasses: ClassSchedule[];
 };
 
 // ================================================================= //

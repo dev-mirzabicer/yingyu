@@ -38,13 +38,13 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import {
   useStudent,
-  useDecks,
   useAvailableUnits,
   assignDeck,
   updateStudent,
   archiveStudent,
   updateStudentNotes,
 } from "@/hooks/api/students"
+import { useDecks } from "@/hooks/api/content"
 import { format } from "date-fns"
 import { SessionStartDialog } from "@/components/session-start-dialog"
 import { AvailableUnitsList } from "@/components/available-units-list"
@@ -141,7 +141,8 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
     if (!selectedDeckId || !student) return
 
     try {
-      const result = await assignDeck(student.id, selectedDeckId)
+      const response = await assignDeck(student.id, selectedDeckId)
+      const result = response.data;
       if (result.job) {
         setAssignDeckJobId(result.job.id)
         toast({

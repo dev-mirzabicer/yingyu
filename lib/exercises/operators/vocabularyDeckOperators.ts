@@ -6,8 +6,8 @@ import {
   SubmissionResult,
   VocabularyDeckProgress,
   SessionProgress,
-  VocabularyQueueItem,
 } from '@/lib/types';
+import { StudentCardState, VocabularyCard, ReviewType } from '@prisma/client';
 import { FsrsRating } from '@/lib/fsrs/engine';
 import { ReviewType } from '@prisma/client';
 import { z } from 'zod';
@@ -81,7 +81,7 @@ class SubmitRatingOperator implements ProgressOperator {
           studentId: services.studentId,
           card: { deckId: currentDeckId },
         },
-        select: { cardId: true, due: true, state: true },
+        include: { card: true },
       });
     } else {
       // Fallback: use initial card IDs (preserves existing behavior for mixed units)
@@ -90,7 +90,7 @@ class SubmitRatingOperator implements ProgressOperator {
           studentId: services.studentId,
           cardId: { in: currentProgress.payload.initialCardIds },
         },
-        select: { cardId: true, due: true, state: true },
+        include: { card: true },
       });
     }
 
@@ -121,33 +121,17 @@ class SubmitRatingOperator implements ProgressOperator {
         : 'no relearning cards'
     });
     // Build the new queue with simple state-based isNew classification
-    const newQueue: VocabularyQueueItem[] = allSessionStates
+    const newQueue = allSessionStates
       .filter((state) => state.due <= now)
-      .map((state) => ({
-        cardId: state.cardId,
-        due: state.due,
-        state: state.state as any,
-      }))
       .sort((a, b) => a.due.getTime() - b.due.getTime());
 
     // DEBUG: Log the final queue
     console.log('Final queue DEBUG:', {
       totalFound: allSessionStates.length,
       queueLength: newQueue.length,
-      newCards: newQueue.filter(q => q.isNew).length,
-      reviewCards: newQueue.filter(q => !q.isNew).length
+      newCards: newQueue.filter(q => q.state === 'NEW').length,
+      reviewCards: newQueue.filter(q => q.state !== 'NEW').length
     });
-
-    let nextCardData = undefined;
-    if (newQueue.length > 0) {
-      nextCardData = await services.tx.vocabularyCard.findUnique({
-        where: { id: newQueue[0].cardId },
-      });
-      if (!nextCardData)
-        throw new Error(
-          `Data integrity error: Card ${newQueue[0].cardId} not found.`
-        );
-    }
 
     const newProgress: VocabularyDeckProgress = {
       ...currentProgress,
@@ -155,7 +139,7 @@ class SubmitRatingOperator implements ProgressOperator {
       payload: {
         ...currentProgress.payload,
         queue: newQueue,
-        currentCardData: nextCardData,
+        currentCardData: newQueue.length > 0 ? newQueue[0] : undefined,
       },
     };
 
