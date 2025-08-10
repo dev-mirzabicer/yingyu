@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { JobService } from '@/lib/actions/jobs';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
-import { getAuth } from '@clerk/nextjs/server';
+
 
 /**
  * GET /api/jobs/{jobId}
@@ -12,9 +12,9 @@ export async function GET(
   { params }: { params: { jobId: string } }
 ) {
   try {
-    const { userId: teacherId } = getAuth(req);
+    const teacherId = req.headers.get('X-Teacher-ID');
     if (!teacherId) {
-      return apiResponse(401, null, 'Unauthorized');
+      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
     const job = await JobService.getJobStatus(params.jobId, teacherId);

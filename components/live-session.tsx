@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useMemo } from "react" // Import useMemo
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
@@ -12,15 +12,18 @@ import { useToast } from "@/hooks/use-toast"
 import { useSession, submitAnswer, endSession } from "@/hooks/api/sessions"
 import { AnswerPayload } from "@/lib/types"
 import { formatTime } from "@/lib/utils"
-import { useLiveSessionStore, useProgressData } from "@/hooks/stores/use-live-session-store"
+import { useLiveSessionStore } from "@/hooks/stores/use-live-session-store" // Remove useProgressData
 import { getExerciseComponent, exerciseTypeInfo } from "@/components/exercises/dispatcher"
 import { format } from "date-fns"
+import { StudentCardState, VocabularyCard } from '@prisma/client' // Import types
 
 interface LiveSessionProps {
   sessionId: string
 }
 
 type Rating = 1 | 2 | 3 | 4 // Again, Hard, Good, Easy
+type EnrichedStudentCardState = StudentCardState & { card: VocabularyCard };
+
 
 export function LiveSession({ sessionId }: LiveSessionProps) {
   const { session, isLoading: sessionLoading, isError, mutate } = useSession(sessionId)
@@ -42,7 +45,60 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     reset,
   } = useLiveSessionStore()
 
-  const progressData = useProgressData()
+  // --- FIX: Select raw state instead of using the custom hook ---
+  const progress = useLiveSessionStore((state) => state.progress)
+  const reviewCount = useLiveSessionStore((state) => state.reviewCount)
+  const encounteredCards = useLiveSessionStore((state) => state.encounteredCards)
+
+  // --- FIX: Use useMemo to derive state inside the component ---
+  const progressData = useMemo(() => {
+    if (!progress || progress.type !== 'VOCABULARY_DECK') {
+      return {
+        totalCards: 0,
+        completedCards: 0,
+        remainingCards: 0,
+        percentage: 0,
+        currentCard: null,
+        currentCardIndex: 0,
+        queue: [],
+        queueAnalysis: {
+          totalInQueue: 0,
+          newCards: 0,
+          learningCards: 0,
+          reviewCards: 0,
+        },
+        reviewsCompleted: 0,
+        uniqueCardsEncountered: 0,
+      };
+    }
+
+    const { queue, initialCardIds, currentCardData } = progress.payload;
+    const totalCards = initialCardIds.length;
+    const remainingCards = queue.length;
+    const completedCards = totalCards > 0 ? totalCards - remainingCards : 0;
+    const percentage = totalCards > 0 ? (completedCards / totalCards) * 100 : 0;
+    const currentCardIndex = completedCards;
+
+    const queueAnalysis = {
+      totalInQueue: queue.length,
+      newCards: queue.filter(c => c.state === 'NEW').length,
+      learningCards: queue.filter(c => c.state === 'LEARNING' || c.state === 'RELEARNING').length,
+      reviewCards: queue.filter(c => c.state === 'REVIEW').length,
+    };
+
+    return {
+      totalCards,
+      completedCards,
+      remainingCards,
+      percentage,
+      currentCard: currentCardData as EnrichedStudentCardState | undefined,
+      currentCardIndex,
+      queue: queue as EnrichedStudentCardState[],
+      queueAnalysis,
+      reviewsCompleted: reviewCount,
+      uniqueCardsEncountered: encounteredCards.size,
+    };
+  }, [progress, reviewCount, encounteredCards]); // Dependency array ensures this only re-runs when needed
 
   // Effect to initialize or update the store when the session data is fetched or changed
   useEffect(() => {
@@ -80,7 +136,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
       }
       const result = await submitAnswer(sessionId, payload)
       if (result.data.newState.progress) {
-        setProgress(result.data.newState.progress)
+        setProgress(result.data.newState.progress as any)
       }
       await mutate()
     } catch (error) {
@@ -106,7 +162,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
       const result = await submitAnswer(sessionId, payload)
       incrementReviewCount()
       if (result.data.newState.progress) {
-        setProgress(result.data.newState.progress)
+        setProgress(result.data.newState.progress as any)
       }
       await mutate()
     } catch (error) {
@@ -329,7 +385,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
                 {progressData.reviewsCompleted > progressData.uniqueCardsEncountered && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded p-2">
                     <div className="text-xs text-yellow-700 font-medium">
-                      🔄 Cards Cycling
+                       Cards Cycling
                     </div>
                     <div className="text-xs text-yellow-600">
                       {progressData.reviewsCompleted - progressData.uniqueCardsEncountered} repeat reviews due to FSRS scheduling

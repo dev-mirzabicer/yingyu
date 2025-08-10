@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { ContentService } from '@/lib/actions/content';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
 import { z } from 'zod';
-import { getAuth } from '@clerk/nextjs/server';
+
 
 const ReorderItemsBodySchema = z.object({
   orderedIds: z.array(z.string().uuid()),
@@ -18,9 +18,9 @@ export async function PUT(
   { params }: { params: { unitId: string } }
 ) {
   try {
-    const { userId: teacherId } = getAuth(req);
+    const teacherId = req.headers.get('X-Teacher-ID');
     if (!teacherId) {
-      return apiResponse(401, null, 'Unauthorized');
+      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
     const body = await req.json();
