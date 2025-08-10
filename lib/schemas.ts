@@ -22,11 +22,7 @@ export const RecordPaymentSchema = z.object({
     .number()
     .int()
     .positive({ message: 'Number of classes must be a positive integer.' }),
-  paymentDate: z.coerce.date({
-    errorMap: (issue, { defaultError }) => ({
-      message: issue.code === 'invalid_date' ? 'Invalid date' : defaultError,
-    }),
-  }),
+  paymentDate: z.coerce.date().refine(date => !isNaN(date.getTime()), { message: 'Invalid date' }),
 });
 
 // Schema for creating a new Unit (lesson plan).
@@ -116,11 +112,7 @@ export const OptimizeParamsPayloadSchema = z.object({
  * Validates the request body for creating a new class schedule.
  */
 export const CreateScheduleSchema = z.object({
-  scheduledTime: z.coerce.date({
-    errorMap: (issue, { defaultError }) => ({
-      message: issue.code === 'invalid_date' ? 'Invalid date' : defaultError,
-    }),
-  }),
+  scheduledTime: z.coerce.date().refine(date => !isNaN(date.getTime()), { message: 'Invalid date' }),
   duration: z.number().int().positive().optional(),
   notes: z.string().optional(),
 });
@@ -130,12 +122,8 @@ export const CreateScheduleSchema = z.object({
  */
 export const UpdateScheduleSchema = z.object({
   scheduledTime: z.coerce
-    .date({
-      errorMap: (issue, { defaultError }) => ({
-        message: issue.code === 'invalid_date' ? 'Invalid date' : defaultError,
-      }),
-    })
-    .optional(),
+    .date()
+    .refine(date => !isNaN(date.getTime()), { message: 'Invalid date' }),
   status: z.nativeEnum(ClassStatus).optional(),
   duration: z.number().int().positive().optional(),
   notes: z.string().optional(),
@@ -202,8 +190,11 @@ export const AddItemBodySchema = z.discriminatedUnion('itemType', [
     exerciseData: CreateDeckSchema.optional(),
     exerciseConfig: VocabularyExerciseConfigSchema,
   }),
-  // Add other exercise types here as they are implemented
-  // e.g., z.object({ itemType: z.literal('GRAMMAR_EXERCISE'), ... })
+  z.object({
+    itemType: z.literal('GRAMMAR_EXERCISE'),
+    exerciseId: z.string().uuid().optional(),
+    // exerciseData: CreateGrammarExerciseSchema.optional(), // Add this when the schema is created
+  }),
 ]);
 
 /**
@@ -237,14 +228,14 @@ export const StartSessionSchema = z.object({
  */
 export const SubmitAnswerSchema = z.object({
   action: z.string(),
-  data: z.record(z.any()),
+  data: z.record(z.any(), z.any()),
 });
 
 /**
 * Validates the payload for reordering items in a unit.
 */
 export const ReorderItemsSchema = z.object({
-  itemIds: z.array(z.string().uuid()),
+  itemIds: z.array(z.string()),
 });
 
 /**

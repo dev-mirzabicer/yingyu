@@ -191,9 +191,9 @@ export function useFsrsStats(studentId: string) {
   };
 }
 
-export function useAvailableUnits(studentId: string) {
+export function useAvailableUnits(studentId: string, options?: { skip?: boolean }) {
   const { data, error, isLoading, mutate } = useSWR<AvailableUnit[]>(
-    studentId ? `/api/students/${studentId}/available-units` : null,
+    studentId && !options?.skip ? `/api/students/${studentId}/available-units` : null,
     fetcher,
   )
 

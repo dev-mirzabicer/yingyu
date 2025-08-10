@@ -371,7 +371,9 @@ export const StudentService = {
     return prisma.classSchedule.create({
       data: {
         studentId,
-        ...scheduleData,
+        scheduledTime: scheduleData.scheduledTime,
+        duration: scheduleData.duration,
+        notes: scheduleData.notes,
       },
     });
   },
