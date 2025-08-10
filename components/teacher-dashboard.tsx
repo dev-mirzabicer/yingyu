@@ -18,7 +18,7 @@ import { useStudents, createStudent } from "@/hooks/api/students"
 import { useDecks } from "@/hooks/api/content"
 import { format } from "date-fns"
 import { SessionStartDialog } from "@/components/session-start-dialog"
-import type { FullStudentProfile, ClassSchedule } from "@/lib/types"
+import type { FullStudentProfile } from "@/lib/types"
 
 export function TeacherDashboard() {
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false)
@@ -90,7 +90,7 @@ export function TeacherDashboard() {
       student.classSchedules
         ?.filter((s) => new Date(s.scheduledTime) > new Date())
         .sort(
-          (a: ClassSchedule, b: ClassSchedule) =>
+          (a, b) =>
             new Date(a.scheduledTime).getTime() -
             new Date(b.scheduledTime).getTime()
         ) || []

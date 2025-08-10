@@ -36,6 +36,7 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import {
   useUnits,
+  useUnit,
   useDecks,
   createUnit,
   updateUnit,
@@ -149,13 +150,16 @@ const difficultyLevels = [
 ]
 
 export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
-  const { units, mutate: mutateUnits } = useUnits()
+  const { mutate: mutateUnits } = useUnits() // Keep for mutation
+  const { unit: fullUnitData, isLoading: isUnitLoading } = useUnit(unitId || ""); // Use the specific hook
   const { decks } = useDecks()
 
   const [unitData, setUnitData] = useState({
     name: "",
     description: "",
     isPublic: false,
+    estimatedMinimumDuration: 0, // Add missing property
+    estimatedMaximumDuration: 0, // Add missing property
   })
 
   const [unitItems, setUnitItems] = useState<DraggableUnitItem[]>([])
@@ -168,13 +172,15 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
 
   // Load existing unit data if editing
   useEffect(() => {
-    if (unitId && units) {
-      const existingUnit = units.find((u) => u.id === unitId) as FullUnit
+    if (unitId && fullUnitData) {
+      const existingUnit = fullUnitData
       if (existingUnit) {
         setUnitData({
           name: existingUnit.name,
           description: existingUnit.description || "",
           isPublic: existingUnit.isPublic,
+          estimatedMinimumDuration: existingUnit.estimatedMinimumDuration || 0,
+          estimatedMaximumDuration: existingUnit.estimatedMaximumDuration || 0,
         })
 
         // Convert unit items to draggable format
@@ -196,7 +202,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
         setUnitItems(draggableItems)
       }
     }
-  }, [unitId, units])
+  }, [unitId, fullUnitData])
 
   const handleDragEnd = useCallback(
     async (result: DropResult) => {

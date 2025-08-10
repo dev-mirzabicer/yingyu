@@ -23,7 +23,9 @@ export const RecordPaymentSchema = z.object({
     .int()
     .positive({ message: 'Number of classes must be a positive integer.' }),
   paymentDate: z.coerce.date({
-    errorMap: () => ({ message: 'Invalid payment date format.' }),
+    errorMap: (issue, { defaultError }) => ({
+      message: issue.code === 'invalid_date' ? 'Invalid date' : defaultError,
+    }),
   }),
 });
 
@@ -115,7 +117,9 @@ export const OptimizeParamsPayloadSchema = z.object({
  */
 export const CreateScheduleSchema = z.object({
   scheduledTime: z.coerce.date({
-    invalid_type_error: 'Invalid scheduled time format.',
+    errorMap: (issue, { defaultError }) => ({
+      message: issue.code === 'invalid_date' ? 'Invalid date' : defaultError,
+    }),
   }),
   duration: z.number().int().positive().optional(),
   notes: z.string().optional(),
@@ -127,7 +131,9 @@ export const CreateScheduleSchema = z.object({
 export const UpdateScheduleSchema = z.object({
   scheduledTime: z.coerce
     .date({
-      invalid_type_error: 'Invalid scheduled time format.',
+      errorMap: (issue, { defaultError }) => ({
+        message: issue.code === 'invalid_date' ? 'Invalid date' : defaultError,
+      }),
     })
     .optional(),
   status: z.nativeEnum(ClassStatus).optional(),
@@ -177,7 +183,7 @@ export const BulkImportSchedulesPayloadSchema = z.object({
   schedules: z.array(
     z.object({
       studentEmail: z.string().email(),
-      scheduledTime: z.string(),
+      scheduledTime: z.coerce.date(),
       duration: z.coerce.number().int().positive().optional(),
       notes: z.string().optional(),
       type: z.string().optional(),

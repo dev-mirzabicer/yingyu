@@ -35,14 +35,31 @@ export const SessionService = {
   ): Promise<FullSessionState | null> {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      include: fullSessionStateInclude,
+      include: {
+        ...fullSessionStateInclude,
+        unit: {
+          include: {
+            items: {
+              orderBy: { order: 'asc' },
+              include: {
+                vocabularyDeck: {
+                  include: { cards: { select: { id: true } } },
+                },
+                grammarExercise: true,
+                listeningExercise: true,
+                vocabFillInBlankExercise: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!session || session.teacherId !== teacherId) {
       return null;
     }
 
-    return session as FullSessionState;
+    return session as unknown as FullSessionState;
   },
 
   /**

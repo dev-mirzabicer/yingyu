@@ -569,11 +569,15 @@ export const StudentService = {
           include: {
             vocabularyDeck: {
               include: {
+                cards: { select: { id: true } },
                 _count: {
                   select: { cards: true },
                 },
               },
             },
+            grammarExercise: true,
+            listeningExercise: true,
+            vocabFillInBlankExercise: true,
           },
           orderBy: { order: 'asc' },
         },

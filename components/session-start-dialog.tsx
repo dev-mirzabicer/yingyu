@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -79,25 +79,20 @@ export function SessionStartDialog({
   })
   const units = initialUnits || fetchedUnits
 
-  const [selectedUnit, setSelectedUnit] = useState<AvailableUnit | null>(() => {
-    if (initialUnitId) {
-      return units.find((u: AvailableUnit) => u.id === initialUnitId) || null
+  const [selectedUnit, setSelectedUnit] = useState<AvailableUnit | null>(null);
+
+  useEffect(() => {
+    if (open && initialUnitId && units) {
+      const unitToSelect = units.find((u: AvailableUnit) => u.id === initialUnitId) || null;
+      setSelectedUnit(unitToSelect);
     }
-    return null
-  })
+  }, [open, initialUnitId, units]);
   const [isStarting, setIsStarting] = useState(false)
   const [configOverrides, setConfigOverrides] = useState<{ [key: string]: any }>({})
   const router = useRouter()
   const { toast } = useToast()
 
-  useState(() => {
-    if (open && initialUnitId) {
-      const unitToSelect = units.find((u: AvailableUnit) => u.id === initialUnitId)
-      if (unitToSelect) {
-        setSelectedUnit(unitToSelect)
-      }
-    }
-  }, [open, initialUnitId, units])
+  
 
   const handleUnitSelect = (unit: AvailableUnit) => {
     setSelectedUnit(selectedUnit?.id === unit.id ? null : unit)
