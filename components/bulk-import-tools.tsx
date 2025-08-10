@@ -38,15 +38,15 @@ import {
   FileClock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { DataTable } from "@/components/data-table";
+import { DataTable, type Column } from "@/components/data-table";
 import { JobStatusIndicator } from "@/components/ui/job-status-indicator";
 import { Job } from "@prisma/client";
-import { ColumnDef } from "@tanstack/react-table";
 import { BulkImportResult, BulkImportError } from "@/lib/types";
 import { BulkImportResultSchema } from "@/lib/schemas/jobs";
 
 interface BulkImportToolsProps {
   deckId?: string;
+  onComplete?: () => void;
 }
 
 // Note: Local validation types are kept for the initial parsing step.
@@ -332,26 +332,27 @@ export function BulkImportTools({ deckId }: BulkImportToolsProps) {
     }
   };
 
-  const resultErrorColumns: ColumnDef<BulkImportError>[] = [
+  const resultErrorColumns: Column<BulkImportError>[] = [
     {
-      accessorKey: "rowNumber",
+      key: "rowNumber",
       header: "Row",
-      cell: ({ row }) => (
-        <Badge variant="outline">Row {row.original.rowNumber}</Badge>
+      render: (value, row) => (
+        <Badge variant="outline">Row {row.rowNumber}</Badge>
       ),
     },
     {
-      accessorKey: "fieldName",
+      key: "fieldName",
       header: "Field",
-      cell: ({ row }) => (
+      render: (value, row) => (
         <code className="text-sm bg-slate-100 px-1 rounded">
-          {row.original.fieldName}
+          {row.fieldName}
         </code>
       ),
     },
     {
-      accessorKey: "errorMessage",
+      key: "errorMessage",
       header: "Message",
+      render: (value, row) => row.errorMessage,
     },
   ];
 
@@ -569,31 +570,32 @@ export function BulkImportTools({ deckId }: BulkImportToolsProps) {
                         {
                           key: "row",
                           header: "Row",
-                          render: (value: number) => (
-                            <Badge variant="outline">Row {value}</Badge>
+                          render: (value, row) => (
+                            <Badge variant="outline">Row {row.row}</Badge>
                           ),
                         },
                         {
                           key: "field",
                           header: "Field",
-                          render: (value: string) => (
+                          render: (value, row) => (
                             <code className="text-sm bg-slate-100 px-1 rounded">
-                              {value}
+                              {row.field}
                             </code>
                           ),
                         },
                         {
                           key: "message",
                           header: "Message",
+                          render: (value, row) => row.message,
                         },
                         {
                           key: "severity",
                           header: "Severity",
-                          render: (value: string) => (
+                          render: (value, row) => (
                             <Badge
-                              variant={value === "error" ? "destructive" : "secondary"}
+                              variant={row.severity === "error" ? "destructive" : "secondary"}
                             >
-                              {value}
+                              {row.severity}
                             </Badge>
                           ),
                         },
@@ -690,14 +692,7 @@ export function BulkImportTools({ deckId }: BulkImportToolsProps) {
                       </Badge>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <DataTable
-                      columns={resultErrorColumns}
-                      data={importedData.errors}
-                      filterColumn="errorMessage"
-                      filterPlaceholder="Filter by error message..."
-                    />
-                  </CardContent>
+                  
                 </Card>
               )}
             </>

@@ -234,7 +234,7 @@ export const ContentService = {
       throw new Error(`Unit with ID ${unitId} not found.`);
     }
 
-    if (targetUnit.isPublic && !itemData.data.isPublic) {
+    if (targetUnit.isPublic && 'data' in itemData && itemData.data && !itemData.data.isPublic) {
       throw new AuthorizationError(
         'Cannot add a private exercise to a public unit. Please make the exercise public first.'
       );
@@ -284,7 +284,7 @@ export const ContentService = {
               order: newOrder,
               type: 'VOCABULARY_DECK',
               vocabularyDeckId: deckId,
-              exerciseConfig: itemData.config || null,
+              exerciseConfig: itemData.config || Prisma.JsonNull,
             },
           });
           break;
@@ -299,7 +299,7 @@ export const ContentService = {
               order: newOrder,
               type: 'GRAMMAR_EXERCISE',
               grammarExerciseId: exercise.id,
-              exerciseConfig: itemData.config || null,
+              exerciseConfig: itemData.config || Prisma.JsonNull,
             },
           });
           break;
@@ -314,7 +314,7 @@ export const ContentService = {
               order: newOrder,
               type: 'LISTENING_EXERCISE',
               listeningExerciseId: exercise.id,
-              exerciseConfig: itemData.config || null,
+              exerciseConfig: itemData.config || Prisma.JsonNull,
             },
           });
           break;
@@ -329,7 +329,7 @@ export const ContentService = {
               order: newOrder,
               type: 'VOCAB_FILL_IN_BLANK_EXERCISE',
               vocabFillInBlankExerciseId: exercise.id,
-              exerciseConfig: itemData.config || null,
+              exerciseConfig: itemData.config || Prisma.JsonNull,
             },
           });
           break;
@@ -582,6 +582,7 @@ export const ContentService = {
 
     const cardsToCreate = cards.map((card) => ({
       ...card,
+      tags: card.tags ? card.tags.split(',').map(t => t.trim()) : [],
       deckId,
     }));
 

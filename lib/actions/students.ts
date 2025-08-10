@@ -515,7 +515,7 @@ export const StudentService = {
 
     const schedulesToCreate = await Promise.all(
       schedules.map(async (schedule) => {
-        const student = await prisma.student.findUnique({
+        const student = await prisma.student.findFirst({
           where: { email: schedule.studentEmail },
         });
 

@@ -130,11 +130,11 @@ export function useStudentSchedules(studentId: string) {
   }
 }
 
-export async function createSchedule(studentId: string, scheduleData: { scheduledTime: string }) {
+export async function createSchedule(studentId: string, scheduleData: { scheduledTime: string; duration?: number; notes?: string }) {
   return mutateWithOptimistic<ClassSchedule>(`/api/students/${studentId}/schedules`, "POST", scheduleData)
 }
 
-export async function updateSchedule(scheduleId: string, scheduleData: { scheduledTime?: string; status?: string }) {
+export async function updateSchedule(scheduleId: string, scheduleData: { scheduledTime?: string; status?: string; duration?: number; notes?: string }) {
   return mutateWithOptimistic<ClassSchedule>(`/api/schedules/${scheduleId}`, "PUT", scheduleData)
 }
 

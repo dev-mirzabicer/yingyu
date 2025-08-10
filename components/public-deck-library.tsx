@@ -66,7 +66,9 @@ export function PublicDeckLibrary({ onDeckImported }: PublicDeckLibraryProps) {
         title: "Deck imported successfully",
         description: `"${deck.name}" has been added to your collection.`,
       })
-      onDeckImported?.(response)
+      if (response.data) {
+        onDeckImported?.(response.data)
+      }
       setIsDeckDetailOpen(false)
     } catch (error) {
       toast({

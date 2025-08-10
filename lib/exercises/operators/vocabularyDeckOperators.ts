@@ -9,7 +9,6 @@ import {
 } from '@/lib/types';
 import { StudentCardState, VocabularyCard, ReviewType } from '@prisma/client';
 import { FsrsRating } from '@/lib/fsrs/engine';
-import { ReviewType } from '@prisma/client';
 import { z } from 'zod';
 
 class RevealAnswerOperator implements ProgressOperator {

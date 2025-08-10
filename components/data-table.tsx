@@ -16,6 +16,8 @@ interface Column<T> {
   searchable?: boolean
 }
 
+export type { Column }
+
 interface DataTableProps<T> {
   data: T[]
   columns: Column<T>[]

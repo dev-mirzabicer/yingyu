@@ -17,7 +17,7 @@ export async function GET(
       return apiResponse(401, null, 'Unauthorized');
     }
 
-    const stats = await FSRSService.getStudentStats(
+    const stats = await FSRSService.getFsrsStats(
       params.studentId,
       teacherId
     );

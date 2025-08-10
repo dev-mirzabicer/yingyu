@@ -18,6 +18,7 @@ import { useStudents, createStudent } from "@/hooks/api/students"
 import { useDecks } from "@/hooks/api/content"
 import { format } from "date-fns"
 import { SessionStartDialog } from "@/components/session-start-dialog"
+import type { FullStudentProfile, ClassSchedule } from "@/lib/types"
 
 export function TeacherDashboard() {
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false)
@@ -72,8 +73,8 @@ export function TeacherDashboard() {
   }
 
   // Calculate stats from real data
-  const activeStudents = students.filter(s => s.status === 'ACTIVE')
-  const lowBalanceStudents = students.filter(s => s.classesRemaining <= 2)
+  const activeStudents = students.filter((s: FullStudentProfile) => s.status === 'ACTIVE')
+  const lowBalanceStudents = students.filter((s: FullStudentProfile) => s.classesRemaining <= 2)
   const totalUpcomingClasses =
     students?.reduce((acc, student) => {
       return (
@@ -84,12 +85,12 @@ export function TeacherDashboard() {
       )
     }, 0) || 0
 
-  const formatNextClass = (student: any) => {
+  const formatNextClass = (student: FullStudentProfile) => {
     const upcoming =
       student.classSchedules
         ?.filter((s) => new Date(s.scheduledTime) > new Date())
         .sort(
-          (a, b) =>
+          (a: ClassSchedule, b: ClassSchedule) =>
             new Date(a.scheduledTime).getTime() -
             new Date(b.scheduledTime).getTime()
         ) || []

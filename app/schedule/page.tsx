@@ -135,7 +135,12 @@ export default function SchedulePage() {
 
       {/* Scheduling Interface */}
       {selectedStudent ? (
-        <ClassScheduler student={selectedStudent} onScheduleUpdated={handleScheduleUpdated} />
+        <ClassScheduler
+          studentId={selectedStudent.id}
+          studentName={selectedStudent.name}
+          classesRemaining={selectedStudent.classesRemaining}
+          onScheduleUpdated={handleScheduleUpdated}
+        />
       ) : activeStudents.length > 0 ? (
         <Card>
           <CardContent className="p-12 text-center">

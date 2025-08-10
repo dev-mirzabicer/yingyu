@@ -115,7 +115,7 @@ export const OptimizeParamsPayloadSchema = z.object({
  */
 export const CreateScheduleSchema = z.object({
   scheduledTime: z.coerce.date({
-    errorMap: () => ({ message: 'Invalid scheduled time format.' }),
+    invalid_type_error: 'Invalid scheduled time format.',
   }),
   duration: z.number().int().positive().optional(),
   notes: z.string().optional(),
@@ -127,7 +127,7 @@ export const CreateScheduleSchema = z.object({
 export const UpdateScheduleSchema = z.object({
   scheduledTime: z.coerce
     .date({
-      errorMap: () => ({ message: 'Invalid scheduled time format.' }),
+      invalid_type_error: 'Invalid scheduled time format.',
     })
     .optional(),
   status: z.nativeEnum(ClassStatus).optional(),

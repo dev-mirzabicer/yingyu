@@ -92,7 +92,7 @@ export default function PaymentsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {activeStudents.map((student) => {
-                        const totalPaid = student.payments.reduce((sum, p) => sum + safeNumberConversion(p.amount), 0)
+                        const totalPaid = student.payments.reduce((sum, p) => sum + safeNumberConversion(p.amount.toString()), 0)
                         return (
                           <SelectItem key={student.id} value={student.id}>
                             <div className="flex items-center space-x-3">
@@ -145,7 +145,7 @@ export default function PaymentsPage() {
                         {selectedStudent.classesRemaining} classes remaining
                       </Badge>
                       <Badge variant="outline">
-                        ¥{selectedStudent.payments.reduce((sum, p) => sum + safeNumberConversion(p.amount), 0).toFixed(2)} total paid
+                        ¥{selectedStudent.payments.reduce((sum, p) => sum + safeNumberConversion(p.amount.toString()), 0).toFixed(2)} total paid
                       </Badge>
                     </div>
                   </div>
@@ -158,7 +158,12 @@ export default function PaymentsPage() {
 
       {/* Payment Management Interface */}
       {selectedStudent ? (
-        <PaymentManager student={selectedStudent} onPaymentRecorded={handlePaymentRecorded} />
+        <PaymentManager
+          studentId={selectedStudent.id}
+          studentName={selectedStudent.name}
+          classesRemaining={selectedStudent.classesRemaining}
+          onPaymentRecorded={handlePaymentRecorded}
+        />
       ) : activeStudents.length > 0 ? (
         <Card>
           <CardContent className="p-12 text-center">

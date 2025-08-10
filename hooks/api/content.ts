@@ -122,7 +122,19 @@ export async function addCardToDeck(
   return mutateWithOptimistic<VocabularyCard>(`/api/decks/${deckId}/cards`, "POST", cardData)
 }
 
-export async function updateCard(cardId: string, cardData: Partial<VocabularyCard>) {
+export async function updateCard(cardId: string, cardData: Partial<{
+  englishWord: string
+  chineseTranslation: string
+  pinyin: string
+  ipaPronunciation: string
+  exampleSentences: any
+  wordType: string
+  difficultyLevel: number
+  audioUrl: string
+  imageUrl: string
+  videoUrl: string
+  tags: string[]
+}>) {
   return mutateWithOptimistic<VocabularyCard>(`/api/cards/${cardId}`, "PUT", cardData)
 }
 

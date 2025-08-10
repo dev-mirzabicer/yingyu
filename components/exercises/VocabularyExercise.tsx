@@ -56,7 +56,7 @@ export function VocabularyExercise({
             <Badge variant="outline">Vocabulary</Badge>
           </div>
           <CardTitle className="text-4xl font-bold text-slate-900">
-            {currentCard.englishWord}
+            {currentCard.card.englishWord}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -64,13 +64,13 @@ export function VocabularyExercise({
             <>
               <div className="p-4 bg-slate-50 rounded-lg">
                 <p className="text-2xl font-medium text-slate-900 mb-2">
-                  {currentCard.chineseTranslation}
+                  {currentCard.card.chineseTranslation}
                 </p>
-                {currentCard.exampleSentences && (
+                {currentCard.card.exampleSentences && (
                   <p className="text-slate-600">
-                    {typeof currentCard.exampleSentences === "string"
-                      ? currentCard.exampleSentences
-                      : JSON.stringify(currentCard.exampleSentences)}
+                    {typeof currentCard.card.exampleSentences === "string"
+                      ? currentCard.card.exampleSentences
+                      : JSON.stringify(currentCard.card.exampleSentences)}
                   </p>
                 )}
               </div>
