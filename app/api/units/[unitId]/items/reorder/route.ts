@@ -15,7 +15,7 @@ const ReorderItemsBodySchema = z.object({
  */
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { unitId: string } }
+  { params }: { params: Promise<{ unitId: string }> }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -23,11 +23,12 @@ export async function PUT(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
+    const { unitId } = await params;
     const body = await req.json();
     const { orderedIds } = ReorderItemsBodySchema.parse(body);
 
     const updatedUnit = await ContentService.reorderUnitItems(
-      params.unitId,
+      unitId,
       teacherId,
       orderedIds
     );

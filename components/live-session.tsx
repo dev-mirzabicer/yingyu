@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo } from "react" // Import useMemo
+import { useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
@@ -12,25 +12,23 @@ import { useToast } from "@/hooks/use-toast"
 import { useSession, submitAnswer, endSession } from "@/hooks/api/sessions"
 import { AnswerPayload } from "@/lib/types"
 import { formatTime } from "@/lib/utils"
-import { useLiveSessionStore } from "@/hooks/stores/use-live-session-store" // Remove useProgressData
+import { useLiveSessionStore } from "@/hooks/stores/use-live-session-store"
 import { getExerciseComponent, exerciseTypeInfo } from "@/components/exercises/dispatcher"
 import { format } from "date-fns"
-import { StudentCardState, VocabularyCard } from '@prisma/client' // Import types
+import { StudentCardState, VocabularyCard } from '@prisma/client'
 
 interface LiveSessionProps {
   sessionId: string
 }
 
-type Rating = 1 | 2 | 3 | 4 // Again, Hard, Good, Easy
+type Rating = 1 | 2 | 3 | 4
 type EnrichedStudentCardState = StudentCardState & { card: VocabularyCard };
 
-
 export function LiveSession({ sessionId }: LiveSessionProps) {
-  const { session, isLoading: sessionLoading, isError, mutate } = useSession(sessionId)
+  const { session, isLoading: sessionLoading, isError } = useSession(sessionId)
   const router = useRouter()
   const { toast } = useToast()
 
-  // Zustand store integration
   const {
     isActionLoading,
     isPaused,
@@ -40,17 +38,15 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     resumeSession,
     incrementReviewCount,
     setElapsedTime,
-    startSession: startSessionInStore,
-    setProgress,
+    initializeSession,
+    updateProgress,
     reset,
+    progress,
+    reviewCount,
+    encounteredCards,
+    sessionId: storeSessionId,
   } = useLiveSessionStore()
 
-  // --- FIX: Select raw state instead of using the custom hook ---
-  const progress = useLiveSessionStore((state) => state.progress)
-  const reviewCount = useLiveSessionStore((state) => state.reviewCount)
-  const encounteredCards = useLiveSessionStore((state) => state.encounteredCards)
-
-  // --- FIX: Use useMemo to derive state inside the component ---
   const progressData = useMemo(() => {
     if (!progress || progress.type !== 'VOCABULARY_DECK') {
       return {
@@ -59,14 +55,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
         remainingCards: 0,
         percentage: 0,
         currentCard: null,
-        currentCardIndex: 0,
-        queue: [],
-        queueAnalysis: {
-          totalInQueue: 0,
-          newCards: 0,
-          learningCards: 0,
-          reviewCards: 0,
-        },
+        queueAnalysis: { totalInQueue: 0, newCards: 0, learningCards: 0, reviewCards: 0 },
         reviewsCompleted: 0,
         uniqueCardsEncountered: 0,
       };
@@ -74,10 +63,11 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
 
     const { queue, initialCardIds, currentCardData } = progress.payload;
     const totalCards = initialCardIds.length;
-    const remainingCards = queue.length;
-    const completedCards = totalCards > 0 ? totalCards - remainingCards : 0;
+    const uniqueCardsEncountered = encounteredCards.size;
+    
+    // This is the corrected, intuitive progress logic
+    const completedCards = uniqueCardsEncountered;
     const percentage = totalCards > 0 ? (completedCards / totalCards) * 100 : 0;
-    const currentCardIndex = completedCards;
 
     const queueAnalysis = {
       totalInQueue: queue.length,
@@ -89,36 +79,35 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     return {
       totalCards,
       completedCards,
-      remainingCards,
+      remainingCards: queue.length, // Keep this for "cards remaining" display
       percentage,
       currentCard: currentCardData as EnrichedStudentCardState | undefined,
-      currentCardIndex,
-      queue: queue as EnrichedStudentCardState[],
       queueAnalysis,
       reviewsCompleted: reviewCount,
-      uniqueCardsEncountered: encounteredCards.size,
+      uniqueCardsEncountered,
     };
-  }, [progress, reviewCount, encounteredCards]); // Dependency array ensures this only re-runs when needed
+  }, [progress, reviewCount, encounteredCards]);
 
-  // Effect to initialize or update the store when the session data is fetched or changed
   useEffect(() => {
     if (session) {
-      startSessionInStore(session)
+      if (storeSessionId !== session.id) {
+        initializeSession(session)
+      } else if (session.progress) {
+        updateProgress(session.progress as any)
+      }
     }
-  }, [session, startSessionInStore])
+  }, [session, storeSessionId, initializeSession, updateProgress])
 
-  // Effect for managing the session timer
   useEffect(() => {
     let timer: NodeJS.Timeout | undefined;
     if (!isPaused && session?.status === "IN_PROGRESS") {
       timer = setInterval(() => {
-        setElapsedTime(Math.floor((new Date().getTime() - new Date(session.startTime).getTime()) / 1000));
+        setElapsedTime(elapsedTime + 1);
       }, 1000);
     }
     return () => clearInterval(timer);
-  }, [isPaused, session?.status, session?.startTime, setElapsedTime]);
+  }, [isPaused, session?.status, elapsedTime, setElapsedTime]);
 
-  // Effect for resetting the store on component unmount
   useEffect(() => {
     return () => {
       reset()
@@ -130,15 +119,11 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
 
     setActionLoading(true)
     try {
-      const payload: AnswerPayload = {
-        action: 'REVEAL_ANSWER',
-        data: {}
-      }
+      const payload: AnswerPayload = { action: 'REVEAL_ANSWER', data: {} }
       const result = await submitAnswer(sessionId, payload)
       if (result.data.newState.progress) {
-        setProgress(result.data.newState.progress as any)
+        updateProgress(result.data.newState.progress as any)
       }
-      await mutate()
     } catch (error) {
       toast({
         title: "Error",
@@ -155,16 +140,12 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
 
     setActionLoading(true)
     try {
-      const payload: AnswerPayload = {
-        action: 'SUBMIT_RATING',
-        data: { rating }
-      }
+      incrementReviewCount() // Optimistic update
+      const payload: AnswerPayload = { action: 'SUBMIT_RATING', data: { rating } }
       const result = await submitAnswer(sessionId, payload)
-      incrementReviewCount()
       if (result.data.newState.progress) {
-        setProgress(result.data.newState.progress as any)
+        updateProgress(result.data.newState.progress as any)
       }
-      await mutate()
     } catch (error) {
       toast({
         title: "Error",
@@ -203,8 +184,6 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     }
   }
 
-
-  // Error state
   if (isError) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -220,11 +199,9 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     )
   }
 
-  // Loading state with comprehensive skeletons
-  if (sessionLoading || !session) {
+  if (sessionLoading || !session || !progress) {
     return (
       <div className="min-h-screen bg-slate-50">
-        {/* Header Skeleton */}
         <div className="bg-white border-b border-slate-200 px-4 py-3">
           <div className="flex items-center justify-between max-w-4xl mx-auto">
             <div className="flex items-center space-x-4">
@@ -237,8 +214,6 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
             </div>
           </div>
         </div>
-
-        {/* Content Skeleton */}
         <div className="flex h-[calc(100vh-73px)]">
           <div className="w-64 bg-white border-r border-slate-200 p-4 space-y-4">
             <Skeleton className="h-4 w-full" />
@@ -263,7 +238,6 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     )
   }
 
-  // Completed state
   if (session.status === "COMPLETED") {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -278,18 +252,16 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
             <div className="text-center space-y-2">
               <p className="text-slate-600">Great work with {session.student.name}!</p>
             </div>
-
             <div className="grid grid-cols-2 gap-4 text-center">
               <div className="space-y-1">
-                <p className="text-2xl font-bold text-slate-900">{session.unit.items.length}</p>
-                <p className="text-sm text-slate-600">Exercises Completed</p>
+                <p className="text-2xl font-bold text-slate-900">{progressData.reviewsCompleted}</p>
+                <p className="text-sm text-slate-600">Total Reviews</p>
               </div>
               <div className="space-y-1">
                 <p className="text-2xl font-bold text-slate-900">{formatTime(elapsedTime)}</p>
                 <p className="text-sm text-slate-600">Total Time</p>
               </div>
             </div>
-
             <Button onClick={() => router.push(`/students/${session.studentId}`)} className="w-full bg-blue-600 hover:bg-blue-700">
               Return to Student Profile
             </Button>
@@ -303,7 +275,6 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Session Header */}
       <div className="bg-white border-b border-slate-200 px-4 py-3">
         <div className="flex items-center justify-between max-w-4xl mx-auto">
           <div className="flex items-center space-x-4">
@@ -315,7 +286,6 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
               <span className="font-medium">{session.student.name}</span> • {session.unit.name}
             </div>
           </div>
-
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2 text-sm text-slate-600">
               <Clock className="h-4 w-4" />
@@ -328,34 +298,29 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
         </div>
       </div>
 
-      {/* Session Content */}
       <div className="flex h-[calc(100vh-73px)]">
-        {/* Session Sidebar */}
         <div className="w-64 bg-white border-r border-slate-200 p-4 space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-600">Queue Progress</span>
+              <span className="text-slate-600">Progress</span>
               <span className="font-medium">
-                {progressData.currentCardIndex} / {progressData.totalCards}
+                {progressData.completedCards} / {progressData.totalCards}
               </span>
             </div>
             <Progress value={progressData.percentage} className="h-2" />
             <div className="text-xs text-slate-500">
-              Cards processed from initial queue
+              Unique cards seen from initial queue
             </div>
           </div>
 
-          {/* Dynamic Queue Analysis */}
           {session?.progress?.type === 'VOCABULARY_DECK' && (
             <div className="space-y-3 border-t pt-4">
               <h4 className="text-sm font-medium text-slate-700">Live Queue Status</h4>
-
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-600">Cards Remaining</span>
+                  <span className="text-slate-600">Cards in Queue</span>
                   <span className="font-medium">{progressData.queueAnalysis.totalInQueue}</span>
                 </div>
-
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   <div className="bg-blue-50 rounded p-2 text-center">
                     <div className="font-medium text-blue-700">{progressData.queueAnalysis.newCards}</div>
@@ -381,19 +346,16 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
                   <span className="text-slate-600">Unique Cards Seen</span>
                   <span className="font-medium">{progressData.uniqueCardsEncountered}</span>
                 </div>
-
                 {progressData.reviewsCompleted > progressData.uniqueCardsEncountered && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded p-2">
                     <div className="text-xs text-yellow-700 font-medium">
                        Cards Cycling
                     </div>
                     <div className="text-xs text-yellow-600">
-                      {progressData.reviewsCompleted - progressData.uniqueCardsEncountered} repeat reviews due to FSRS scheduling
+                      {progressData.reviewsCompleted - progressData.uniqueCardsEncountered} repeat reviews
                     </div>
                   </div>
                 )}
-
-                {/* FSRS Details for Current Card */}
                 {progressData.currentCard && (
                   <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
                     <h4 className="font-semibold text-sm text-slate-600 mb-2">FSRS Details</h4>
@@ -449,10 +411,8 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
           </div>
         </div>
 
-        {/* Main Exercise Area */}
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="w-full max-w-2xl space-y-6">
-            {/* Modular Exercise Rendering - Extensible Architecture */}
             <ExerciseComponent
               sessionState={session}
               onRevealAnswer={handleRevealAnswer}

@@ -9,6 +9,7 @@ import { StudentCardState, VocabularyCard } from '@prisma/client';
 type EnrichedStudentCardState = StudentCardState & { card: VocabularyCard };
 
 interface LiveSessionState {
+  sessionId: string | null;
   isActionLoading: boolean;
   isPaused: boolean;
   elapsedTime: number; // in seconds
@@ -17,19 +18,19 @@ interface LiveSessionState {
   progress: VocabularyDeckProgress | null;
 
   // Actions
-  startSession: (session: FullSessionState) => void;
+  initializeSession: (session: FullSessionState) => void;
+  updateProgress: (progress: VocabularyDeckProgress) => void;
   pauseSession: () => void;
   resumeSession: () => void;
-  endSession: () => void;
   setElapsedTime: (time: number) => void;
   incrementReviewCount: () => void;
-  addEncounteredCard: (cardId: string) => void;
   setProgress: (progress: VocabularyDeckProgress) => void;
   setActionLoading: (isLoading: boolean) => void;
   reset: () => void;
 }
 
 const initialState = {
+  sessionId: null,
   isActionLoading: false,
   isPaused: false,
   elapsedTime: 0,
@@ -41,24 +42,40 @@ const initialState = {
 export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
   ...initialState,
 
-  startSession: (session) => {
+  initializeSession: (session) => {
     const progress = session.progress as VocabularyDeckProgress;
     set({
+      sessionId: session.id,
       progress,
       reviewCount: 0,
-      encounteredCards: new Set(progress?.payload.initialCardIds || []),
+      encounteredCards: new Set<string>(),
       isPaused: false,
+      elapsedTime: session.startTime ? Math.floor((new Date().getTime() - new Date(session.startTime).getTime()) / 1000) : 0,
     });
   },
+
+  updateProgress: (progress) => {
+    set({ progress });
+  },
+  
   pauseSession: () => set({ isPaused: true }),
   resumeSession: () => set({ isPaused: false }),
-  endSession: () => set(initialState),
   setElapsedTime: (time) => set({ elapsedTime: time }),
-  incrementReviewCount: () => set((state) => ({ reviewCount: state.reviewCount + 1 })),
-  addEncounteredCard: (cardId) =>
-    set((state) => ({
-      encounteredCards: new Set(state.encounteredCards).add(cardId),
-    })),
+  
+  incrementReviewCount: () =>
+    set((state) => {
+      const currentCardId = state.progress?.payload?.currentCardData?.cardId;
+      if (currentCardId) {
+        const newEncounteredCards = new Set(state.encounteredCards);
+        newEncounteredCards.add(currentCardId);
+        return {
+          reviewCount: state.reviewCount + 1,
+          encounteredCards: newEncounteredCards,
+        };
+      }
+      return { reviewCount: state.reviewCount + 1 };
+    }),
+
   setProgress: (progress) => set({ progress }),
   setActionLoading: (isLoading) => set({ isActionLoading: isLoading }),
   reset: () => set(initialState),

@@ -1,12 +1,10 @@
 import { UnitBuilder } from "@/components/unit-builder";
 
-interface UnitPageProps {
-  params: {
-    unitId: string;
-  };
-}
-
-export default function UnitPage({ params }: UnitPageProps) {
+export default async function UnitPage({
+  params,
+}: {
+  params: { unitId: string };
+}) {
   return (
     <div className="container mx-auto p-4">
       <UnitBuilder unitId={params.unitId} />

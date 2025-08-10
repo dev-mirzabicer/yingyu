@@ -6,6 +6,7 @@ import { z } from 'zod';
 const StartSessionBodySchema = z.object({
   studentId: z.string().uuid(),
   unitId: z.string().uuid(),
+  configOverrides: z.record(z.any(), z.any()).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -16,12 +17,13 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { studentId, unitId } = StartSessionBodySchema.parse(body);
+    const { studentId, unitId, configOverrides } = StartSessionBodySchema.parse(body);
 
     const initialState = await SessionService.startSession(
       teacherId,
       studentId,
-      unitId
+      unitId,
+      configOverrides
     );
 
     return apiResponse(201, initialState, null);

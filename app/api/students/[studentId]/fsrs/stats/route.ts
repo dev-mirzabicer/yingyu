@@ -9,7 +9,7 @@ import { apiResponse, handleApiError } from '@/lib/api-utils';
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { studentId: string } }
+  { params }: { params: Promise<{ studentId: string }> }
 ) {
   try {
     const teacherId = req.headers.get('X-Teacher-ID');
@@ -17,8 +17,9 @@ export async function GET(
       return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
     }
 
+    const { studentId } = await params;
     const stats = await FSRSService.getFsrsStats(
-      params.studentId,
+      studentId,
       teacherId
     );
     return apiResponse(200, stats, null);

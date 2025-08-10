@@ -123,7 +123,8 @@ export const CreateScheduleSchema = z.object({
 export const UpdateScheduleSchema = z.object({
   scheduledTime: z.coerce
     .date()
-    .refine(date => !isNaN(date.getTime()), { message: 'Invalid date' }),
+    .refine(date => !isNaN(date.getTime()), { message: 'Invalid date' })
+    .optional(),
   status: z.nativeEnum(ClassStatus).optional(),
   duration: z.number().int().positive().optional(),
   notes: z.string().optional(),

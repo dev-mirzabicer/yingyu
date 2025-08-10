@@ -258,6 +258,19 @@ export const StudentService = {
   },
 
   /**
+   * Retrieves all payments for a specific student.
+   * @param studentId The UUID of the student.
+   * @returns A promise that resolves to an array of Payment objects.
+   */
+  async getPaymentsForStudent(studentId: string): Promise<Payment[]> {
+    // Authorization is handled at the API route layer for this read-only operation.
+    return prisma.payment.findMany({
+      where: { studentId },
+      orderBy: { paymentDate: 'desc' },
+    });
+  },
+
+  /**
    * Updates the private notes a teacher keeps for a student.
    *
    * @param studentId The UUID of the student.
@@ -392,7 +405,7 @@ export const StudentService = {
   ): Promise<ClassSchedule> {
     const schedule = await prisma.classSchedule.findUnique({
       where: { id: scheduleId },
-      select: { student: { select: { teacherId: true } } },
+      select: { studentId: true, student: { select: { teacherId: true } } },
     });
 
     if (!schedule || schedule.student.teacherId !== teacherId) {
@@ -401,9 +414,44 @@ export const StudentService = {
       );
     }
 
-    return prisma.classSchedule.update({
-      where: { id: scheduleId },
-      data: updateData,
+    // Use a transaction to ensure atomicity of status update and payment deduction
+    return prisma.$transaction(async (tx) => {
+      const updatedSchedule = await tx.classSchedule.update({
+        where: { id: scheduleId },
+        data: updateData,
+      });
+
+      // If the class is marked as COMPLETED, deduct a class credit
+      if (updateData.status === ClassStatus.COMPLETED) {
+        const paymentToUpdate = await tx.payment.findFirst({
+          where: {
+            studentId: schedule.studentId,
+            classesUsed: {
+              lt: prisma.payment.fields.classesPurchased,
+            },
+          },
+          orderBy: {
+            paymentDate: 'asc',
+          },
+        });
+
+        if (paymentToUpdate) {
+          await tx.payment.update({
+            where: { id: paymentToUpdate.id },
+            data: {
+              classesUsed: {
+                increment: 1,
+              },
+            },
+          });
+        }
+        // Note: If no payment with available classes is found, the class is still
+        // marked as completed. This is a business decision - we don't block
+        // completion if the student is out of credits. An alert system could
+        // be built on top of this.
+      }
+
+      return updatedSchedule;
     });
   },
 

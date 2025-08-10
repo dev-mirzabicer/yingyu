@@ -29,7 +29,6 @@ import {
   useListeningCandidates,
   useFsrsStats,
   optimizeFsrsParameters,
-  rebuildFsrsCache,
 } from "@/hooks/api/students"
 import { JobStatusIndicator } from "@/components/ui/job-status-indicator"
 import type { FullStudentProfile, FsrsStats } from "@/lib/types"
@@ -69,7 +68,6 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
   const { stats, isLoading: isStatsLoading, isError: isStatsError } = useFsrsStats(student.id)
 
   const [optimizationJobId, setOptimizationJobId] = useState<string | null>(null)
-  const [rebuildJobId, setRebuildJobId] = useState<string | null>(null)
 
   const { toast } = useToast()
 
@@ -86,24 +84,6 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
       toast({
         title: "Error",
         description: "Failed to start parameter optimization.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleRebuildCache = async () => {
-    try {
-      const response = await rebuildFsrsCache(student.id)
-      const job = response.data;
-      setRebuildJobId(job.id)
-      toast({
-        title: "Cache rebuild started",
-        description: "FSRS cache is being rebuilt in the background.",
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to start cache rebuild.",
         variant: "destructive",
       })
     }
@@ -257,12 +237,12 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
             <div>
               <h3 className="font-semibold">Optimize Parameters</h3>
               <p className="text-sm text-slate-500">
-                Recalculate the optimal FSRS parameters based on the student&apos;s review history.
+                Recalculate the optimal FSRS parameters based on the student&apos;s review history. (Weekly automatic job)
               </p>
             </div>
             <Button onClick={handleOptimizeParameters} disabled={!!optimizationJobId}>
               <Brain className="mr-2 h-4 w-4" />
-              Optimize
+              Optimize Now
             </Button>
           </div>
           {optimizationJobId && (
@@ -270,26 +250,6 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
               jobId={optimizationJobId}
               title="FSRS Parameter Optimization"
               description="The system is analyzing the review history to find the best parameters."
-            />
-          )}
-
-          <div className="flex items-center justify-between p-4 border rounded-lg">
-            <div>
-              <h3 className="font-semibold">Rebuild Cache</h3>
-              <p className="text-sm text-slate-500">
-                Force a rebuild of the student&apos;s card state from their review history.
-              </p>
-            </div>
-            <Button onClick={handleRebuildCache} disabled={!!rebuildJobId}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Rebuild
-            </Button>
-          </div>
-          {rebuildJobId && (
-            <JobStatusIndicator
-              jobId={rebuildJobId}
-              title="FSRS Cache Rebuild"
-              description="The system is rebuilding the student's card states. This may take a moment."
             />
           )}
         </CardContent>
