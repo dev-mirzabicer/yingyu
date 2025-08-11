@@ -128,8 +128,15 @@ export const FSRSService = {
   ): Promise<{ shouldGraduate: boolean; newDueDate: Date }> {
     const client = tx || prisma;
     const now = new Date();
-    
-    // Count current learning step reviews to determine current step
+
+    // If the user rates a card as "Easy", graduate it immediately.
+    if (rating === 4) {
+      return {
+        shouldGraduate: true,
+        newDueDate: now
+      };
+    }
+
     const currentStepReviews = await client.reviewHistory.count({
       where: { 
         studentId, 
@@ -147,18 +154,16 @@ export const FSRSService = {
       };
     }
     
-    // Rating >= 2: advance to next step
-    const nextStep = currentStepReviews; // After this review, we'll be at this step
+    // Rating is 2 (Hard) or 3 (Good): advance to next step
+    const nextStep = currentStepReviews + 1;
     
     if (nextStep >= learningSteps.length) {
-      // Graduate to FSRS - this review will be the first FSRS review
       return {
         shouldGraduate: true,
-        newDueDate: now // FSRS will calculate the actual due date
+        newDueDate: now
       };
     }
     
-    // Stay in learning steps - advance to next step
     const nextStepDuration = parseLearningStepDuration(learningSteps[nextStep]);
     return {
       shouldGraduate: false,
@@ -527,18 +532,7 @@ export const FSRSService = {
       orderBy: { card: { createdAt: 'asc' } },
     });
 
-    // Get RELEARNING cards (failed cards in learning steps)
-    const relearningCards = await prisma.studentCardState.findMany({
-      where: {
-        studentId,
-        state: { in: ['LEARNING', 'RELEARNING'] },
-        due: { lte: now },
-        card: { deckId: finalConfig.deckId },
-      },
-      orderBy: { due: 'asc' },
-    });
-
-    const dueItems: StudentCardState[] = [...dueCards, ...relearningCards];
+    const dueItems: StudentCardState[] = dueCards;
     const newItems: StudentCardState[] = newCards;
 
     return { dueItems, newItems };

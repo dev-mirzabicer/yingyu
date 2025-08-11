@@ -61,12 +61,11 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
       };
     }
 
-    const { queue, initialCardIds, currentCardData } = progress.payload;
-    const totalCards = initialCardIds.length;
-    const uniqueCardsEncountered = encounteredCards.size;
-    
-    const completedCards = uniqueCardsEncountered;
-    const percentage = totalCards > 0 ? (completedCards / totalCards) * 100 : 0;
+    const { queue, currentCardData } = progress.payload;
+    const queueCardIds = new Set(queue.map(c => c.cardId));
+    const totalUniqueCardsInSession = new Set([...encounteredCards, ...queueCardIds]).size;
+    const completedCards = encounteredCards.size;
+    const percentage = totalUniqueCardsInSession > 0 ? (completedCards / totalUniqueCardsInSession) * 100 : 0;
 
     const queueAnalysis = {
       totalInQueue: queue.length,
@@ -76,14 +75,14 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     };
 
     return {
-      totalCards,
+      totalCards: totalUniqueCardsInSession,
       completedCards,
       remainingCards: queue.length,
       percentage,
       currentCard: currentCardData as EnrichedStudentCardState | undefined,
       queueAnalysis,
       reviewsCompleted: reviewCount,
-      uniqueCardsEncountered,
+      uniqueCardsEncountered: encounteredCards.size,
     };
   }, [progress, reviewCount, encounteredCards]);
 

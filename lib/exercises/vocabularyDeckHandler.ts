@@ -52,10 +52,14 @@ class VocabularyDeckHandler implements ExerciseHandler {
     tx?: TransactionClient
   ): Promise<FullSessionState> {
     const db = tx || prisma;
-    const config =
-      VocabularyExerciseConfigSchema.parse(
-        sessionState.currentUnitItem?.exerciseConfig ?? {}
-      ) ?? {};
+    const unitItemFromUnit = sessionState.unit?.items.find(
+      (i) => i.id === sessionState.currentUnitItemId
+    );
+    const rawConfig =
+      unitItemFromUnit?.exerciseConfig ??
+      sessionState.currentUnitItem?.exerciseConfig ??
+      {};
+    const config = VocabularyExerciseConfigSchema.parse(rawConfig) ?? {};
 
     const currentUnitItem = sessionState.currentUnitItem;
     const deckId = currentUnitItem?.vocabularyDeck?.id;
