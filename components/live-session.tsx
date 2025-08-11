@@ -6,11 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Clock, BookOpen, ArrowLeft, Pause, Play, CheckCircle } from "lucide-react"
+import { Clock, ArrowLeft, Pause, Play, CheckCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { useSession, submitAnswer, endSession } from "@/hooks/api/sessions"
-import { AnswerPayload } from "@/lib/types"
+import { AnswerPayload, VocabularyDeckProgress } from "@/lib/types"
 import { formatTime } from "@/lib/utils"
 import { useLiveSessionStore } from "@/hooks/stores/use-live-session-store"
 import { getExerciseComponent, exerciseTypeInfo } from "@/components/exercises/dispatcher"
@@ -39,7 +39,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     incrementReviewCount,
     setElapsedTime,
     initializeSession,
-    updateProgress,
+    setProgress,
     reset,
     progress,
     reviewCount,
@@ -65,7 +65,6 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     const totalCards = initialCardIds.length;
     const uniqueCardsEncountered = encounteredCards.size;
     
-    // This is the corrected, intuitive progress logic
     const completedCards = uniqueCardsEncountered;
     const percentage = totalCards > 0 ? (completedCards / totalCards) * 100 : 0;
 
@@ -79,7 +78,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     return {
       totalCards,
       completedCards,
-      remainingCards: queue.length, // Keep this for "cards remaining" display
+      remainingCards: queue.length,
       percentage,
       currentCard: currentCardData as EnrichedStudentCardState | undefined,
       queueAnalysis,
@@ -93,10 +92,10 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
       if (storeSessionId !== session.id) {
         initializeSession(session)
       } else if (session.progress) {
-        updateProgress(session.progress as any)
+        setProgress(session.progress as VocabularyDeckProgress)
       }
     }
-  }, [session, storeSessionId, initializeSession, updateProgress])
+  }, [session, storeSessionId, initializeSession, setProgress])
 
   useEffect(() => {
     let timer: NodeJS.Timeout | undefined;
@@ -122,7 +121,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
       const payload: AnswerPayload = { action: 'REVEAL_ANSWER', data: {} }
       const result = await submitAnswer(sessionId, payload)
       if (result.data.newState.progress) {
-        updateProgress(result.data.newState.progress as any)
+        setProgress(result.data.newState.progress as VocabularyDeckProgress)
       }
     } catch (error) {
       toast({
@@ -144,7 +143,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
       const payload: AnswerPayload = { action: 'SUBMIT_RATING', data: { rating } }
       const result = await submitAnswer(sessionId, payload)
       if (result.data.newState.progress) {
-        updateProgress(result.data.newState.progress as any)
+        setProgress(result.data.newState.progress as VocabularyDeckProgress)
       }
     } catch (error) {
       toast({

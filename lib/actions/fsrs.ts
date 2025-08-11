@@ -487,7 +487,12 @@ export const FSRSService = {
     const finalConfig = { ...defaults, ...config };
 
     let dueCards = await prisma.studentCardState.findMany({
-      where: { studentId, due: { lte: now }, state: { not: 'NEW' } },
+      where: {
+        studentId,
+        due: { lte: now },
+        state: { not: 'NEW' },
+        card: { deckId: finalConfig.deckId },
+      },
       take: finalConfig.maxDue,
       orderBy: { due: 'asc' },
     });
@@ -503,6 +508,7 @@ export const FSRSService = {
           due: { gt: now, lte: endOfDay },
           state: { not: 'NEW' },
           cardId: { notIn: dueCards.map((c) => c.cardId) },
+          card: { deckId: finalConfig.deckId },
         },
         take: needed,
         orderBy: { due: 'asc' },
@@ -512,14 +518,23 @@ export const FSRSService = {
 
     // Get truly NEW cards (never reviewed)
     const newCards = await prisma.studentCardState.findMany({
-      where: { studentId, state: 'NEW' },
+      where: {
+        studentId,
+        state: 'NEW',
+        card: { deckId: finalConfig.deckId },
+      },
       take: finalConfig.newCards,
       orderBy: { card: { createdAt: 'asc' } },
     });
 
     // Get RELEARNING cards (failed cards in learning steps)
     const relearningCards = await prisma.studentCardState.findMany({
-      where: { studentId, state: { in: ['LEARNING', 'RELEARNING'] }, due: { lte: now } },
+      where: {
+        studentId,
+        state: { in: ['LEARNING', 'RELEARNING'] },
+        due: { lte: now },
+        card: { deckId: finalConfig.deckId },
+      },
       orderBy: { due: 'asc' },
     });
 

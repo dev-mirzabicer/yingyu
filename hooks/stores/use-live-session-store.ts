@@ -1,12 +1,8 @@
 import { create } from 'zustand';
 import {
-  SessionProgress,
-  VocabularyDeckProgress,
   FullSessionState,
+  VocabularyDeckProgress,
 } from '@/lib/types';
-import { StudentCardState, VocabularyCard } from '@prisma/client';
-
-type EnrichedStudentCardState = StudentCardState & { card: VocabularyCard };
 
 interface LiveSessionState {
   sessionId: string | null;
@@ -19,7 +15,6 @@ interface LiveSessionState {
 
   // Actions
   initializeSession: (session: FullSessionState) => void;
-  updateProgress: (progress: VocabularyDeckProgress) => void;
   pauseSession: () => void;
   resumeSession: () => void;
   setElapsedTime: (time: number) => void;
@@ -53,10 +48,6 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
       elapsedTime: session.startTime ? Math.floor((new Date().getTime() - new Date(session.startTime).getTime()) / 1000) : 0,
     });
   },
-
-  updateProgress: (progress) => {
-    set({ progress });
-  },
   
   pauseSession: () => set({ isPaused: true }),
   resumeSession: () => set({ isPaused: false }),
@@ -80,5 +71,3 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
   setActionLoading: (isLoading) => set({ isActionLoading: isLoading }),
   reset: () => set(initialState),
 }));
-
-

@@ -342,7 +342,7 @@ export function SessionStartDialog({
                               <p className="text-sm font-medium text-slate-900">
                                 {item.vocabularyDeck?.name}
                               </p>
-                              <div className="grid grid-cols-2 gap-3">
+                              <div className="grid grid-cols-3 gap-3">
                                 <div className="space-y-1">
                                   <Label htmlFor={`newCards-${item.id}`} className="text-xs">New Cards</Label>
                                   <Input
@@ -350,6 +350,16 @@ export function SessionStartDialog({
                                     type="number"
                                     defaultValue={item.exerciseConfig?.newCards || 10}
                                     onChange={(e) => handleConfigChange(item.id, { newCards: parseInt(e.target.value) })}
+                                    className="h-8"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label htmlFor={`minDue-${item.id}`} className="text-xs">Min Due</Label>
+                                  <Input
+                                    id={`minDue-${item.id}`}
+                                    type="number"
+                                    defaultValue={item.exerciseConfig?.minDue || 10}
+                                    onChange={(e) => handleConfigChange(item.id, { minDue: parseInt(e.target.value) })}
                                     className="h-8"
                                   />
                                 </div>

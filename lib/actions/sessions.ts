@@ -114,12 +114,25 @@ export const SessionService = {
         status: SessionStatus.IN_PROGRESS,
         currentUnitItemId: firstItem.id,
       },
+      include: fullSessionStateInclude,
     });
 
-    let sessionState = await this.getFullState(newSession.id, teacherId);
-    if (!sessionState) {
-      throw new Error('Failed to create and retrieve session state.');
-    }
+    // Construct the initial state in-memory instead of re-fetching.
+    // This preserves the configOverrides applied to the `unit` object.
+    let sessionState: FullSessionState = {
+      ...(newSession as unknown as FullSessionState),
+      unit: {
+        ...unit,
+        items: unit.items.map(item => ({
+          ...item,
+          // Ensure nested relations are at least empty arrays if not present
+          vocabularyDeck: item.vocabularyDeck || null,
+          grammarExercise: item.grammarExercise || null,
+          listeningExercise: item.listeningExercise || null,
+          vocabFillInBlankExercise: item.vocabFillInBlankExercise || null,
+        })),
+      },
+    };
 
     const handler = getHandler(firstItem.type);
     sessionState = await handler.initialize(sessionState);
