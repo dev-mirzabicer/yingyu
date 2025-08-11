@@ -132,8 +132,8 @@ const navigationItems = [
 
 // Mock user data - in production this would come from auth context
 const mockUser = {
-  name: "Sarah Chen",
-  email: "sarah.chen@example.com",
+  name: "Li Jingya",
+  email: "lijingya@example.com",
   avatar: "/placeholder.svg?height=40&width=40",
   role: "Teacher",
 }
