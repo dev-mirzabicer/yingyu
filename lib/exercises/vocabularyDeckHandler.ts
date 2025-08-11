@@ -62,7 +62,7 @@ class VocabularyDeckHandler implements ExerciseHandler {
     const config = VocabularyExerciseConfigSchema.parse(rawConfig) ?? {};
 
     const currentUnitItem = sessionState.currentUnitItem;
-    const deckId = currentUnitItem?.vocabularyDeck?.id;
+    const deckId = currentUnitItem?.vocabularyDeckId;
 
     if (!deckId) {
       throw new Error('No vocabulary deck found for this unit item.');

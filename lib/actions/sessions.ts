@@ -125,11 +125,13 @@ export const SessionService = {
         ...unit,
         items: unit.items.map(item => ({
           ...item,
-          // Ensure nested relations are at least empty arrays if not present
-          vocabularyDeck: item.vocabularyDeck || null,
-          grammarExercise: item.grammarExercise || null,
-          listeningExercise: item.listeningExercise || null,
-          vocabFillInBlankExercise: item.vocabFillInBlankExercise || null,
+          // The `unit` object from prisma only has the IDs, not the full
+          // relations. The handler is responsible for fetching the full item details.
+          // We ensure the properties exist as null for type consistency.
+          vocabularyDeck: null,
+          grammarExercise: null,
+          listeningExercise: null,
+          vocabFillInBlankExercise: null,
         })),
       },
     };
