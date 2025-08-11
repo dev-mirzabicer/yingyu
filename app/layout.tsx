@@ -1,28 +1,33 @@
-import type React from "react"
-import type { Metadata } from "next"
-import { Inter } from "next/font/google"
-import "./globals.css"
-import { SidebarProvider } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/app-sidebar"
-import { Toaster } from "@/components/ui/toaster"
-import { ThemeProvider } from "@/components/theme-provider"
+import type React from "react";
+import type { Metadata } from "next";
+import localFont from "next/font/local";
+import "./globals.css";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
+import { Toaster } from "@/components/ui/toaster";
+import { ThemeProvider } from "@/components/theme-provider";
 
-const inter = Inter({ subsets: ["latin"] })
+
+const inter = localFont({
+  src: [
+    { path: "./fonts/inter/Inter-VariableFont_opsz,wght.ttf", style: "normal" },
+    { path: "./fonts/inter/Inter-Italic-VariableFont_opsz,wght.ttf", style: "italic" },
+  ],
+  weight: "100 900",       // variable axis range
+  display: "swap",          // avoid FOIT
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
   title: "Yingyu English - Teaching Platform",
   description: "Advanced English teaching platform with FSRS-powered spaced repetition",
-  generator: 'Next.js'
-}
+  generator: "Next.js",
+};
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={inter.className}>
-      <body suppressHydrationWarning >
+    <html lang="en" suppressHydrationWarning className={inter.variable}>
+      <body suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <SidebarProvider>
             <div className="flex min-h-screen w-full">
@@ -36,5 +41,6 @@ export default function RootLayout({
         </ThemeProvider>
       </body>
     </html>
-  )
+  );
 }
+
