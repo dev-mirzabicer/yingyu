@@ -62,75 +62,23 @@ class SubmitRatingOperator implements ProgressOperator {
       services.sessionId // Pass the sessionId
     );
 
-    // FIXED: Query all cards from the current deck, not just initialCardIds
-    // This allows truly dynamic queue expansion during the session
-    const currentDeckId = currentProgress.payload.config.deckId;
-    
-    // DEBUG: Verify deck-based querying is working
-    console.log('Session Queue Rebuild:', {
-      deckId: currentDeckId,
-      studentId: services.studentId.substring(0, 8)
-    });
-    
-    let cardStatesQuery;
-    if (currentDeckId) {
-      // If we have a specific deck ID, query only that deck
-      cardStatesQuery = services.tx.studentCardState.findMany({
-        where: {
-          studentId: services.studentId,
-          card: { deckId: currentDeckId },
-        },
-        include: { card: true },
-      });
-    } else {
-      // Fallback: use initial card IDs (preserves existing behavior for mixed units)
-      cardStatesQuery = services.tx.studentCardState.findMany({
-        where: {
-          studentId: services.studentId,
-          cardId: { in: currentProgress.payload.initialCardIds },
-        },
-        include: { card: true },
-      });
-    }
-
-    const allSessionStates = await cardStatesQuery;
-
-    // DEBUG: Log query results
-    console.log('Query results DEBUG:', {
-      foundStates: allSessionStates.length,
-      stateDetails: allSessionStates.map(s => ({
-        cardId: s.cardId.substring(0, 8),
-        due: s.due,
-        state: s.state,
-        isDueNow: s.due <= new Date()
-      }))
+    // the session's scope is fixed upon initialization.
+    // We ONLY rebuild the queue from the set of cards that were present at the start.
+    // This makes session behavior predictable and ensures the initial "new card"
+    // configuration is respected for the entire session.
+    const allCardsInSession = await services.tx.studentCardState.findMany({
+      where: {
+        studentId: services.studentId,
+        cardId: { in: currentProgress.payload.initialCardIds },
+      },
+      include: { card: true },
     });
 
-    // Build the new queue with all due cards (new cards + review cards)
+    // From that fixed set, filter down to the cards that are currently due.
     const now = new Date();
-    
-    // DEBUG: Check timezone handling
-    console.log('TIMEZONE DEBUG:', {
-      serverTime: now.toISOString(),
-      serverTimeUTC: now.getTime(),
-      serverTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      firstRelearningDue: allSessionStates.find(s => s.state === 'RELEARNING')?.due?.toISOString(),
-      timeDiffMinutes: allSessionStates.find(s => s.state === 'RELEARNING') 
-        ? Math.round((allSessionStates.find(s => s.state === 'RELEARNING')!.due.getTime() - now.getTime()) / (1000 * 60))
-        : 'no relearning cards'
-    });
-    // Build the new queue with simple state-based isNew classification
-    const newQueue = allSessionStates
+    const newQueue = allCardsInSession
       .filter((state) => state.due <= now)
       .sort((a, b) => a.due.getTime() - b.due.getTime());
-
-    // DEBUG: Log the final queue
-    console.log('Final queue DEBUG:', {
-      totalFound: allSessionStates.length,
-      queueLength: newQueue.length,
-      newCards: newQueue.filter(q => q.state === 'NEW').length,
-      reviewCards: newQueue.filter(q => q.state !== 'NEW').length
-    });
 
     const newProgress: VocabularyDeckProgress = {
       ...currentProgress,
