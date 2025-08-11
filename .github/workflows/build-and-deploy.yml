@@ -40,6 +40,21 @@ jobs:
           echo "image_tag=$SHA_TAG" >> $GITHUB_OUTPUT
           echo "Using tag: $SHA_TAG"
 
+      - name: Install Node (for lint/typecheck)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci --legacy-peer-deps
+
+      - name: Lint (non-blocking for now)
+        run: npm run lint || true
+
+      - name: Typecheck (non-blocking for now)
+        run: npx tsc -p tsconfig.json || true
+
       - name: Build & Push (with registry cache)
         uses: docker/build-push-action@v6
         with:
