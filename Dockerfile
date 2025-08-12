@@ -40,13 +40,16 @@ FROM node:20-bookworm-slim AS production
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl postgresql-client && rm -rf /var/lib/apt/lists/*
-RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
+RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 --home /home/nextjs nextjs
+USER nextjs
+ENV HOME=/home/nextjs
 
 # Copy the Next standalone output and static assets
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # (Optional) ensure prisma client present in runner
