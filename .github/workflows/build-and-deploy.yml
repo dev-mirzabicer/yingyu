@@ -69,72 +69,60 @@ jobs:
           cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
 
-  deploy:
-    name: Deploy to ECS
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: SSH deploy
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.ECS_HOST }}
-          username: ${{ secrets.ECS_USER }}
-          key: ${{ secrets.ECS_SSH_KEY }}
-          script_stop: true
-          script: |
-            set -Eeuo pipefail
-            trap 'echo "❌ Line $LINENO failed. Last cmd: $BASH_COMMAND"' ERR
-            set -x
+deploy:
+  needs: build
+  runs-on: ubuntu-latest
+  steps:
+    - name: SSH deploy
+      uses: appleboy/ssh-action@v1.0.3
+      env:
+        IMAGE_TAG: ${{ needs.build.outputs.image_tag }}   # <- from build job output
+      with:
+        host: ${{ secrets.ECS_HOST }}
+        username: ${{ secrets.ECS_USER }}
+        key: ${{ secrets.ECS_SSH_KEY }}
+        script_stop: true
+        envs: IMAGE_TAG                                  # <- export to remote shell
+        script: |
+          set -Eeuo pipefail
+          trap 'echo "❌ Line $LINENO failed. Last cmd: $BASH_COMMAND"' ERR
+          set -x
 
-            IMAGE_TAG="sha-${GITHUB_SHA::12}"
-            echo "Deploying image tag: ${IMAGE_TAG}"
+          echo "Deploying image tag: ${IMAGE_TAG}"
 
-            cd /srv/yingyu
+          cd /srv/yingyu
+          if [ ! -d .git ]; then
+            git clone https://github.com/dev-mirzabicer/yingyu.git .
+          fi
+          git fetch --all
+          git reset --hard origin/main
 
-            # Ensure repo exists and is current (compose/scripts might change)
-            if [ ! -d .git ]; then
-              git clone https://github.com/dev-mirzabicer/yingyu.git .
+          test -f .env.production || { echo "Missing /srv/yingyu/.env.production"; exit 1; }
+          systemctl is-active docker || systemctl start docker
+
+          # persist tag for compose
+          if grep -q '^IMAGE_TAG=' .env.production; then
+            sed -i "s|^IMAGE_TAG=.*$|IMAGE_TAG=\"${IMAGE_TAG}\"|" .env.production
+          else
+            echo "IMAGE_TAG=\"${IMAGE_TAG}\"" >> .env.production
+          fi
+
+          docker pull ghcr.io/dev-mirzabicer/yingyu:${IMAGE_TAG}
+          docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+
+          APP_CID=$(docker compose -f docker-compose.prod.yml ps -q app)
+          test -n "$APP_CID"
+          docker exec -e DATABASE_URL="$(grep -E '^DATABASE_URL' .env.production | cut -d= -f2- || true)" -i "$APP_CID" npx prisma migrate deploy
+
+          for i in $(seq 1 24); do
+            if curl -fsS http://127.0.0.1/api/health >/dev/null; then
+              echo "Health OK"; break
             fi
-            git fetch --all
-            git reset --hard origin/main
+            sleep 5
+            [ "$i" -eq 24 ] && { echo "Health check failed"; exit 1; }
+          done
 
-            # Ensure env file exists
-            test -f .env.production || { echo "Missing /srv/yingyu/.env.production"; exit 1; }
-
-            # Make sure Docker is running
-            systemctl is-active docker || systemctl start docker
-
-            # Persist the tag so compose uses it: image: ...:${IMAGE_TAG:-latest}
-            if grep -q '^IMAGE_TAG=' .env.production; then
-              sed -i "s|^IMAGE_TAG=.*$|IMAGE_TAG=\"${IMAGE_TAG}\"|" .env.production
-            else
-              echo "IMAGE_TAG=\"${IMAGE_TAG}\"" >> .env.production
-            fi
-            tail -n +1 .env.production | sed 's/CRON_SECRET=.*/CRON_SECRET="****"/'
-
-            # Pull the exact image tag (if public package, no login needed)
-            docker pull ghcr.io/dev-mirzabicer/yingyu:${IMAGE_TAG}
-
-            # Bring up stack with env-file (DB + Redis + App)
-            docker compose --env-file .env.production -f docker-compose.prod.yml up -d
-
-            # Run Prisma migrations inside the app container
-            APP_CID=$(docker compose -f docker-compose.prod.yml ps -q app)
-            test -n "$APP_CID"
-            docker exec -e DATABASE_URL="$(grep -E '^DATABASE_URL' .env.production | cut -d= -f2- || true)" -i "$APP_CID" \
-              npx prisma migrate deploy
-
-            # Health gate: wait up to 120s for /api/health
-            for i in $(seq 1 24); do
-              if curl -fsS http://127.0.0.1/api/health >/dev/null; then
-                echo "Health OK"; break
-              fi
-              sleep 5
-              [ "$i" -eq 24 ] && { echo "Health check failed"; exit 1; }
-            done
-
-            # Mark success for rollback reference
-            mkdir -p .deploy
-            echo "${IMAGE_TAG}" > .deploy/last_successful_tag
-            echo "✅ Deployed ${IMAGE_TAG} successfully."
+          mkdir -p .deploy
+          echo "${IMAGE_TAG}" > .deploy/last_successful_tag
+          echo "✅ Deployed ${IMAGE_TAG} successfully."
 
