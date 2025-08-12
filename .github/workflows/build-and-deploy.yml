@@ -80,77 +80,61 @@ jobs:
           host: ${{ secrets.ECS_HOST }}
           username: ${{ secrets.ECS_USER }}
           key: ${{ secrets.ECS_SSH_KEY }}
-          envs: IMAGE_TAG
           script_stop: true
           script: |
-            set -euo pipefail
-            IMAGE_TAG="${{ needs.build.outputs.image_tag }}"
+            set -Eeuo pipefail
+            trap 'echo "❌ Line $LINENO failed. Last cmd: $BASH_COMMAND"' ERR
+            set -x
+
+            IMAGE_TAG="sha-${GITHUB_SHA::12}"
             echo "Deploying image tag: ${IMAGE_TAG}"
 
             cd /srv/yingyu
 
-            # Ensure repo exists on server
+            # Ensure repo exists and is current (compose/scripts might change)
             if [ ! -d .git ]; then
               git clone https://github.com/dev-mirzabicer/yingyu.git .
             fi
-
-            # Update code (for compose/scripts changes)
             git fetch --all
             git reset --hard origin/main
 
             # Ensure env file exists
-            if [ ! -f .env.production ]; then
-              echo "Missing /srv/yingyu/.env.production"; exit 1
-            fi
+            test -f .env.production || { echo "Missing /srv/yingyu/.env.production"; exit 1; }
 
-            # --- transactional deploy with rollback ---
-            mkdir -p .deploy
-            PREV_TAG_FILE=.deploy/last_successful_tag
-            [ -f "$PREV_TAG_FILE" ] && PREV_TAG=$(cat "$PREV_TAG_FILE") || PREV_TAG=""
+            # Make sure Docker is running
+            systemctl is-active docker || systemctl start docker
 
-            # Update IMAGE_TAG in runtime (compose substitutes it)
+            # Persist the tag so compose uses it: image: ...:${IMAGE_TAG:-latest}
             if grep -q '^IMAGE_TAG=' .env.production; then
               sed -i "s|^IMAGE_TAG=.*$|IMAGE_TAG=\"${IMAGE_TAG}\"|" .env.production
             else
               echo "IMAGE_TAG=\"${IMAGE_TAG}\"" >> .env.production
             fi
+            tail -n +1 .env.production | sed 's/CRON_SECRET=.*/CRON_SECRET="****"/'
 
-            # Pull & start
-            docker pull ghcr.io/dev-mirzabicer/yingyu:${IMAGE_TAG} || true
+            # Pull the exact image tag (if public package, no login needed)
+            docker pull ghcr.io/dev-mirzabicer/yingyu:${IMAGE_TAG}
+
+            # Bring up stack with env-file (DB + Redis + App)
             docker compose --env-file .env.production -f docker-compose.prod.yml up -d
 
-            # Run Prisma migrations BEFORE marking success
+            # Run Prisma migrations inside the app container
             APP_CID=$(docker compose -f docker-compose.prod.yml ps -q app)
-            if [ -n "$APP_CID" ]; then
-              docker exec -e DATABASE_URL="$(grep -E '^DATABASE_URL' .env.production | cut -d= -f2- || true)" -i "$APP_CID" \
-                npx prisma migrate deploy || MIG_ERR=$?
-            else
-              echo "App container not found"; MIG_ERR=1
-            fi
+            test -n "$APP_CID"
+            docker exec -e DATABASE_URL="$(grep -E '^DATABASE_URL' .env.production | cut -d= -f2- || true)" -i "$APP_CID" \
+              npx prisma migrate deploy
 
-            # Health gate: wait up to 120s
-            HEALTH_OK=0
+            # Health gate: wait up to 120s for /api/health
             for i in $(seq 1 24); do
               if curl -fsS http://127.0.0.1/api/health >/dev/null; then
-                HEALTH_OK=1; break
+                echo "Health OK"; break
               fi
               sleep 5
+              [ "$i" -eq 24 ] && { echo "Health check failed"; exit 1; }
             done
 
-            if [ "${MIG_ERR:-0}" != "0" ] || [ "$HEALTH_OK" != "1" ]; then
-              echo "❌ Deploy failed (migrate=$MIG_ERR, health=$HEALTH_OK). Rolling back..."
-              if [ -n "$PREV_TAG" ]; then
-                sed -i "s|^IMAGE_TAG=.*$|IMAGE_TAG=\"${PREV_TAG}\"|" .env.production
-                docker pull ghcr.io/dev-mirzabicer/yingyu:${PREV_TAG} || true
-                docker compose --env-file .env.production -f docker-compose.prod.yml up -d
-                echo "Rolled back to ${PREV_TAG}"
-              else
-                echo "No previous tag to roll back to."
-              fi
-              exit 1
-            fi
-
-            # Mark success for future rollbacks
-            echo "${IMAGE_TAG}" > "$PREV_TAG_FILE"
+            # Mark success for rollback reference
+            mkdir -p .deploy
+            echo "${IMAGE_TAG}" > .deploy/last_successful_tag
             echo "✅ Deployed ${IMAGE_TAG} successfully."
 

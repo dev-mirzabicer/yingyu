@@ -45,8 +45,9 @@ services:
       redis:
         condition: service_started
     networks: [yingyu-network]
-    expose:
-      - "3000"
+    ports:
+      - "127.0.0.1:3000:3000"
+
 
 volumes:
   postgres_data:
