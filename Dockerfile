@@ -1,61 +1,61 @@
-# --- deps: install node_modules (prod deps) ---
-FROM node:20-bullseye AS deps
+# ====== Stage 1: deps ======
+FROM node:20-bookworm-slim AS deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates git curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-ENV NEXT_TELEMETRY_DISABLED=1
-# Optional: faster installs in CN; harmless elsewhere
-ARG NPM_REGISTRY=https://registry.npmmirror.com
-RUN npm config set registry ${NPM_REGISTRY}
 
 COPY package*.json ./
-# Install ALL deps (including dev) for the build step; we'll prune later
-RUN npm ci --legacy-peer-deps
+COPY prisma ./prisma/
+# Install prod deps early (native builds will target glibc)
+RUN npm ci --omit=dev --legacy-peer-deps && npm cache clean --force
 
-# --- builder: build Next standalone & Prisma client ---
-FROM node:20-bullseye AS build
+# ====== Stage 2: development (optional) ======
+FROM node:20-bookworm-slim AS development
 WORKDIR /app
-ENV NEXT_TELEMETRY_DISABLED=1
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates git curl postgresql-client && rm -rf /var/lib/apt/lists/*
+COPY package*.json ./
+RUN npm ci --legacy-peer-deps
+COPY . .
+RUN npx prisma generate
+EXPOSE 3000
+ENV NODE_ENV=development NEXT_TELEMETRY_DISABLED=1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD curl -f http://localhost:3000/api/health || exit 1
+CMD ["npm", "run", "dev"]
+
+# ====== Stage 3: builder ======
+FROM node:20-bookworm-slim AS builder
+WORKDIR /app
+# toolchain for any native rebuilds during build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 build-essential ca-certificates git && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-# Generate Prisma client BEFORE build so it's bundled correctly
-# (Assumes prisma CLI is in dependencies or devDependencies)
 RUN npx prisma generate
-
-# Build Next.js (must produce .next/standalone)
 RUN npm run build
 
-# Optional: prune dev deps to shrink handover to runner (not strictly needed with standalone)
-RUN npm prune --omit=dev
-
-# --- runner: production container ---
-FROM node:20-bullseye AS production
+# ====== Stage 4: production runner ======
+FROM node:20-bookworm-slim AS production
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl postgresql-client && rm -rf /var/lib/apt/lists/*
+RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 
-# Create non-root user
-RUN useradd -m -u 1001 nextjs
+# Copy the Next standalone output and static assets
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Copy standalone server + static assets + public
-COPY --from=build /app/.next/standalone ./
-COPY --from=build /app/.next/static ./.next/static
-COPY --from=build /app/public ./public
+# (Optional) ensure prisma client present in runner
+RUN npx prisma generate
 
-# Useful tools for healthcheck
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
-
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
-ENV PORT=3000
-ENV HOSTNAME=0.0.0.0
-
-# Make sure files are owned by the non-root user
-RUN chown -R nextjs:nextjs /app
 USER nextjs
-
 EXPOSE 3000
-
-# Healthcheck: your app should expose /api/health
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD curl -f http://127.0.0.1:3000/api/health || exit 1
-
+  CMD curl -f http://localhost:3000/api/health || exit 1
 CMD ["node", "server.js"]
 
