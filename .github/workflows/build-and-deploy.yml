@@ -112,8 +112,8 @@ jobs:
 
             APP_CID=$(docker compose -f docker-compose.prod.yml ps -q app)
             test -n "$APP_CID"
-            docker exec  -e HOME=/tmp -e DATABASE_URL="$(grep -E '^DATABASE_URL' .env.production | cut -d= -f2- || true)" -i "$APP_CID" npx prisma migrate deploy
-            docker exec -e DATABASE_URL="$(grep -E '^DATABASE_URL' .env.production | cut -d= -f2- || true)" -i "$APP_CID" npx prisma migrate deploy
+            docker exec -i "$APP_CID" node ./node_modules/.bin/prisma migrate deploy
+
 
             for i in $(seq 1 24); do
               if curl -fsS http://127.0.0.1/api/health >/dev/null; then
