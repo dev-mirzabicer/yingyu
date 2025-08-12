@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
 # Install prod deps early (native builds will target glibc)
-RUN npm ci --omit=dev --legacy-peer-deps && npm cache clean --force
+RUN npm ci --legacy-peer-deps && npm cache clean --force
 
 # ====== Stage 2: development (optional) ======
 FROM node:20-bookworm-slim AS development
