@@ -239,6 +239,12 @@ export const ReorderItemsSchema = z.object({
   itemIds: z.array(z.string()),
 });
 
+// --- AUTH SCHEMAS ---
+export const LoginSchema = z.object({
+  username: z.string().min(1, 'Username is required.'),
+  password: z.string().min(1, 'Password is required.'),
+});
+
 /**
  * Validates the payload for adding a single vocabulary card.
  */

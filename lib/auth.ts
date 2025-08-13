@@ -1,5 +1,17 @@
 import { prisma } from '@/lib/db';
 import { StudentStatus } from '@prisma/client';
+import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
+
+const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'yingyu_session';
+const SESSION_TTL_DAYS = parseInt(process.env.SESSION_TTL_DAYS || '14', 10);
+
+export class AuthenticationError extends Error {
+  constructor(message = 'Invalid credentials.') {
+    super(message);
+    this.name = 'AuthenticationError';
+  }
+}
 
 /**
  * A custom error class for authorization failures.
@@ -9,6 +21,88 @@ export class AuthorizationError extends Error {
     super(message);
     this.name = 'AuthorizationError';
   }
+}
+
+export function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function parseCookieHeader(cookieHeader: string | null): Record<string, string> {
+  const cookies: Record<string, string> = {};
+  if (!cookieHeader) return cookies;
+  for (const part of cookieHeader.split(';')) {
+    const [rawName, ...rest] = part.trim().split('=');
+    const name = rawName?.trim();
+    const value = rest.join('=').trim();
+    if (name) cookies[name] = decodeURIComponent(value);
+  }
+  return cookies;
+}
+
+export function getSessionTokenFromRequest(req: Request | NextRequest): string | null {
+  // Prefer NextRequest.cookies() if available
+  const anyReq = req as any;
+  try {
+    if (anyReq?.cookies && typeof anyReq.cookies.get === 'function') {
+      const c = anyReq.cookies.get(AUTH_COOKIE_NAME);
+      return c?.value || null;
+    }
+  } catch {}
+  const cookieHeader = req.headers.get('cookie');
+  const cookies = parseCookieHeader(cookieHeader);
+  return cookies[AUTH_COOKIE_NAME] || null;
+}
+
+export function attachSessionCookie(res: NextResponse, rawToken: string) {
+  const maxAge = SESSION_TTL_DAYS * 24 * 60 * 60; // seconds
+  const secure = process.env.NODE_ENV === 'production';
+  res.cookies.set({
+    name: AUTH_COOKIE_NAME,
+    value: rawToken,
+    httpOnly: true,
+    sameSite: 'lax',
+    secure,
+    path: '/',
+    maxAge,
+  });
+}
+
+export function clearSessionCookie(res: NextResponse) {
+  res.cookies.set({
+    name: AUTH_COOKIE_NAME,
+    value: '',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: 0,
+  });
+}
+
+/**
+ * Reads the session cookie, validates it against the DB, and returns teacherId.
+ * If invalid/expired and in dev with ALLOW_HEADER_AUTH=1, falls back to X-Teacher-ID.
+ */
+export async function requireAuth(req: NextRequest): Promise<string> {
+  const token = getSessionTokenFromRequest(req);
+  if (token) {
+    const tokenHash = hashToken(token);
+    const session = await prisma.authSession.findUnique({
+      where: { tokenHash },
+      select: { teacherId: true, expiresAt: true },
+    });
+    if (session && session.expiresAt > new Date()) {
+      return session.teacherId;
+    }
+  }
+
+  // Temporary dev-only compatibility to ease rollout
+  if (process.env.ALLOW_HEADER_AUTH === '1') {
+    const teacherId = req.headers.get('X-Teacher-ID');
+    if (teacherId) return teacherId;
+  }
+
+  throw new AuthenticationError('Unauthorized');
 }
 
 /**

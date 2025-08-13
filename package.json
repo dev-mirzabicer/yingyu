@@ -10,6 +10,7 @@
     "test:e2e": "node -r ts-node/register scripts/e2e-test.ts"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "@clerk/nextjs": "^6.30.0",
     "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "^3.9.1",

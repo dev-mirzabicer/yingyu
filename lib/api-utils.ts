@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
-import { AuthorizationError } from './auth';
+import { AuthorizationError, AuthenticationError } from './auth';
 
 /**
  * A standardized wrapper for all API responses.
@@ -36,6 +36,10 @@ export function handleApiError(error: unknown): NextResponse {
 
   if (error instanceof AuthorizationError) {
     return apiResponse(403, null, error.message);
+  }
+
+  if (error instanceof AuthenticationError) {
+    return apiResponse(401, null, error.message);
   }
 
   if (error instanceof Error) {
