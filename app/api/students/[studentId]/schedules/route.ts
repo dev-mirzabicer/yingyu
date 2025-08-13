@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { StudentService } from '@/lib/actions/students';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
 import { CreateScheduleSchema } from '@/lib/schemas';
+import { requireAuth } from '@/lib/auth';
 
 /**
  * GET /api/students/[studentId]/schedules
@@ -12,10 +13,7 @@ export async function GET(
   { params }: { params: Promise<{ studentId: string }> }
 ) {
   try {
-    const teacherId = req.headers.get('X-Teacher-ID');
-    if (!teacherId) {
-      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
-    }
+    const teacherId = await requireAuth(req);
 
     const { studentId } = await params;
     const schedules = await StudentService.getSchedulesForStudent(
@@ -38,10 +36,7 @@ export async function POST(
   { params }: { params: Promise<{ studentId: string }> }
 ) {
   try {
-    const teacherId = req.headers.get('X-Teacher-ID');
-    if (!teacherId) {
-      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
-    }
+    const teacherId = await requireAuth(req);
 
     const { studentId } = await params;
     const body = await req.json();

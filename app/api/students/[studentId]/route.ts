@@ -2,16 +2,14 @@ import { NextRequest } from 'next/server';
 import { StudentService } from '@/lib/actions/students';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
 import { UpdateStudentSchema } from '@/lib/schemas';
+import { requireAuth } from '@/lib/auth';
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ studentId: string }> }
 ) {
   try {
-    const teacherId = req.headers.get('X-Teacher-ID');
-    if (!teacherId) {
-      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
-    }
+    const teacherId = await requireAuth(req);
 
     const { studentId } = await params;
     const studentProfile = await StudentService.getStudentProfile(
@@ -30,10 +28,7 @@ export async function PUT(
   { params }: { params: Promise<{ studentId: string }> }
 ) {
   try {
-    const teacherId = req.headers.get('X-Teacher-ID');
-    if (!teacherId) {
-      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
-    }
+    const teacherId = await requireAuth(req);
 
     const { studentId } = await params;
     const body = await req.json();
@@ -56,10 +51,7 @@ export async function DELETE(
   { params }: { params: Promise<{ studentId: string }> }
 ) {
   try {
-    const teacherId = req.headers.get('X-Teacher-ID');
-    if (!teacherId) {
-      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
-    }
+    const teacherId = await requireAuth(req);
 
     const { studentId } = await params;
     const archivedStudent = await StudentService.archiveStudent(

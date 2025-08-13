@@ -4,6 +4,7 @@ import { apiResponse, handleApiError } from '@/lib/api-utils';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
+import { requireAuth } from '@/lib/auth';
 
 // A robust Zod schema to validate the incoming data for a new vocabulary card.
 const AddCardBodySchema = z.object({
@@ -26,11 +27,8 @@ export async function GET(
   { params }: { params: Promise<{ deckId: string }> }
 ) {
   try {
-    // 1. Authentication (Development Placeholder)
-    const teacherId = req.headers.get('X-Teacher-ID');
-    if (!teacherId) {
-      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
-    }
+    // 1. Authentication
+    const teacherId = await requireAuth(req);
 
     // 2. Parameter Validation
     const { deckId } = await params;
@@ -72,11 +70,8 @@ export async function POST(
   { params }: { params: Promise<{ deckId: string }> }
 ) {
   try {
-    // 1. Authentication (Development Placeholder)
-    const teacherId = req.headers.get('X-Teacher-ID');
-    if (!teacherId) {
-      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
-    }
+    // 1. Authentication
+    const teacherId = await requireAuth(req);
 
     // 2. Parameter & Body Validation
     const { deckId } = await params;

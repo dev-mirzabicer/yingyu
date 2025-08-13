@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { OnboardingWorkflow } from '@/lib/workflows/onboarding';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
 import { CreateStudentSchema } from '@/lib/schemas';
+import { requireAuth } from '@/lib/auth';
 import { z } from 'zod';
 
 const OnboardStudentBodySchema = z.object({
@@ -11,11 +12,8 @@ const OnboardStudentBodySchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Authentication (Development Placeholder)
-    const teacherId = req.headers.get('X-Teacher-ID');
-    if (!teacherId) {
-      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
-    }
+    // 1. Authentication
+    const teacherId = await requireAuth(req);
 
     // 2. Parse and Validate Request Body
     const body = await req.json();

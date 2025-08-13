@@ -1,16 +1,14 @@
 import { NextRequest } from 'next/server';
 import { SessionService } from '@/lib/actions/sessions';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
+import { requireAuth } from '@/lib/auth';
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    const teacherId = req.headers.get('X-Teacher-ID');
-    if (!teacherId) {
-      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
-    }
+    const teacherId = await requireAuth(req);
 
     const { sessionId } = await params;
 
@@ -32,10 +30,7 @@ export async function DELETE(
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    const teacherId = req.headers.get('X-Teacher-ID');
-    if (!teacherId) {
-      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
-    }
+    const teacherId = await requireAuth(req);
 
     const { sessionId } = await params;
 

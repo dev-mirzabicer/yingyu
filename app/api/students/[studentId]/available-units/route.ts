@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { StudentService } from '@/lib/actions/students';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
+import { requireAuth } from '@/lib/auth';
 
 
 /**
@@ -12,10 +13,7 @@ export async function GET(
   { params }: { params: Promise<{ studentId: string }> }
 ) {
   try {
-    const teacherId = req.headers.get('X-Teacher-ID');
-    if (!teacherId) {
-      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
-    }
+    const teacherId = await requireAuth(req);
     
     const { studentId } = await params;
     const availableUnits = await StudentService.getAvailableUnitsForStudent(

@@ -3,17 +3,14 @@ import { ContentService } from '@/lib/actions/content';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
 import { UpdateUnitSchema } from '@/lib/schemas';
 import { prisma } from '@/lib/db';
-import { AuthorizationError } from '@/lib/auth';
+import { AuthorizationError, requireAuth } from '@/lib/auth';
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ unitId: string }> }
 ) {
   try {
-    const teacherId = req.headers.get('X-Teacher-ID');
-    if (!teacherId) {
-      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
-    }
+    const teacherId = await requireAuth(req);
 
     const { unitId } = await params;
 
@@ -38,10 +35,7 @@ export async function PUT(
   { params }: { params: Promise<{ unitId: string }> }
 ) {
   try {
-    const teacherId = req.headers.get('X-Teacher-ID');
-    if (!teacherId) {
-      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
-    }
+    const teacherId = await requireAuth(req);
 
     const { unitId } = await params;
     const body = await req.json();

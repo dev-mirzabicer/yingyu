@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { TeacherService } from '@/lib/actions/teacher';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
 import { UpdateTeacherSettingsSchema } from '@/lib/schemas';
+import { requireAuth } from '@/lib/auth';
 
 /**
  * GET /api/teacher/settings
@@ -9,10 +10,7 @@ import { UpdateTeacherSettingsSchema } from '@/lib/schemas';
  */
 export async function GET(req: NextRequest) {
   try {
-    const teacherId = req.headers.get('X-Teacher-ID');
-    if (!teacherId) {
-      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
-    }
+    const teacherId = await requireAuth(req);
 
     const settings = await TeacherService.getSettings(teacherId);
     return apiResponse(200, settings, null);
@@ -27,10 +25,7 @@ export async function GET(req: NextRequest) {
  */
 export async function PUT(req: NextRequest) {
   try {
-    const teacherId = req.headers.get('X-Teacher-ID');
-    if (!teacherId) {
-      return apiResponse(401, null, 'Unauthorized: Missing X-Teacher-ID header.');
-    }
+    const teacherId = await requireAuth(req);
 
     const body = await req.json();
     const settingsData = UpdateTeacherSettingsSchema.parse(body);
