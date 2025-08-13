@@ -29,16 +29,12 @@ import {
   type UIPreferences,
 } from "@/lib/ui-preferences"
 
-interface TeacherSettingsPanelProps {
-  teacherId: string
-}
-
 interface BackendSettingsData {
   paymentAlertThreshold: number
   preferredLessonDuration: number
 }
 
-export function TeacherSettingsPanel({ teacherId }: TeacherSettingsPanelProps) {
+export function TeacherSettingsPanel() {
   const { settings, isLoading, isError, mutate } = useTeacherSettings()
 
   // Backend settings state

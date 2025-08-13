@@ -10,35 +10,33 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { GraduationCap, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/hooks/auth/use-auth"
 
 export function LoginForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const router = useRouter()
   const { toast } = useToast()
+  const { login } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-
-    // Simulate API call
-    setTimeout(() => {
-      if (email === "teacher@example.com" && password === "password") {
-        toast({
-          title: "Welcome back!",
-          description: "Successfully logged in.",
-        })
-        router.push("/")
-      } else {
-        toast({
-          title: "Login failed",
-          description: "Invalid email or password.",
-          variant: "destructive",
-        })
-      }
+    try {
+      await login(email, password)
+      toast({
+        title: "Welcome back!",
+        description: "Successfully logged in.",
+      })
+    } catch (err: any) {
+      toast({
+        title: "Login failed",
+        description: err?.message || "Invalid credentials.",
+        variant: "destructive",
+      })
+    } finally {
       setIsLoading(false)
-    }, 1000)
+    }
   }
 
   return (
@@ -47,7 +45,7 @@ export function LoginForm() {
         <div className="flex justify-center">
           <div className="flex items-center space-x-2">
             <GraduationCap className="h-10 w-10 text-blue-600" />
-            <span className="text-2xl font-bold text-slate-900">TeachFlow</span>
+            <span className="text-2xl font-bold text-slate-900">Yingyu</span>
           </div>
         </div>
         <CardTitle className="text-2xl">Welcome back</CardTitle>
@@ -88,7 +86,7 @@ export function LoginForm() {
           </div>
         </form>
         <div className="mt-6 p-4 bg-slate-50 rounded-lg">
-          <p className="text-sm text-slate-600 text-center">Demo credentials: teacher@example.com / password</p>
+          <p className="text-sm text-slate-600 text-center">Use your assigned teacher credentials.</p>
         </div>
       </CardContent>
     </Card>

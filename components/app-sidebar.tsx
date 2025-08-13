@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { useAuth } from "@/hooks/auth/use-auth"
 import {
   Sidebar,
   SidebarContent,
@@ -130,16 +131,15 @@ const navigationItems = [
   },
 ]
 
-// Mock user data - in production this would come from auth context
-const mockUser = {
-  name: "Li Jingya",
-  email: "lijingya@example.com",
-  avatar: "/placeholder.svg?height=40&width=40",
-  role: "Teacher",
-}
-
 export function AppSidebar({ ...props }: AppSidebarProps) {
   const pathname = usePathname()
+  const { user, logout } = useAuth()
+
+  // Hide sidebar on public pages
+  if (pathname === '/login' || pathname.startsWith('/admin/register')) return null
+  
+  // Hide sidebar if not authenticated
+  if (!user) return null
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -194,12 +194,12 @@ export function AppSidebar({ ...props }: AppSidebarProps) {
                 >
                   <div className="flex items-center space-x-3 flex-1">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={mockUser.avatar || "/placeholder.svg"} alt={mockUser.name} />
-                      <AvatarFallback>{mockUser.name.charAt(0)}</AvatarFallback>
+                      <AvatarImage src="/placeholder.svg" alt={user.name} />
+                      <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0 text-left">
-                      <div className="text-sm font-medium text-slate-900 truncate">{mockUser.name}</div>
-                      <div className="text-xs text-slate-500 truncate">{mockUser.role}</div>
+                      <div className="text-sm font-medium text-slate-900 truncate">{user.name}</div>
+                      <div className="text-xs text-slate-500 truncate">Teacher</div>
                     </div>
                   </div>
                   <div className="flex items-center space-x-1">
@@ -216,12 +216,12 @@ export function AppSidebar({ ...props }: AppSidebarProps) {
                 <div className="p-2">
                   <div className="flex items-center space-x-2">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={mockUser.avatar || "/placeholder.svg"} alt={mockUser.name} />
-                      <AvatarFallback>{mockUser.name.charAt(0)}</AvatarFallback>
+                      <AvatarImage src="/placeholder.svg" alt={user.name} />
+                      <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-slate-900 truncate">{mockUser.name}</div>
-                      <div className="text-xs text-slate-500 truncate">{mockUser.email}</div>
+                      <div className="text-sm font-medium text-slate-900 truncate">{user.name}</div>
+                      <div className="text-xs text-slate-500 truncate">{user.email}</div>
                     </div>
                   </div>
                 </div>
@@ -239,7 +239,7 @@ export function AppSidebar({ ...props }: AppSidebarProps) {
                   <span>Help & Support</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-red-600">
+                <DropdownMenuItem className="text-red-600" onClick={logout}>
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Log out</span>
                 </DropdownMenuItem>

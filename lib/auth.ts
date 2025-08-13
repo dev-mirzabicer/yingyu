@@ -5,6 +5,9 @@ import crypto from 'crypto';
 
 const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'yingyu_session';
 const SESSION_TTL_DAYS = parseInt(process.env.SESSION_TTL_DAYS || '14', 10);
+const ADMIN_REG_COOKIE_NAME = process.env.ADMIN_REG_COOKIE_NAME || 'yingyu_admin_reg';
+const ADMIN_REG_TTL_MIN = parseInt(process.env.ADMIN_REG_TTL_MIN || '15', 10);
+const ADMIN_REG_SECRET = process.env.ADMIN_REGISTRATION_KEY || '';
 
 export class AuthenticationError extends Error {
   constructor(message = 'Invalid credentials.') {
@@ -147,5 +150,93 @@ export async function authorizeTeacherForStudent(
     throw new AuthorizationError(
       `Operation failed: Student is not active (status: ${student.status}).`
     );
+  }
+}
+
+// -------------------- Admin Registration Session (HMAC-signed cookie) --------------------
+
+type AdminRegPayload = { iat: number; exp: number };
+
+function base64url(input: Buffer) {
+  return input.toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+}
+
+function signAdminPayload(payload: AdminRegPayload): string {
+  if (!ADMIN_REG_SECRET) {
+    throw new Error('ADMIN_REGISTRATION_KEY is not set');
+  }
+  const header = base64url(Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'ARJ' })));
+  const body = base64url(Buffer.from(JSON.stringify(payload)));
+  const data = `${header}.${body}`;
+  const sig = crypto.createHmac('sha256', ADMIN_REG_SECRET).update(data).digest();
+  return `${data}.${base64url(sig)}`;
+}
+
+function verifyAdminToken(token: string): boolean {
+  try {
+    if (!ADMIN_REG_SECRET) return false;
+    const [headerB64, bodyB64, sigB64] = token.split('.');
+    if (!headerB64 || !bodyB64 || !sigB64) return false;
+    const data = `${headerB64}.${bodyB64}`;
+    const expected = base64url(crypto.createHmac('sha256', ADMIN_REG_SECRET).update(data).digest());
+    if (expected !== sigB64) return false;
+    const bodyJson = Buffer.from(bodyB64.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString();
+    const payload = JSON.parse(bodyJson) as AdminRegPayload;
+    if (typeof payload.exp !== 'number') return false;
+    return Date.now() < payload.exp;
+  } catch {
+    return false;
+  }
+}
+
+export function attachAdminRegCookie(res: NextResponse) {
+  const iat = Date.now();
+  const exp = iat + ADMIN_REG_TTL_MIN * 60 * 1000;
+  const token = signAdminPayload({ iat, exp });
+  res.cookies.set({
+    name: ADMIN_REG_COOKIE_NAME,
+    value: token,
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: ADMIN_REG_TTL_MIN * 60,
+  });
+}
+
+export function clearAdminRegCookie(res: NextResponse) {
+  res.cookies.set({
+    name: ADMIN_REG_COOKIE_NAME,
+    value: '',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: 0,
+  });
+}
+
+export function getAdminRegTokenFromRequest(req: Request | NextRequest): string | null {
+  const anyReq = req as any;
+  try {
+    if (anyReq?.cookies && typeof anyReq.cookies.get === 'function') {
+      const c = anyReq.cookies.get(ADMIN_REG_COOKIE_NAME);
+      return c?.value || null;
+    }
+  } catch {}
+  const cookieHeader = req.headers.get('cookie');
+  const cookies = parseCookieHeader(cookieHeader);
+  return cookies[ADMIN_REG_COOKIE_NAME] || null;
+}
+
+export function isAdminRegAuthorized(req: NextRequest): boolean {
+  const token = getAdminRegTokenFromRequest(req);
+  if (!token) return false;
+  return verifyAdminToken(token);
+}
+
+export function requireAdminReg(req: NextRequest): void {
+  if (!isAdminRegAuthorized(req)) {
+    throw new AuthenticationError('Unauthorized');
   }
 }

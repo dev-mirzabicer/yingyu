@@ -2,10 +2,10 @@ import type React from "react";
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
-import { SidebarProvider } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/app-sidebar";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
+import { AppProviders } from "./app-providers";
+import { AppLayout } from "./app-layout";
 
 
 const inter = localFont({
@@ -29,15 +29,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning className={inter.variable}>
       <body suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-          <SidebarProvider>
-            <div className="flex min-h-screen w-full">
-              <AppSidebar />
-              <main className="flex-1 overflow-auto">
-                <div className="container mx-auto p-6">{children}</div>
-              </main>
-            </div>
-          </SidebarProvider>
-          <Toaster />
+          <AppProviders>
+            <AppLayout>{children}</AppLayout>
+            <Toaster />
+          </AppProviders>
         </ThemeProvider>
       </body>
     </html>

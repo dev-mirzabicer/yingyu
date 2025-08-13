@@ -15,16 +15,9 @@ export type ApiResponse<T> = {
   error: string | null
 }
 
-// Mock teacher ID - in production this would come from auth context
-const MOCK_TEACHER_ID = "1773ead3-dc43-4d67-919c-50f1e8974fe6";
-
 // Enhanced fetcher with better error handling
 export const fetcher = async (url: string): Promise<any> => {
-  const response = await fetch(url, {
-    headers: {
-      "X-Teacher-ID": MOCK_TEACHER_ID,
-    },
-  })
+  const response = await fetch(url)
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}))
@@ -57,7 +50,6 @@ export const mutateWithOptimistic = async <T>(
       method,
       headers: {
         "Content-Type": "application/json",
-        "X-Teacher-ID": MOCK_TEACHER_ID,
       },
       body: body ? JSON.stringify(body) : undefined,
     })
