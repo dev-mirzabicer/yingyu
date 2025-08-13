@@ -56,6 +56,7 @@ function TeacherCreateForm() {
   const [password, setPassword] = useState('');
   const [timezone, setTimezone] = useState('Asia/Shanghai');
   const [phone, setPhone] = useState('');
+  const [validityDays, setValidityDays] = useState('30');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -66,12 +67,12 @@ function TeacherCreateForm() {
       const res = await fetch('/api/admin/teachers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, name, password, timezone, phone: phone || undefined }),
+        body: JSON.stringify({ email, name, password, timezone, phone: phone || undefined, validityDays: parseInt(validityDays, 10) }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       toast({ title: 'Teacher created', description: `Account for ${json.data.name} created.` });
-      setEmail(''); setName(''); setPassword(''); setPhone('');
+      setEmail(''); setName(''); setPassword(''); setPhone(''); setValidityDays('30');
     } catch (e: any) {
       toast({ title: 'Creation failed', description: e?.message || 'Error creating teacher', variant: 'destructive' });
     } finally {
@@ -105,6 +106,17 @@ function TeacherCreateForm() {
           <div className="space-y-2">
             <Label htmlFor="phone">Phone (optional)</Label>
             <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="validityDays">Validity (days)</Label>
+            <Input 
+              id="validityDays" 
+              type="number" 
+              min="1" 
+              value={validityDays} 
+              onChange={(e) => setValidityDays(e.target.value)} 
+              required 
+            />
           </div>
           <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 w-full">Create</Button>
         </form>

@@ -6,7 +6,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const isPublicPage = pathname === '/login' || pathname.startsWith('/admin/register')
+  const isPublicPage = pathname === '/login' || pathname.startsWith('/admin')
 
   if (isPublicPage) {
     return <>{children}</>

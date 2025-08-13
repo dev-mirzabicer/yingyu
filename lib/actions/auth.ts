@@ -38,6 +38,11 @@ export const AuthService = {
     const ok = await bcrypt.compare(password, teacher.passwordHash);
     if (!ok) throw new AuthenticationError('Invalid username or password');
 
+    // Check validity period
+    if (teacher.validityUntil && new Date() > teacher.validityUntil) {
+      throw new AuthenticationError('Account expired');
+    }
+
     // Create a new session
     const rawToken = (await import('crypto')).randomBytes(32).toString('base64url');
     const tokenHash = hashToken(rawToken);
@@ -49,6 +54,12 @@ export const AuthService = {
         userAgent: headers?.get('user-agent') || undefined,
         ip: headers ? getIpFromHeaders(headers) : undefined,
       },
+    });
+
+    // Update lastLoginAt
+    await prisma.teacher.update({
+      where: { id: teacher.id },
+      data: { lastLoginAt: new Date() },
     });
 
     return {
@@ -79,6 +90,12 @@ export const AuthService = {
     // Touch lastUsedAt
     await prisma.authSession.update({ where: { tokenHash }, data: { lastUsedAt: new Date() } });
     const t = session.teacher;
-    return { id: t.id, name: t.name, email: t.email, timezone: t.timezone };
+    return { 
+      id: t.id, 
+      name: t.name, 
+      email: t.email, 
+      timezone: t.timezone, 
+      validityUntil: t.validityUntil 
+    };
   },
 };

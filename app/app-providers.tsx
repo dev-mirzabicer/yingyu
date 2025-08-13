@@ -5,13 +5,13 @@ import { SWRConfig } from 'swr';
 import { useRouter, usePathname } from 'next/navigation';
 import { AuthProvider, useAuth } from '@/hooks/auth/use-auth';
 
-const publicRoutes = ['/login', '/admin/register']; // Public routes that don't require authentication
+const publicRoutes = ['/login', '/admin/register', '/admin/teachers']; // Public routes that don't require authentication
 
 function Gate({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const isPublic = publicRoutes.includes(pathname) || pathname.startsWith('/admin/register');
+  const isPublic = publicRoutes.includes(pathname) || pathname.startsWith('/admin');
 
   React.useEffect(() => {
     if (!loading && !isPublic && !user) {

@@ -95,6 +95,8 @@ model Teacher {
   avatarUrl    String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+  validityUntil DateTime?
+  lastLoginAt   DateTime?
 
   settings              TeacherSettings?
   students              Student[]

@@ -136,7 +136,7 @@ export function AppSidebar({ ...props }: AppSidebarProps) {
   const { user, logout } = useAuth()
 
   // Hide sidebar on public pages
-  if (pathname === '/login' || pathname.startsWith('/admin/register')) return null
+  if (pathname === '/login' || pathname.startsWith('/admin')) return null
   
   // Hide sidebar if not authenticated
   if (!user) return null

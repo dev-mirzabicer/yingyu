@@ -16,6 +16,7 @@ import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 import { useStudents, createStudent } from "@/hooks/api/students"
 import { useDecks } from "@/hooks/api/content"
+import { useAuth } from "@/hooks/auth/use-auth"
 import { format } from "date-fns"
 import { SessionStartDialog } from "@/components/session-start-dialog"
 import type { FullStudentProfile } from "@/lib/types"
@@ -27,6 +28,7 @@ export function TeacherDashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [sessionStudent, setSessionStudent] = useState<{ id: string; name: string } | null>(null)
   const { toast } = useToast()
+  const { user } = useAuth()
   const { students, isLoading, isError, mutate } = useStudents()
   const { decks, isLoading: areDecksLoading } = useDecks()
 
@@ -98,6 +100,37 @@ export function TeacherDashboard() {
     return `Next: ${format(new Date(upcoming[0].scheduledTime), "MMM dd, HH:mm")}`
   }
 
+  // Calculate validity status
+  const getValidityStatus = () => {
+    if (!user?.validityUntil) {
+      return { message: "Your account has no expiration date", variant: "default" as const, icon: "✅" }
+    }
+    
+    const validityDate = new Date(user.validityUntil)
+    const now = new Date()
+    const daysRemaining = Math.ceil((validityDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    
+    if (daysRemaining <= 0) {
+      return { 
+        message: `Your account expired on ${format(validityDate, "MMM dd, yyyy")}`, 
+        variant: "destructive" as const, 
+        icon: "⚠️" 
+      }
+    } else if (daysRemaining <= 7) {
+      return { 
+        message: `Your account expires on ${format(validityDate, "MMM dd, yyyy")} (${daysRemaining} days remaining)`, 
+        variant: "outline" as const, 
+        icon: "⏰" 
+      }
+    } else {
+      return { 
+        message: `Your account is active until ${format(validityDate, "MMM dd, yyyy")}`, 
+        variant: "default" as const, 
+        icon: "✅" 
+      }
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Welcome Header */}
@@ -105,6 +138,14 @@ export function TeacherDashboard() {
         <div className="space-y-2">
           <h1 className="text-3xl font-bold text-slate-900">Welcome back!</h1>
           <p className="text-slate-600">Here's what's happening with your students today.</p>
+          {user && (
+            <div className="flex items-center space-x-2">
+              <Badge variant={getValidityStatus().variant} className="text-xs">
+                <span className="mr-1">{getValidityStatus().icon}</span>
+                {getValidityStatus().message}
+              </Badge>
+            </div>
+          )}
         </div>
         <Button onClick={() => setIsAddStudentOpen(true)} className="bg-blue-600 hover:bg-blue-700">
           <Plus className="h-4 w-4 mr-2" />
