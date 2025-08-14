@@ -189,28 +189,8 @@ export const BulkImportSchedulesPayloadSchema = z.object({
   ),
 });
 
-/**
- * Validates the payload for adding a new item to a unit.
- * It's a discriminated union based on the `itemType`.
- */
-export const AddItemBodySchema = z.discriminatedUnion('itemType', [
-  z.object({
-    itemType: z.literal('VOCABULARY_DECK'),
-    exerciseId: z.string().uuid().optional(),
-    exerciseData: CreateDeckSchema.optional(),
-    exerciseConfig: VocabularyExerciseConfigSchema,
-  }),
-  z.object({
-    itemType: z.literal('GRAMMAR_EXERCISE'),
-    exerciseId: z.string().uuid().optional(),
-    // exerciseData: CreateGrammarExerciseSchema.optional(), // Add this when the schema is created
-  }),
-  z.object({
-    itemType: z.literal('LISTENING_EXERCISE'),
-    exerciseId: z.string().uuid().optional(),
-    // creation uses ContentService.addExerciseToUnit schema in route; here we only acknowledge type
-  }),
-]);
+// Note: The schema for adding unit items is defined within
+// app/api/units/[unitId]/items/route.ts for route-specific validation.
 
 /**
  * Validates the payload for forking an exercise.
