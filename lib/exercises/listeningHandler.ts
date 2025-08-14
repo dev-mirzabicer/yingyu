@@ -3,7 +3,7 @@ import { ExerciseHandler } from './handler';
 import { TransactionClient } from './operators/base';
 import { FullSessionState, AnswerPayload, SubmissionResult, SessionProgress, ListeningExerciseProgress } from '@/lib/types';
 import { ListeningExerciseConfigSchema } from '@/lib/schemas';
-import { revealListeningAnswerOperator, submitTextAnswerOperator } from '@/lib/exercises/operators/listeningOperators';
+import { revealListeningAnswerOperator, submitListeningRatingOperator } from '@/lib/exercises/operators/listeningOperators';
 import { ListeningFSRSService } from '@/lib/actions/listening';
 import { fullSessionStateInclude } from '@/lib/prisma-includes';
 
@@ -11,18 +11,12 @@ const DEFAULTS = {
   count: 10,
   listeningConfidenceThreshold: 0.36,
   vocabConfidenceThreshold: 0.36,
-  maxAttempts: 2,
-  caseSensitive: false,
-  ignoreSpaces: true,
-  stripPunctuation: true,
-  alternateAnswers: [] as string[],
-  typoTolerance: 0,
 };
 
 export class ListeningHandler implements ExerciseHandler {
   private operators = {
     REVEAL_ANSWER: revealListeningAnswerOperator,
-    SUBMIT_TEXT_ANSWER: submitTextAnswerOperator,
+    SUBMIT_RATING: submitListeningRatingOperator,
   } as const;
 
   async initialize(sessionState: FullSessionState, tx?: TransactionClient): Promise<FullSessionState> {
@@ -34,19 +28,23 @@ export class ListeningHandler implements ExerciseHandler {
 
     // Ensure listening states exist for student+card? We select from existing listening states only.
     const { cards, suggestedCount } = await ListeningFSRSService.getInitialListeningQueue(sessionState.studentId, config);
-
     const initialCardIds = cards.map((c) => c.id);
+    // Fetch listening states for selected cards
+    const states = await db.studentListeningState.findMany({
+      where: { studentId: sessionState.studentId, cardId: { in: initialCardIds } },
+      include: { card: true },
+    });
+    // Preserve selected cards order
+    const orderMap = new Map(initialCardIds.map((id, idx) => [id, idx]));
+    const initialQueue = states.sort((a, b) => (orderMap.get(a.cardId)! - orderMap.get(b.cardId)!));
     const progress: ListeningExerciseProgress = {
       type: 'LISTENING_EXERCISE',
-      stage: 'AWAITING_ANSWER',
+      stage: 'PRESENTING_CARD',
       payload: {
-        queue: cards.map((c) => ({ card: c })),
-        current: cards[0] ? { card: cards[0] } : undefined,
-        attempts: 0,
-        maxAttempts: config.maxAttempts,
+        queue: initialQueue,
+        current: initialQueue[0],
         config,
         initialCardIds,
-        advisory: { suggestedCount, threshold: config.vocabConfidenceThreshold },
       },
     };
 
@@ -67,7 +65,7 @@ export class ListeningHandler implements ExerciseHandler {
     if (!op) throw new Error(`Unsupported action '${payload.action}' for listening handler.`);
     if (sessionState.progress?.type !== 'LISTENING_EXERCISE') throw new Error('Mismatched progress type.');
 
-    const services = { tx, fsrsService: undefined as any, studentId: sessionState.studentId, sessionId: sessionState.id };
+    const services = { tx, listeningFsrsService: ListeningFSRSService, studentId: sessionState.studentId, sessionId: sessionState.id };
     const [newProgress, result] = await op.execute(sessionState.progress as SessionProgress, payload.data, services);
     return [result, newProgress];
   }
@@ -80,4 +78,3 @@ export class ListeningHandler implements ExerciseHandler {
 }
 
 export const listeningHandler = new ListeningHandler();
-

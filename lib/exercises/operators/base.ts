@@ -24,9 +24,13 @@ export interface OperatorServices {
    */
   tx: TransactionClient;
   /**
-   * The FSRS service for any spaced repetition calculations.
+   * The FSRS service for vocabulary spaced repetition calculations.
    */
-  fsrsService: typeof FSRSService;
+  fsrsService?: typeof FSRSService;
+  /**
+   * The FSRS service for listening spaced repetition calculations.
+   */
+  listeningFsrsService?: any;
   /**
    * The ID of the student for whom the operation is being performed.
    */
@@ -58,4 +62,3 @@ export interface ProgressOperator {
     services: OperatorServices
   ): Promise<[SessionProgress, SubmissionResult]>;
 }
-

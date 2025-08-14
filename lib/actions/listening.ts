@@ -10,6 +10,7 @@ import {
 } from '@/lib/fsrs/engine';
 import { Prisma, CardState, VocabularyCard } from '@prisma/client';
 import { ListeningExerciseConfig } from '@/lib/types';
+import { authorizeTeacherForStudent } from '../auth';
 
 const DEFAULT_LISTENING_CONFIDENCE_THRESHOLD = 0.36; // good enough at listening
 const DEFAULT_VOCAB_CONFIDENCE_THRESHOLD = 0.36; // advisory threshold not to disrupt vocab
@@ -163,7 +164,7 @@ export const ListeningFSRSService = {
       return { st, rListening: r };
     });
 
-    const listeningGood = withListeningRetrievability.filter((x) => x.rListening > listenThresh);
+    const listeningGood = withListeningRetrievability.filter((x) => x.rListening > listenThresh && !!x.st.card);
 
     if (listeningGood.length === 0) {
       return { cards: [], suggestedCount: 0 };
@@ -194,8 +195,53 @@ export const ListeningFSRSService = {
       if (enriched[i].rVocab >= vocabThresh) suggested = i + 1; else break;
     }
 
-    const selected = enriched.slice(0, count).map((e) => e.st.card);
+    const selected = enriched.slice(0, count).map((e) => e.st.card!);
     return { cards: selected, suggestedCount: Math.min(suggested, count) };
+  },
+
+  /**
+   * Suggests the maximum count n for a listening section such that, after
+   * filtering to listening-good cards, the top-n by vocabulary retrievability
+   * all meet or exceed the vocab threshold.
+   */
+  async suggestMaxCount(
+    studentId: string,
+    cfg: { listeningConfidenceThreshold?: number; vocabConfidenceThreshold?: number }
+  ): Promise<number> {
+    const listenThresh = cfg.listeningConfidenceThreshold ?? DEFAULT_LISTENING_CONFIDENCE_THRESHOLD;
+    const vocabThresh = cfg.vocabConfidenceThreshold ?? DEFAULT_VOCAB_CONFIDENCE_THRESHOLD;
+
+    const listeningStates = await prisma.studentListeningState.findMany({
+      where: { studentId, state: { not: 'NEW' }, stability: { gt: 0 }, lastReview: { not: null } },
+      include: { card: true },
+    });
+    const now = Date.now();
+    const withListeningRetrievability = listeningStates.map((st) => {
+      const elapsedDays = st.lastReview ? (now - st.lastReview.getTime()) / 86400000 : 0;
+      const r = Math.exp(-elapsedDays / (st.stability || 1));
+      return { st, rListening: r };
+    });
+    const listeningGood = withListeningRetrievability.filter((x) => x.rListening > listenThresh && !!x.st.card);
+    if (listeningGood.length === 0) return 0;
+
+    const cardIds = listeningGood.map((x) => x.st.cardId);
+    const vocabStates = await prisma.studentCardState.findMany({
+      where: { studentId, cardId: { in: cardIds }, stability: { gt: 0 }, lastReview: { not: null } },
+      select: { cardId: true, stability: true, lastReview: true },
+    });
+    const vocabMap = new Map(vocabStates.map((s) => [s.cardId, s]));
+    const enriched = listeningGood.map((x) => {
+      const s = vocabMap.get(x.st.cardId);
+      const elapsedDays = s?.lastReview ? (now - s.lastReview.getTime()) / 86400000 : 0;
+      const r = s ? Math.exp(-elapsedDays / (s.stability || 1)) : 0;
+      return { ...x, rVocab: r };
+    });
+    enriched.sort((a, b) => b.rVocab - a.rVocab);
+    let suggested = 0;
+    for (let i = 0; i < enriched.length; i++) {
+      if (enriched[i].rVocab >= vocabThresh) suggested = i + 1; else break;
+    }
+    return suggested;
   },
 
   async _optimizeParameters(payload: Prisma.JsonValue): Promise<{ message: string; params?: any }> {
@@ -247,10 +293,7 @@ export const ListeningFSRSService = {
   },
 
   async createOptimizeParametersJob(studentId: string, teacherId: string) {
-    // no special authorization helper here: mimic FSRSService pattern if required
-    // Ensure teacher owns student
-    const student = await prisma.student.findUnique({ where: { id: studentId }, select: { teacherId: true } });
-    if (!student || student.teacherId !== teacherId) throw new Error('Not authorized to optimize this student.');
+    await authorizeTeacherForStudent(teacherId, studentId);
     return prisma.job.create({
       data: {
         ownerId: teacherId,

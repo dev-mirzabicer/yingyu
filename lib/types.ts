@@ -16,6 +16,7 @@ import {
   StudentCardState,
   Job,
 } from '@prisma/client';
+import { StudentListeningState } from '@prisma/client';
 import { z } from 'zod';
 import {
   BulkImportResultSchema,
@@ -138,13 +139,7 @@ export type ListeningExerciseConfig = {
   count?: number; // number of words to include (n)
   listeningConfidenceThreshold?: number; // filter: listening retrievability threshold
   vocabConfidenceThreshold?: number; // advisory threshold against disturbing vocab curve
-  // Answer checking options
-  maxAttempts?: number;
-  caseSensitive?: boolean;
-  ignoreSpaces?: boolean;
-  stripPunctuation?: boolean;
-  alternateAnswers?: string[];
-  typoTolerance?: number; // allowed Levenshtein distance, 0 = exact
+  // Rating-based; no text-answer options needed for teacher-centric flow
 };
 
 /**
@@ -152,15 +147,12 @@ export type ListeningExerciseConfig = {
  */
 export type ListeningExerciseProgress = {
   type: 'LISTENING_EXERCISE';
-  stage: 'AWAITING_ANSWER' | 'ANSWER_REVEALED';
+  stage: 'PRESENTING_CARD' | 'AWAITING_RATING';
   payload: {
-    queue: { card: VocabularyCard }[];
-    current?: { card: VocabularyCard };
-    attempts: number;
-    maxAttempts: number;
+    queue: (StudentListeningState & { card: VocabularyCard })[];
+    current?: StudentListeningState & { card: VocabularyCard };
     config: ListeningExerciseConfig;
     initialCardIds: string[];
-    lastSubmission?: string;
     advisory?: { suggestedCount: number; threshold: number };
   };
 };
