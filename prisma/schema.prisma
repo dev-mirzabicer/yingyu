@@ -65,9 +65,12 @@ enum SessionStatus {
 
 enum JobType {
   INITIALIZE_CARD_STATES
+  INITIALIZE_LISTENING_CARD_STATES
   GENERATE_PRACTICE_PDF
   OPTIMIZE_FSRS_PARAMS
+  OPTIMIZE_LISTENING_FSRS_PARAMS
   REBUILD_FSRS_CACHE
+  REBUILD_LISTENING_FSRS_CACHE
   BULK_IMPORT_VOCABULARY
   BULK_IMPORT_STUDENTS
   BULK_IMPORT_SCHEDULES
@@ -132,14 +135,16 @@ model Student {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
-  teacher        Teacher              @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  payments       Payment[]
-  classSchedules ClassSchedule[]
-  studentDecks   StudentDeck[]
-  cardStates     StudentCardState[]
-  reviewHistory  ReviewHistory[]
-  fsrsParams     StudentFsrsParams[]
-  sessions       Session[]
+  teacher              Teacher               @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  payments             Payment[]
+  classSchedules       ClassSchedule[]
+  studentDecks         StudentDeck[]
+  cardStates           StudentCardState[]
+  listeningCardStates  ListeningCardState[]
+  reviewHistory        ReviewHistory[]
+  fsrsParams           StudentFsrsParams[]
+  listeningFsrsParams  ListeningFsrsParams[]
+  sessions             Session[]
 }
 
 // ================================================================= //
@@ -237,10 +242,11 @@ model VocabularyDeck {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  creator      Teacher?         @relation(fields: [creatorId], references: [id], onDelete: SetNull)
-  cards        VocabularyCard[]
-  studentDecks StudentDeck[]
-  unitItem     UnitItem?
+  creator           Teacher?           @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  cards             VocabularyCard[]
+  studentDecks      StudentDeck[]
+  listeningExercises ListeningExercise[]
+  unitItem          UnitItem?
 }
 
 model VocabularyCard {
@@ -261,8 +267,9 @@ model VocabularyCard {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  deck       VocabularyDeck     @relation(fields: [deckId], references: [id], onDelete: Cascade)
-  cardStates StudentCardState[]
+  deck                 VocabularyDeck       @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  cardStates           StudentCardState[]
+  listeningCardStates  ListeningCardState[]
 }
 
 model GrammarExercise {
@@ -288,9 +295,8 @@ model ListeningExercise {
   id               String   @id @default(uuid()) @db.Uuid
   creatorId        String?  @db.Uuid
   title            String
+  vocabularyDeckId String   @db.Uuid
   difficultyLevel  Int      @default(1)
-  audioUrl         String
-  correctSpelling  String
   explanation      String?
   tags             String[]
   isPublic         Boolean  @default(false)
@@ -299,8 +305,9 @@ model ListeningExercise {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  creator  Teacher?  @relation(fields: [creatorId], references: [id], onDelete: SetNull)
-  unitItem UnitItem?
+  creator         Teacher?        @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  vocabularyDeck  VocabularyDeck  @relation(fields: [vocabularyDeckId], references: [id], onDelete: Restrict)
+  unitItem        UnitItem?
 }
 
 model VocabFillInBlankExercise {
@@ -385,6 +392,47 @@ model ReviewHistory {
 }
 
 model StudentFsrsParams {
+  id                String   @id @default(uuid()) @db.Uuid
+  studentId         String   @db.Uuid
+  w                 Json
+  version           Int      @default(1)
+  optimizationScore Float?
+  trainingDataSize  Int?
+  lastOptimized     DateTime @default(now())
+  isActive          Boolean  @default(true)
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, isActive])
+}
+
+model ListeningCardState {
+  id                    String    @id @default(uuid()) @db.Uuid
+  studentId             String    @db.Uuid
+  cardId                String    @db.Uuid
+  stability             Float
+  difficulty            Float
+  due                   DateTime
+  lastReview            DateTime?
+  reps                  Int       @default(0)
+  lapses                Int       @default(0)
+  state                 CardState @default(NEW)
+  averageResponseTimeMs Int       @default(0)
+  consecutiveCorrect    Int       @default(0)
+  retrievability        Float?
+  intervalDays          Int?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  card    VocabularyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  
+  @@unique([studentId, cardId])
+  @@index([studentId, due])
+  @@index([studentId, state])
+}
+
+model ListeningFsrsParams {
   id                String   @id @default(uuid()) @db.Uuid
   studentId         String   @db.Uuid
   w                 Json

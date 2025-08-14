@@ -101,7 +101,7 @@ export type AnswerPayload = {
    * The specific, enumerated action the user is performing. This determines
    * which ProgressOperator the handler will dispatch to.
    */
-  action: 'REVEAL_ANSWER' | 'SUBMIT_RATING' | 'SUBMIT_TEXT_ANSWER';
+  action: 'REVEAL_ANSWER' | 'SUBMIT_RATING' | 'SUBMIT_TEXT_ANSWER' | 'PLAY_AUDIO';
   /**
    * The data associated with the action, to be validated by the specific operator.
    */
@@ -142,10 +142,46 @@ export interface SubmissionResult {
 }
 
 /**
+ * Configuration for listening exercises, stored in UnitItem.exerciseConfig.
+ */
+export type ListeningExerciseConfig = {
+  deckId: string; // The vocabulary deck to use for listening
+  newCards?: number;
+  maxDue?: number;
+  minDue?: number;
+  vocabularyConfidenceThreshold?: number; // Min vocabulary retrievability (default 0.8)
+  listeningCandidateThreshold?: number; // Min threshold for listening readiness (default 0.6)
+  learningSteps?: string[]; // Listening-specific learning steps
+};
+
+/**
+ * Progress state for listening exercises.
+ */
+export type ListeningDeckProgress = {
+  type: 'LISTENING_EXERCISE';
+  stage: 'PLAYING_AUDIO' | 'AWAITING_RATING';
+  payload: {
+    /** The dynamic, sorted queue of listening cards to be reviewed */
+    queue: Array<any>; // Will be typed as (ListeningCardState & { card: VocabularyCard })[]
+    /** The full data for the current card (queue[0]) */
+    currentCardData?: any; // Will be typed as ListeningCardState & { card: VocabularyCard }
+    /** The original configuration for this session */
+    config: ListeningExerciseConfig;
+    /** Static list of all card IDs included at the start of the session */
+    initialCardIds: string[];
+    /** Warnings about session composition */
+    sessionWarnings?: {
+      suboptimalCandidates: number;
+      recommendedMaxCards: number;
+    };
+  };
+};
+
+/**
  * A union type representing all possible progress states for any exercise.
  * The `Session.progress` field will always conform to one of these shapes.
  */
-export type SessionProgress = VocabularyDeckProgress;
+export type SessionProgress = VocabularyDeckProgress | ListeningDeckProgress;
 // | GrammarExerciseProgress etc. will be added here.
 
 /**
@@ -198,12 +234,12 @@ export type NewUnitItemData =
   | {
     type: 'LISTENING_EXERCISE';
     order?: number;
-    config?: any;
+    config?: ListeningExerciseConfig;
+    mode: 'existing';
+    existingDeckId: string; // Must reference an existing vocabulary deck
     data: {
       title: string;
       difficultyLevel?: number;
-      audioUrl: string;
-      correctSpelling: string;
       explanation?: string;
       tags?: string[];
       isPublic?: boolean;

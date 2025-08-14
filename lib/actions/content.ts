@@ -3,6 +3,7 @@ import {
   FullUnit,
   NewUnitItemData,
   VocabularyExerciseConfig,
+  ListeningExerciseConfig,
 } from '@/lib/types';
 import {
   Unit,
@@ -305,16 +306,43 @@ export const ContentService = {
           break;
         }
         case 'LISTENING_EXERCISE': {
-          const exercise = await tx.listeningExercise.create({
-            data: { ...itemData.data, creatorId },
+          // Listening exercises are deck-based and must reference an existing vocabulary deck
+          const existingDeck = await tx.vocabularyDeck.findUnique({
+            where: { id: itemData.existingDeckId },
+            select: { id: true, creatorId: true, isPublic: true },
           });
+
+          if (!existingDeck) {
+            throw new Error('Selected vocabulary deck not found.');
+          }
+
+          // Check if the teacher has access to this deck
+          if (!existingDeck.isPublic && existingDeck.creatorId !== creatorId) {
+            throw new AuthorizationError('You do not have permission to use this deck.');
+          }
+
+          // Create listening exercise referencing the vocabulary deck
+          const exercise = await tx.listeningExercise.create({
+            data: { 
+              ...itemData.data, 
+              vocabularyDeckId: existingDeck.id,
+              creatorId 
+            },
+          });
+
+          // Ensure config has deckId for the listening exercise
+          const listeningConfig = {
+            ...itemData.config,
+            deckId: existingDeck.id
+          };
+
           newUnitItem = await tx.unitItem.create({
             data: {
               unitId,
               order: newOrder,
               type: 'LISTENING_EXERCISE',
               listeningExerciseId: exercise.id,
-              exerciseConfig: itemData.config || Prisma.JsonNull,
+              exerciseConfig: listeningConfig || Prisma.JsonNull,
             },
           });
           break;

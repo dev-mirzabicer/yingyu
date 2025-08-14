@@ -90,6 +90,17 @@ export async function processPendingJobs() {
           resultPayload = await FSRSService._optimizeParameters(payload);
           break;
         }
+        // --- LISTENING FSRS JOB HANDLERS ---
+        case JobType.OPTIMIZE_LISTENING_FSRS_PARAMS: {
+          const payload = OptimizeParamsPayloadSchema.parse(job.payload);
+          resultPayload = await FSRSService._optimizeListeningParameters(payload);
+          break;
+        }
+        case JobType.REBUILD_LISTENING_FSRS_CACHE: {
+          const payload = RebuildCachePayloadSchema.parse(job.payload);
+          resultPayload = await FSRSService._rebuildListeningCacheForStudent(payload);
+          break;
+        }
         case JobType.BULK_IMPORT_VOCABULARY: {
           const payload = BulkImportVocabularyPayloadSchema.parse(job.payload);
           resultPayload = await ContentService._bulkAddVocabularyCards(payload);

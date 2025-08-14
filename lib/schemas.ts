@@ -99,6 +99,23 @@ export const VocabularyExerciseConfigSchema = z
   })
   .optional();
 
+/**
+ * Schema for listening exercise configuration.
+ */
+export const ListeningExerciseConfigSchema = z
+  .object({
+    deckId: z.string().uuid().optional(), // Optional during parsing, gets injected by handler
+    newCards: z.number().int().min(0).optional(),
+    maxDue: z.number().int().min(0).optional(),
+    minDue: z.number().int().min(0).optional(),
+    vocabularyConfidenceThreshold: z.number().min(0).max(1).optional(),
+    listeningCandidateThreshold: z.number().min(0).max(1).optional(),
+    learningSteps: z.array(
+      z.string().regex(/^\d+[smhd]$/, 'Learning step must be in format like "3m", "15m", "1h", "2d"')
+    ).optional(),
+  })
+  .optional();
+
 // --- NEW SCHEMAS ---
 
 /**

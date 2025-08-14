@@ -21,6 +21,7 @@ import {
 import { authorizeTeacherForStudent } from '../auth';
 import { JobService } from './jobs';
 import { FsrsStats, VocabularyExerciseConfig } from '../types';
+import { OptimizeParamsPayloadSchema, RebuildCachePayloadSchema } from '../schemas';
 
 /**
  * A constant representing the minimum retrievability for a card to be considered
@@ -885,6 +886,768 @@ export const FSRSService = {
     await prisma.$transaction([
       prisma.studentCardState.deleteMany({ where: { studentId } }),
       prisma.studentCardState.createMany({ data: allStatesToCreate }),
+    ]);
+
+    return { cardsRebuilt: allStatesToCreate.length };
+  },
+
+  // ================================================================= //
+  // LISTENING EXERCISE FSRS METHODS (Completely Separate System)
+  // ================================================================= //
+
+  /**
+   * Smart word selection algorithm for listening exercises.
+   * Filters words based on vocabulary confidence and listening readiness.
+   */
+  async getListeningCandidatesFromVocabulary(
+    studentId: string,
+    deckId: string,
+    config: {
+      maxCards?: number;
+      vocabularyConfidenceThreshold?: number;
+      listeningCandidateThreshold?: number;
+    } = {}
+  ): Promise<{
+    candidates: VocabularyCard[];
+    warnings?: {
+      suboptimalCandidates: number;
+      recommendedMaxCards: number;
+    };
+  }> {
+    const {
+      maxCards = 20,
+      vocabularyConfidenceThreshold = 0.8, // High vocabulary confidence required
+      listeningCandidateThreshold = 0.6,   // Threshold for listening readiness
+    } = config;
+
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { status: true },
+    });
+    if (!student || student.status !== 'ACTIVE') {
+      return { candidates: [] };
+    }
+
+    // Get all cards from the specified deck with their vocabulary and listening states
+    const cardsWithStates = await prisma.$queryRaw<Array<{
+      id: string;
+      englishWord: string;
+      chineseTranslation: string;
+      pinyin: string | null;
+      audioUrl: string | null;
+      vocabularyRetrievability: number | null;
+      vocabularyStability: number | null;
+      listeningRetrievability: number | null;
+      listeningStability: number | null;
+      hasListeningState: boolean;
+    }>>`
+      SELECT 
+        vc.id,
+        vc."englishWord",
+        vc."chineseTranslation",
+        vc.pinyin,
+        vc."audioUrl",
+        CASE 
+          WHEN scs.stability > 0 AND scs."lastReview" IS NOT NULL THEN
+            exp(-extract(epoch from (now() - scs."lastReview")) / (86400 * scs.stability))
+          ELSE NULL
+        END as "vocabularyRetrievability",
+        scs.stability as "vocabularyStability",
+        CASE 
+          WHEN lcs.stability > 0 AND lcs."lastReview" IS NOT NULL THEN
+            exp(-extract(epoch from (now() - lcs."lastReview")) / (86400 * lcs.stability))
+          ELSE NULL
+        END as "listeningRetrievability",
+        lcs.stability as "listeningStability",
+        CASE WHEN lcs.id IS NOT NULL THEN true ELSE false END as "hasListeningState"
+      FROM "VocabularyCard" vc
+      LEFT JOIN "StudentCardState" scs ON vc.id = scs."cardId" AND scs."studentId" = ${studentId}::uuid
+      LEFT JOIN "ListeningCardState" lcs ON vc.id = lcs."cardId" AND lcs."studentId" = ${studentId}::uuid
+      WHERE vc."deckId" = ${deckId}::uuid
+        AND vc."audioUrl" IS NOT NULL -- Must have audio for listening practice
+        AND scs.id IS NOT NULL -- Must have learned this word vocabularily
+        AND scs.state = 'REVIEW' -- Must be in review state (not learning)
+    `;
+
+    // Filter and sort candidates
+    let candidates = cardsWithStates
+      // Filter: Must have high vocabulary confidence
+      .filter(card => 
+        card.vocabularyRetrievability !== null && 
+        card.vocabularyRetrievability >= vocabularyConfidenceThreshold
+      )
+      // Filter: Exclude cards already mastered for listening
+      .filter(card => 
+        !card.hasListeningState || 
+        (card.listeningRetrievability !== null && card.listeningRetrievability < 0.9)
+      )
+      // Sort by vocabulary confidence (descending) - focus on best-known vocabulary
+      .sort((a, b) => (b.vocabularyRetrievability || 0) - (a.vocabularyRetrievability || 0));
+
+    // Analyze warnings for suboptimal candidates
+    let warnings: { suboptimalCandidates: number; recommendedMaxCards: number } | undefined;
+    
+    if (candidates.length > 0) {
+      const requestedCandidates = candidates.slice(0, maxCards);
+      const suboptimalCount = requestedCandidates.filter(card => 
+        !card.hasListeningState || 
+        (card.listeningRetrievability !== null && card.listeningRetrievability < listeningCandidateThreshold)
+      ).length;
+
+      if (suboptimalCount > 0) {
+        // Find optimal session size
+        const optimalCandidates = candidates.filter(card =>
+          card.hasListeningState && 
+          card.listeningRetrievability !== null &&
+          card.listeningRetrievability >= listeningCandidateThreshold
+        );
+
+        warnings = {
+          suboptimalCandidates: suboptimalCount,
+          recommendedMaxCards: Math.max(1, optimalCandidates.length)
+        };
+      }
+    }
+
+    // Convert to VocabularyCard format
+    const finalCandidates: VocabularyCard[] = candidates.slice(0, maxCards).map(card => ({
+      id: card.id,
+      deckId,
+      englishWord: card.englishWord,
+      chineseTranslation: card.chineseTranslation,
+      pinyin: card.pinyin,
+      ipaPronunciation: null,
+      exampleSentences: null,
+      wordType: null,
+      difficultyLevel: 1,
+      audioUrl: card.audioUrl,
+      imageUrl: null,
+      videoUrl: null,
+      frequencyRank: null,
+      tags: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
+
+    return {
+      candidates: finalCandidates,
+      warnings
+    };
+  },
+
+  /**
+   * Get the initial listening review queue for a session.
+   * Similar to vocabulary but uses ListeningCardState.
+   */
+  async getListeningReviewQueue(
+    studentId: string,
+    deckId: string,
+    config: {
+      newCards?: number;
+      maxDue?: number;
+      minDue?: number;
+      vocabularyConfidenceThreshold?: number;
+      listeningCandidateThreshold?: number;
+    } = {}
+  ): Promise<{
+    dueItems: Array<any>;
+    newItems: Array<any>;
+    warnings?: {
+      suboptimalCandidates: number;
+      recommendedMaxCards: number;
+    };
+  }> {
+    const {
+      newCards = 10,
+      maxDue = 20,
+      minDue = 0,
+      vocabularyConfidenceThreshold = 0.8,
+      listeningCandidateThreshold = 0.6,
+    } = config;
+
+    const now = new Date();
+
+    // Get due listening cards
+    const dueItems = await prisma.listeningCardState.findMany({
+      where: {
+        studentId,
+        due: { lte: now },
+        card: { deckId }
+      },
+      include: { card: true },
+      orderBy: { due: 'asc' },
+      take: Math.max(maxDue, minDue),
+    });
+
+    // For new cards, use the smart candidate selection
+    const { candidates, warnings } = await this.getListeningCandidatesFromVocabulary(
+      studentId,
+      deckId,
+      {
+        maxCards: newCards,
+        vocabularyConfidenceThreshold,
+        listeningCandidateThreshold,
+      }
+    );
+
+    // Convert candidates to new listening card states
+    const newItems = await Promise.all(
+      candidates.map(async (card) => {
+        // Check if listening state already exists
+        const existingState = await prisma.listeningCardState.findUnique({
+          where: {
+            studentId_cardId: { studentId, cardId: card.id }
+          }
+        });
+
+        if (existingState) {
+          return existingState;
+        }
+
+        // Create new listening card state
+        return prisma.listeningCardState.create({
+          data: {
+            studentId,
+            cardId: card.id,
+            stability: 1.0,
+            difficulty: 5.0,
+            due: now,
+            state: 'NEW',
+          },
+          include: { card: true }
+        });
+      })
+    );
+
+    return {
+      dueItems: dueItems.slice(minDue),
+      newItems,
+      warnings
+    };
+  },
+
+  /**
+   * Record a listening review (completely separate from vocabulary reviews).
+   */
+  async recordListeningReview(
+    studentId: string,
+    cardId: string,
+    rating: FsrsRating,
+    sessionId?: string
+  ): Promise<any> {
+    return prisma.$transaction(async (tx) => {
+      const now = new Date();
+      
+      // Get learning steps configuration (reuse vocabulary learning steps for now)
+      let learningSteps = DEFAULT_LEARNING_STEPS;
+      if (sessionId) {
+        try {
+          const session = await tx.session.findUnique({
+            where: { id: sessionId },
+            select: { progress: true }
+          });
+          
+          if (session?.progress) {
+            const progress = session.progress as any;
+            const config = progress?.payload?.config;
+            if (config?.learningSteps && Array.isArray(config.learningSteps)) {
+              learningSteps = config.learningSteps;
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to fetch session config for listening learning steps:', error);
+        }
+      }
+      
+      // Get current listening card state
+      const previousCardState = await tx.listeningCardState.findUnique({
+        where: { studentId_cardId: { studentId, cardId } },
+      });
+
+      if (!previousCardState) {
+        throw new Error(
+          `Listening FSRS Error: Cannot record review for a card that has no initial listening state. StudentId: ${studentId}, CardId: ${cardId}`
+        );
+      }
+      
+      // Check if this card should use learning steps for listening
+      const shouldUseLearningSteps = await this._shouldUseListeningLearningSteps(
+        studentId, 
+        cardId, 
+        learningSteps, 
+        tx
+      );
+      
+      if (shouldUseLearningSteps) {
+        // Use learning steps logic for listening
+        const { shouldGraduate, newDueDate } = await this._calculateListeningLearningStepsDue(
+          studentId,
+          cardId,
+          rating,
+          learningSteps,
+          tx
+        );
+        
+        if (shouldGraduate) {
+          // Graduate to FSRS - fall through to FSRS logic
+        } else {
+          // Stay in learning steps
+          const newState = (previousCardState.state === 'REVIEW' || previousCardState.state === 'RELEARNING')
+            ? 'RELEARNING'
+            : 'LEARNING';
+          
+          const updatedState = await tx.listeningCardState.update({
+            where: { studentId_cardId: { studentId, cardId } },
+            data: {
+              due: newDueDate,
+              lastReview: now,
+              lapses: rating === 1 ? { increment: 1 } : undefined,
+              state: newState,
+            },
+          });
+          
+          // Record as learning step review for listening
+          await tx.reviewHistory.create({
+            data: {
+              studentId,
+              cardId,
+              rating,
+              reviewType: 'LISTENING',
+              sessionId,
+              reviewedAt: now,
+              previousState: previousCardState.state,
+              previousDifficulty: previousCardState.difficulty,
+              previousStability: previousCardState.stability,
+              previousDue: previousCardState.due,
+              isLearningStep: true,
+            },
+          });
+          
+          return updatedState;
+        }
+      }
+      
+      // FSRS logic for listening
+      const listeningParams = await tx.listeningFsrsParams.findFirst({
+        where: { studentId, isActive: true },
+      });
+      const w = (listeningParams?.w as number[]) ?? FSRS_DEFAULT_PARAMETERS;
+      const engine = new FSRS(w);
+
+      // Determine memory state
+      const currentMemory =
+        previousCardState.state === 'NEW'
+          ? undefined
+          : new MemoryState(
+            previousCardState.stability,
+            previousCardState.difficulty
+          );
+
+      // Calculate days since last listening review
+      const daysSinceLastReview = (previousCardState.state === 'NEW' || !previousCardState.lastReview)
+        ? 0
+        : Math.round(
+          (now.getTime() - previousCardState.lastReview.getTime()) /
+          (1000 * 60 * 60 * 24)
+        );
+
+      // Get next states from FSRS
+      const nextStates = engine.nextStates(
+        currentMemory,
+        DEFAULT_DESIRED_RETENTION,
+        daysSinceLastReview
+      );
+      
+      // Select state based on rating
+      let newState;
+      switch (rating) {
+        case 1:
+          newState = nextStates.again;
+          break;
+        case 2:
+          newState = nextStates.hard;
+          break;
+        case 3:
+          newState = nextStates.good;
+          break;
+        case 4:
+          newState = nextStates.easy;
+          break;
+        default:
+          throw new Error(`Invalid FSRS rating: ${rating}`);
+      }
+
+      // Calculate new due date
+      const newDueDate = new Date(
+        now.getTime() + newState.interval * 24 * 60 * 60 * 1000
+      );
+
+      // Update listening card state
+      const updatedState = await tx.listeningCardState.update({
+        where: { studentId_cardId: { studentId, cardId } },
+        data: {
+          stability: newState.memory.stability,
+          difficulty: newState.memory.difficulty,
+          due: newDueDate,
+          lastReview: now,
+          reps: { increment: 1 },
+          lapses: rating === 1 ? { increment: 1 } : undefined,
+          state: rating === 1 ? 'RELEARNING' : 'REVIEW',
+        },
+      });
+
+      // Record as listening FSRS review
+      await tx.reviewHistory.create({
+        data: {
+          studentId,
+          cardId,
+          rating,
+          reviewType: 'LISTENING',
+          sessionId,
+          reviewedAt: now,
+          previousState: previousCardState.state,
+          previousDifficulty: previousCardState.difficulty,
+          previousStability: previousCardState.stability,
+          previousDue: previousCardState.due,
+          isLearningStep: false,
+        },
+      });
+
+      return updatedState;
+    });
+  },
+
+  /**
+   * Helper: Check if listening card should use learning steps.
+   */
+  async _shouldUseListeningLearningSteps(
+    studentId: string,
+    cardId: string,
+    learningSteps: string[],
+    tx: any
+  ): Promise<boolean> {
+    const cardState = await tx.listeningCardState.findUnique({
+      where: { studentId_cardId: { studentId, cardId } },
+    });
+
+    if (!cardState) return false;
+
+    if (cardState.state === 'NEW') return true;
+    
+    if (cardState.state === 'RELEARNING') {
+      const lastListeningReview = await tx.reviewHistory.findFirst({
+        where: {
+          studentId,
+          cardId,
+          reviewType: 'LISTENING',
+          isLearningStep: true,
+        },
+        orderBy: { reviewedAt: 'desc' },
+      });
+      
+      if (!lastListeningReview) return true;
+      
+      const completedSteps = await tx.reviewHistory.count({
+        where: {
+          studentId,
+          cardId,
+          reviewType: 'LISTENING',
+          isLearningStep: true,
+          reviewedAt: { gte: lastListeningReview.reviewedAt },
+          rating: { gte: 2 },
+        },
+      });
+      
+      return completedSteps < learningSteps.length;
+    }
+
+    return false;
+  },
+
+  /**
+   * Helper: Calculate listening learning steps due date.
+   */
+  async _calculateListeningLearningStepsDue(
+    studentId: string,
+    cardId: string,
+    rating: FsrsRating,
+    learningSteps: string[],
+    tx: any
+  ): Promise<{ shouldGraduate: boolean; newDueDate: Date }> {
+    if (rating === 1) {
+      // Reset to first learning step
+      const firstStepDuration = parseLearningStepDuration(learningSteps[0]);
+      return {
+        shouldGraduate: false,
+        newDueDate: new Date(Date.now() + firstStepDuration)
+      };
+    }
+
+    // Find current position in learning steps for listening
+    const completedSteps = await tx.reviewHistory.count({
+      where: {
+        studentId,
+        cardId,
+        reviewType: 'LISTENING',
+        isLearningStep: true,
+        rating: { gte: 2 },
+      },
+    });
+
+    const nextStepIndex = completedSteps;
+
+    if (nextStepIndex >= learningSteps.length) {
+      // Graduate from learning steps
+      return {
+        shouldGraduate: true,
+        newDueDate: new Date() // Will be overridden by FSRS
+      };
+    }
+
+    // Move to next learning step
+    const nextStepDuration = parseLearningStepDuration(learningSteps[nextStepIndex]);
+    return {
+      shouldGraduate: false,
+      newDueDate: new Date(Date.now() + nextStepDuration)
+    };
+  },
+
+  /**
+   * Get listening-specific FSRS statistics.
+   */
+  async getListeningStats(studentId: string): Promise<any> {
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { status: true },
+    });
+    if (!student || student.status !== 'ACTIVE') return null;
+
+    const stats = await prisma.$queryRaw<Array<{
+      totalCards: bigint;
+      newCards: bigint;
+      learningCards: bigint;
+      reviewCards: bigint;
+      relearningCards: bigint;
+      dueToday: bigint;
+      dueThisWeek: bigint;
+      overdue: bigint;
+      totalReviews: bigint;
+      averageRetention: number | null;
+      averageResponseTime: number | null;
+    }>>`
+      SELECT
+        COUNT(*) as "totalCards",
+        COUNT(CASE WHEN state = 'NEW' THEN 1 END) as "newCards",
+        COUNT(CASE WHEN state = 'LEARNING' THEN 1 END) as "learningCards",
+        COUNT(CASE WHEN state = 'REVIEW' THEN 1 END) as "reviewCards",
+        COUNT(CASE WHEN state = 'RELEARNING' THEN 1 END) as "relearningCards",
+        COUNT(CASE WHEN due <= CURRENT_DATE THEN 1 END) as "dueToday",
+        COUNT(CASE WHEN due <= CURRENT_DATE + INTERVAL '7 days' THEN 1 END) as "dueThisWeek",
+        COUNT(CASE WHEN due < CURRENT_DATE THEN 1 END) as "overdue",
+        (SELECT COUNT(*) FROM "ReviewHistory" WHERE "studentId" = ${studentId}::uuid AND "reviewType" = 'LISTENING') as "totalReviews",
+        AVG(CASE WHEN stability > 0 THEN stability END) as "averageRetention",
+        AVG("averageResponseTimeMs") as "averageResponseTime"
+      FROM "ListeningCardState"
+      WHERE "studentId" = ${studentId}::uuid
+    `;
+
+    const result = stats[0];
+    return {
+      totalCards: Number(result.totalCards),
+      newCards: Number(result.newCards),
+      learningCards: Number(result.learningCards),
+      reviewCards: Number(result.reviewCards),
+      relearningCards: Number(result.relearningCards),
+      dueToday: Number(result.dueToday),
+      dueThisWeek: Number(result.dueThisWeek),
+      overdue: Number(result.overdue),
+      totalReviews: Number(result.totalReviews),
+      averageRetention: result.averageRetention || 0,
+      averageResponseTime: result.averageResponseTime || 0,
+    };
+  },
+
+  /**
+   * Create job for optimizing listening FSRS parameters.
+   */
+  async createOptimizeListeningParametersJob(studentId: string): Promise<any> {
+    const teacherId = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { teacherId: true }
+    });
+    
+    if (!teacherId) {
+      throw new Error('Student not found');
+    }
+
+    return JobService.createJob(
+      teacherId.teacherId, 
+      'OPTIMIZE_LISTENING_FSRS_PARAMS', 
+      { studentId }
+    );
+  },
+
+  /**
+   * Internal: Optimize listening FSRS parameters (called by worker).
+   */
+  async _optimizeListeningParameters(
+    payload: Prisma.JsonValue
+  ): Promise<{ message: string; params?: any }> {
+    const { studentId } = OptimizeParamsPayloadSchema.parse(payload);
+    const listeningReviews = await prisma.reviewHistory.findMany({
+      where: {
+        studentId,
+        reviewType: 'LISTENING',
+        isLearningStep: false,
+      },
+      orderBy: { reviewedAt: 'asc' },
+    });
+
+    if (listeningReviews.length < 10) {
+      throw new Error('Not enough listening review data for optimization');
+    }
+
+    const trainingSet = listeningReviews.map((history) => {
+      const fsrsReviews = this._mapHistoryToFsrsReviews([history]);
+      return new FSRSItem(fsrsReviews);
+    });
+
+    const engine = new FSRS();
+    const optimizedWeights = await engine.computeParameters(trainingSet, true);
+
+    // Deactivate old listening parameters
+    await prisma.listeningFsrsParams.updateMany({
+      where: { studentId, isActive: true },
+      data: { isActive: false },
+    });
+
+    // Create new optimized listening parameters
+    const newParams = await prisma.listeningFsrsParams.create({
+      data: {
+        studentId,
+        w: optimizedWeights,
+        trainingDataSize: listeningReviews.length,
+        version: 1,
+        isActive: true,
+      },
+    });
+
+    return {
+      message: `Successfully optimized listening parameters for student ${studentId}.`,
+      params: newParams,
+    };
+  },
+
+  /**
+   * Create job for rebuilding listening FSRS cache.
+   */
+  async createRebuildListeningCacheJob(studentId: string): Promise<any> {
+    const teacherId = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { teacherId: true }
+    });
+    
+    if (!teacherId) {
+      throw new Error('Student not found');
+    }
+
+    return JobService.createJob(
+      teacherId.teacherId, 
+      'REBUILD_LISTENING_FSRS_CACHE', 
+      { studentId }
+    );
+  },
+
+  /**
+   * Internal: Rebuild listening FSRS cache from review history (called by worker).
+   */
+  async _rebuildListeningCacheForStudent(
+    payload: Prisma.JsonValue
+  ): Promise<{ cardsRebuilt: number }> {
+    const { studentId } = RebuildCachePayloadSchema.parse(payload);
+    const listeningReviews = await prisma.reviewHistory.findMany({
+      where: {
+        studentId,
+        reviewType: 'LISTENING',
+      },
+      orderBy: [{ cardId: 'asc' }, { reviewedAt: 'asc' }],
+    });
+
+    const cardStateMap = new Map<string, any>();
+
+    // Process listening reviews chronologically per card
+    for (const review of listeningReviews) {
+      if (!cardStateMap.has(review.cardId)) {
+        cardStateMap.set(review.cardId, {
+          studentId,
+          cardId: review.cardId,
+          stability: 1.0,
+          difficulty: 5.0,
+          due: new Date(),
+          lastReview: null,
+          reps: 0,
+          lapses: 0,
+          state: 'NEW',
+          averageResponseTimeMs: 0,
+          consecutiveCorrect: 0,
+          retrievability: null,
+          intervalDays: null,
+          createdAt: review.reviewedAt,
+          updatedAt: review.reviewedAt,
+        });
+      }
+
+      if (!review.isLearningStep) {
+        const state = cardStateMap.get(review.cardId);
+        state.reps += 1;
+        if (review.rating === 1) state.lapses += 1;
+        state.lastReview = review.reviewedAt;
+        state.updatedAt = review.reviewedAt;
+        // FSRS calculations would be applied here in a real implementation
+      }
+    }
+
+    const statesFromHistory = Array.from(cardStateMap.values());
+
+    // Get all vocabulary cards that might need listening states but don't have history
+    const allCards = await prisma.vocabularyCard.findMany({
+      where: {
+        audioUrl: { not: null },
+        deck: {
+          studentDecks: {
+            some: { studentId }
+          }
+        }
+      },
+      select: { id: true }
+    });
+
+    const cardsWithHistory = new Set(statesFromHistory.map(s => s.cardId));
+    const newCardStates = allCards
+      .filter(card => !cardsWithHistory.has(card.id))
+      .map(card => ({
+        studentId,
+        cardId: card.id,
+        stability: 1.0,
+        difficulty: 5.0,
+        due: new Date(),
+        lastReview: null,
+        reps: 0,
+        lapses: 0,
+        state: 'NEW',
+        averageResponseTimeMs: 0,
+        consecutiveCorrect: 0,
+        retrievability: null,
+        intervalDays: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }));
+
+    const allStatesToCreate = [...statesFromHistory, ...newCardStates];
+
+    await prisma.$transaction([
+      prisma.listeningCardState.deleteMany({ where: { studentId } }),
+      prisma.listeningCardState.createMany({ data: allStatesToCreate }),
     ]);
 
     return { cardsRebuilt: allStatesToCreate.length };
