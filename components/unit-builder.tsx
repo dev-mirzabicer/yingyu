@@ -373,17 +373,85 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
       // Add/update unit items
       for (const item of unitItems) {
         if (item.id.startsWith("temp-")) {
-          // Add new item
-          const itemData: NewUnitItemData = {
-            type: item.type,
-            order: item.order,
-            config: item.config,
-            data: {
-              name: item.title || "Untitled",
-              description: "",
-              isPublic: false,
-            },
-          } as NewUnitItemData
+          // Add new item - handle different exercise types
+          let itemData: NewUnitItemData
+
+          if (item.type === 'VOCABULARY_DECK') {
+            if (item.config.deckId) {
+              // Existing deck mode
+              itemData = {
+                type: 'VOCABULARY_DECK',
+                order: item.order,
+                config: item.config,
+                mode: 'existing',
+                existingDeckId: item.config.deckId,
+              }
+            } else {
+              // New deck mode
+              itemData = {
+                type: 'VOCABULARY_DECK',
+                order: item.order,
+                config: item.config,
+                mode: 'new',
+                data: {
+                  name: item.title || "Untitled Vocabulary Deck",
+                  description: "",
+                  isPublic: false,
+                },
+              }
+            }
+          } else if (item.type === 'LISTENING_EXERCISE') {
+            // Listening exercises always reference existing decks
+            if (!item.config.deckId) {
+              throw new Error(`Listening exercise "${item.title}" must have a vocabulary deck selected.`)
+            }
+            itemData = {
+              type: 'LISTENING_EXERCISE',
+              order: item.order,
+              config: item.config,
+              mode: 'existing',
+              existingDeckId: item.config.deckId,
+              data: {
+                title: item.title || "Untitled Listening Exercise",
+                difficultyLevel: 1,
+                explanation: "",
+                tags: [],
+                isPublic: false,
+              },
+            }
+          } else if (item.type === 'GRAMMAR_EXERCISE') {
+            itemData = {
+              type: 'GRAMMAR_EXERCISE',
+              order: item.order,
+              config: item.config,
+              data: {
+                title: item.title || "Untitled Grammar Exercise",
+                grammarTopic: item.config.grammarTopic || "General",
+                difficultyLevel: item.config.difficulty || 1,
+                exerciseData: item.config.exerciseData || {},
+                explanation: "",
+                tags: [],
+                isPublic: false,
+              },
+            }
+          } else if (item.type === 'VOCAB_FILL_IN_BLANK_EXERCISE') {
+            itemData = {
+              type: 'VOCAB_FILL_IN_BLANK_EXERCISE',
+              order: item.order,
+              config: item.config,
+              data: {
+                title: item.title || "Untitled Fill-in-Blank Exercise",
+                difficultyLevel: item.config.difficulty || 1,
+                exerciseData: item.config.exerciseData || {},
+                explanation: "",
+                tags: [],
+                isPublic: false,
+              },
+            }
+          } else {
+            // This should not happen with current exercise types
+            throw new Error(`Unsupported exercise type: ${item.type}`)
+          }
 
           await addExerciseToUnit(savedUnit.id, itemData)
         }
@@ -532,83 +600,137 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
     const renderListeningExerciseConfig = () => (
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="exerciseTitle">Exercise Title *</Label>
+          <Label htmlFor="listeningTitle">Exercise Title *</Label>
           <Input
-            id="exerciseTitle"
-            value={editingItem.config.title || ""}
+            id="listeningTitle"
+            value={editingItem.title || ""}
             onChange={(e) =>
               setEditingItem({
                 ...editingItem,
                 title: e.target.value,
-                config: { ...editingItem.config, title: e.target.value },
               })
             }
-            placeholder="Enter exercise title"
+            placeholder="Enter listening exercise title"
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="audioUrl">Audio URL *</Label>
-          <Input
-            id="audioUrl"
-            value={editingItem.config.audioUrl || ""}
-            onChange={(e) =>
+          <Label htmlFor="listeningDeckId">Vocabulary Deck *</Label>
+          <Select
+            value={editingItem.config.deckId || ""}
+            onValueChange={(value) =>
               setEditingItem({
                 ...editingItem,
-                config: { ...editingItem.config, audioUrl: e.target.value },
+                config: { ...editingItem.config, deckId: value },
               })
             }
-            placeholder="https://example.com/audio.mp3"
-          />
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select a deck for listening practice" />
+            </SelectTrigger>
+            <SelectContent>
+              {decks.map((deck) => (
+                <SelectItem key={deck.id} value={deck.id}>
+                  {deck.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-sm text-slate-500">
+            Students will practice listening to audio from this vocabulary deck
+          </p>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="correctSpelling">Correct Spelling *</Label>
-          <Textarea
-            id="correctSpelling"
-            value={editingItem.config.correctSpelling || ""}
-            onChange={(e) =>
-              setEditingItem({
-                ...editingItem,
-                config: { ...editingItem.config, correctSpelling: e.target.value },
-              })
-            }
-            placeholder="Enter the correct text that students should hear"
-            rows={3}
-          />
-        </div>
-
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label>Allow Multiple Attempts</Label>
-              <p className="text-sm text-slate-500">Let students try again if they get it wrong</p>
-            </div>
-            <Switch
-              checked={editingItem.config.allowMultipleAttempts ?? true}
-              onCheckedChange={(checked) =>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="listeningNewCards">New Cards</Label>
+            <Input
+              id="listeningNewCards"
+              type="number"
+              min="0"
+              max="50"
+              value={editingItem.config.newCards || 5}
+              onChange={(e) =>
                 setEditingItem({
                   ...editingItem,
-                  config: { ...editingItem.config, allowMultipleAttempts: checked },
+                  config: { ...editingItem.config, newCards: Number.parseInt(e.target.value) },
                 })
               }
             />
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label>Show Hints</Label>
-              <p className="text-sm text-slate-500">Provide hints after incorrect attempts</p>
-            </div>
-            <Switch
-              checked={editingItem.config.showHints ?? false}
-              onCheckedChange={(checked) =>
+          <div className="space-y-2">
+            <Label htmlFor="listeningMaxDue">Max Due Cards</Label>
+            <Input
+              id="listeningMaxDue"
+              type="number"
+              min="0"
+              max="200"
+              value={editingItem.config.maxDue || 25}
+              onChange={(e) =>
                 setEditingItem({
                   ...editingItem,
-                  config: { ...editingItem.config, showHints: checked },
+                  config: { ...editingItem.config, maxDue: Number.parseInt(e.target.value) },
                 })
               }
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="listeningMinDue">Min Due Cards</Label>
+            <Input
+              id="listeningMinDue"
+              type="number"
+              min="0"
+              max="50"
+              value={editingItem.config.minDue || 0}
+              onChange={(e) =>
+                setEditingItem({
+                  ...editingItem,
+                  config: { ...editingItem.config, minDue: Number.parseInt(e.target.value) },
+                })
+              }
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="vocabConfidenceThreshold">Vocabulary Confidence Threshold</Label>
+            <Input
+              id="vocabConfidenceThreshold"
+              type="number"
+              min="0"
+              max="1"
+              step="0.1"
+              value={editingItem.config.vocabularyConfidenceThreshold || 0.8}
+              onChange={(e) =>
+                setEditingItem({
+                  ...editingItem,
+                  config: { ...editingItem.config, vocabularyConfidenceThreshold: Number.parseFloat(e.target.value) },
+                })
+              }
+            />
+            <p className="text-sm text-slate-500">Minimum vocabulary retrievability (0.0-1.0)</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="listeningCandidateThreshold">Listening Readiness Threshold</Label>
+            <Input
+              id="listeningCandidateThreshold"
+              type="number"
+              min="0"
+              max="1"
+              step="0.1"
+              value={editingItem.config.listeningCandidateThreshold || 0.6}
+              onChange={(e) =>
+                setEditingItem({
+                  ...editingItem,
+                  config: { ...editingItem.config, listeningCandidateThreshold: Number.parseFloat(e.target.value) },
+                })
+              }
+            />
+            <p className="text-sm text-slate-500">Minimum threshold for listening readiness (0.0-1.0)</p>
           </div>
         </div>
       </div>
@@ -1034,12 +1156,16 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
                                       {item.type === "LISTENING_EXERCISE" && (
                                         <div className="space-y-1">
                                           <p>
-                                            <strong>Audio:</strong>{" "}
-                                            {item.config.audioUrl ? "✓ Configured" : "⚠ Not set"}
+                                            <strong>Deck:</strong>{" "}
+                                            {item.config.deckId 
+                                              ? decks.find(d => d.id === item.config.deckId)?.name || "Selected" 
+                                              : "⚠ Not selected"}
                                           </p>
                                           <p>
-                                            <strong>Multiple Attempts:</strong>{" "}
-                                            {item.config.allowMultipleAttempts ? "Yes" : "No"}
+                                            <strong>New Cards:</strong> {item.config.newCards || 5}
+                                          </p>
+                                          <p>
+                                            <strong>Max Due:</strong> {item.config.maxDue || 25}
                                           </p>
                                         </div>
                                       )}
@@ -1089,7 +1215,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
       {unitItems.some(
         (item) =>
           (item.type === "VOCABULARY_DECK" && !item.config.deckId) ||
-          (item.type === "LISTENING_EXERCISE" && !item.config.audioUrl) ||
+          (item.type === "LISTENING_EXERCISE" && !item.config.deckId) ||
           !item.config.title,
       ) && (
           <Alert>

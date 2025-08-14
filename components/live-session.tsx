@@ -10,7 +10,7 @@ import { Clock, ArrowLeft, Pause, Play, CheckCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { useSession, submitAnswer, endSession } from "@/hooks/api/sessions"
-import { AnswerPayload, VocabularyDeckProgress } from "@/lib/types"
+import { AnswerPayload, VocabularyDeckProgress, ListeningDeckProgress, SessionProgress } from "@/lib/types"
 import { formatTime } from "@/lib/utils"
 import { useLiveSessionStore } from "@/hooks/stores/use-live-session-store"
 import { getExerciseComponent, exerciseTypeInfo } from "@/components/exercises/dispatcher"
@@ -48,7 +48,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
   } = useLiveSessionStore()
 
   const progressData = useMemo(() => {
-    if (!progress || progress.type !== 'VOCABULARY_DECK') {
+    if (!progress) {
       return {
         totalCards: 0,
         completedCards: 0,
@@ -67,12 +67,26 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     const completedCards = encounteredCards.size;
     const percentage = totalUniqueCardsInSession > 0 ? (completedCards / totalUniqueCardsInSession) * 100 : 0;
 
-    const queueAnalysis = {
-      totalInQueue: queue.length,
-      newCards: queue.filter(c => c.state === 'NEW').length,
-      learningCards: queue.filter(c => c.state === 'LEARNING' || c.state === 'RELEARNING').length,
-      reviewCards: queue.filter(c => c.state === 'REVIEW').length,
-    };
+    // Handle queue analysis differently for vocabulary vs listening
+    let queueAnalysis;
+    if (progress.type === 'VOCABULARY_DECK') {
+      queueAnalysis = {
+        totalInQueue: queue.length,
+        newCards: queue.filter(c => c.state === 'NEW').length,
+        learningCards: queue.filter(c => c.state === 'LEARNING' || c.state === 'RELEARNING').length,
+        reviewCards: queue.filter(c => c.state === 'REVIEW').length,
+      };
+    } else if (progress.type === 'LISTENING_EXERCISE') {
+      // Listening exercises may have different state structure
+      queueAnalysis = {
+        totalInQueue: queue.length,
+        newCards: queue.filter(c => c.state === 'NEW').length,
+        learningCards: queue.filter(c => c.state === 'LEARNING' || c.state === 'RELEARNING').length,
+        reviewCards: queue.filter(c => c.state === 'REVIEW').length,
+      };
+    } else {
+      queueAnalysis = { totalInQueue: queue.length, newCards: 0, learningCards: 0, reviewCards: 0 };
+    }
 
     return {
       totalCards: totalUniqueCardsInSession,
@@ -91,7 +105,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
       if (storeSessionId !== session.id) {
         initializeSession(session)
       } else if (session.progress) {
-        setProgress(session.progress as VocabularyDeckProgress)
+        setProgress(session.progress as SessionProgress)
       }
     }
   }, [session, storeSessionId, initializeSession, setProgress])
@@ -117,15 +131,19 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
 
     setActionLoading(true)
     try {
-      const payload: AnswerPayload = { action: 'REVEAL_ANSWER', data: {} }
+      // Determine the correct action based on exercise type
+      const action = progress?.type === 'LISTENING_EXERCISE' ? 'PLAY_AUDIO' : 'REVEAL_ANSWER'
+      const payload: AnswerPayload = { action, data: {} }
       const result = await submitAnswer(sessionId, payload)
       if (result.data.newState.progress) {
-        setProgress(result.data.newState.progress as VocabularyDeckProgress)
+        setProgress(result.data.newState.progress as SessionProgress)
       }
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to reveal answer. Please try again.",
+        description: progress?.type === 'LISTENING_EXERCISE' 
+          ? "Failed to play audio. Please try again."
+          : "Failed to reveal answer. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -142,7 +160,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
       const payload: AnswerPayload = { action: 'SUBMIT_RATING', data: { rating } }
       const result = await submitAnswer(sessionId, payload)
       if (result.data.newState.progress) {
-        setProgress(result.data.newState.progress as VocabularyDeckProgress)
+        setProgress(result.data.newState.progress as SessionProgress)
       }
     } catch (error) {
       toast({

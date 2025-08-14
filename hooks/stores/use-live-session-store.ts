@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import {
   FullSessionState,
-  VocabularyDeckProgress,
+  SessionProgress,
 } from '@/lib/types';
 
 interface LiveSessionState {
@@ -11,7 +11,7 @@ interface LiveSessionState {
   elapsedTime: number; // in seconds
   reviewCount: number;
   encounteredCards: Set<string>;
-  progress: VocabularyDeckProgress | null;
+  progress: SessionProgress | null;
 
   // Actions
   initializeSession: (session: FullSessionState) => void;
@@ -19,7 +19,7 @@ interface LiveSessionState {
   resumeSession: () => void;
   setElapsedTime: (time: number) => void;
   incrementReviewCount: () => void;
-  setProgress: (progress: VocabularyDeckProgress) => void;
+  setProgress: (progress: SessionProgress) => void;
   setActionLoading: (isLoading: boolean) => void;
   reset: () => void;
 }
@@ -38,7 +38,7 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
   ...initialState,
 
   initializeSession: (session) => {
-    const progress = session.progress as VocabularyDeckProgress;
+    const progress = session.progress as SessionProgress;
     set({
       sessionId: session.id,
       progress,
