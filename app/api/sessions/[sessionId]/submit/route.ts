@@ -25,6 +25,14 @@ const SubmitAnswerBodySchema = z.discriminatedUnion('action', [
       rating: z.number().min(1).max(4),
     }),
   }),
+  // Schema for when the action is 'SUBMIT_TEXT_ANSWER'
+  z.object({
+    action: z.literal('SUBMIT_TEXT_ANSWER'),
+    data: z.object({
+      text: z.string().min(1),
+      responseTimeMs: z.number().int().min(0).optional(),
+    }),
+  }),
 ]);
 
 export async function POST(

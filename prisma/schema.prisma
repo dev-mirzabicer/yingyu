@@ -67,6 +67,7 @@ enum JobType {
   INITIALIZE_CARD_STATES
   GENERATE_PRACTICE_PDF
   OPTIMIZE_FSRS_PARAMS
+  OPTIMIZE_LISTENING_PARAMS
   REBUILD_FSRS_CACHE
   BULK_IMPORT_VOCABULARY
   BULK_IMPORT_STUDENTS
@@ -358,6 +359,72 @@ model StudentCardState {
   student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
   card    VocabularyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
   @@unique([studentId, cardId])
+}
+
+// ================================
+// LISTENING FSRS (separate system)
+// ================================
+
+model StudentListeningState {
+  id                    String    @id @default(uuid()) @db.Uuid
+  studentId             String    @db.Uuid
+  cardId                String    @db.Uuid
+  stability             Float
+  difficulty            Float
+  due                   DateTime
+  lastReview            DateTime?
+  reps                  Int       @default(0)
+  lapses                Int       @default(0)
+  state                 CardState @default(NEW)
+  averageResponseTimeMs Int       @default(0)
+  consecutiveCorrect    Int       @default(0)
+  retrievability        Float?
+  intervalDays          Int?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  card    VocabularyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, cardId])
+}
+
+model ListeningReviewHistory {
+  id                 BigInt     @id @default(autoincrement())
+  studentId          String     @db.Uuid
+  cardId             String     @db.Uuid
+  sessionId          String?    @db.Uuid
+  rating             Int
+  responseTimeMs     Int?
+  previousStability  Float?
+  previousDifficulty Float?
+  previousDue        DateTime?
+  previousState      CardState?
+  isLearningStep     Boolean    @default(false)
+  reviewedAt         DateTime   @default(now())
+
+  student Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  session Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([studentId, cardId])
+  @@index([studentId, cardId, isLearningStep])
+  @@index([reviewedAt])
+  @@index([sessionId])
+}
+
+model StudentListeningFsrsParams {
+  id                String   @id @default(uuid()) @db.Uuid
+  studentId         String   @db.Uuid
+  w                 Json
+  version           Int      @default(1)
+  optimizationScore Float?
+  trainingDataSize  Int?
+  lastOptimized     DateTime @default(now())
+  isActive          Boolean  @default(true)
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, isActive])
 }
 
 model ReviewHistory {

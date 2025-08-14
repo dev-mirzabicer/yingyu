@@ -132,6 +132,40 @@ export type VocabularyDeckProgress = {
 };
 
 /**
+ * Configuration for a listening exercise section. Combines selection and answer-checking settings.
+ */
+export type ListeningExerciseConfig = {
+  count?: number; // number of words to include (n)
+  listeningConfidenceThreshold?: number; // filter: listening retrievability threshold
+  vocabConfidenceThreshold?: number; // advisory threshold against disturbing vocab curve
+  // Answer checking options
+  maxAttempts?: number;
+  caseSensitive?: boolean;
+  ignoreSpaces?: boolean;
+  stripPunctuation?: boolean;
+  alternateAnswers?: string[];
+  typoTolerance?: number; // allowed Levenshtein distance, 0 = exact
+};
+
+/**
+ * Progress state for the listening exercise section.
+ */
+export type ListeningExerciseProgress = {
+  type: 'LISTENING_EXERCISE';
+  stage: 'AWAITING_ANSWER' | 'ANSWER_REVEALED';
+  payload: {
+    queue: { card: VocabularyCard }[];
+    current?: { card: VocabularyCard };
+    attempts: number;
+    maxAttempts: number;
+    config: ListeningExerciseConfig;
+    initialCardIds: string[];
+    lastSubmission?: string;
+    advisory?: { suggestedCount: number; threshold: number };
+  };
+};
+
+/**
  * Defines the result of an answer submission.
  * This provides a structured way to give feedback to the frontend.
  */
@@ -145,7 +179,7 @@ export interface SubmissionResult {
  * A union type representing all possible progress states for any exercise.
  * The `Session.progress` field will always conform to one of these shapes.
  */
-export type SessionProgress = VocabularyDeckProgress;
+export type SessionProgress = VocabularyDeckProgress | ListeningExerciseProgress;
 // | GrammarExerciseProgress etc. will be added here.
 
 /**

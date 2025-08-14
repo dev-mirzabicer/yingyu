@@ -99,6 +99,21 @@ export const VocabularyExerciseConfigSchema = z
   })
   .optional();
 
+// Schema for Listening exercise configuration.
+export const ListeningExerciseConfigSchema = z
+  .object({
+    count: z.number().int().min(1).max(200).optional(),
+    listeningConfidenceThreshold: z.number().min(0).max(0.9999).optional(),
+    vocabConfidenceThreshold: z.number().min(0).max(0.9999).optional(),
+    maxAttempts: z.number().int().min(1).max(10).optional(),
+    caseSensitive: z.boolean().optional(),
+    ignoreSpaces: z.boolean().optional(),
+    stripPunctuation: z.boolean().optional(),
+    alternateAnswers: z.array(z.string()).optional(),
+    typoTolerance: z.number().int().min(0).max(3).optional(),
+  })
+  .optional();
+
 // --- NEW SCHEMAS ---
 
 /**

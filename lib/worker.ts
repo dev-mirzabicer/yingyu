@@ -13,6 +13,7 @@ import {
   BulkImportVocabularyPayloadSchema,
 } from './schemas';
 import { ContentService } from './actions/content';
+import { ListeningFSRSService } from './actions/listening';
 
 /**
  * Processes all currently pending jobs in the queue.
@@ -90,6 +91,11 @@ export async function processPendingJobs() {
           resultPayload = await FSRSService._optimizeParameters(payload);
           break;
         }
+        case JobType.OPTIMIZE_LISTENING_PARAMS: {
+          const payload = OptimizeParamsPayloadSchema.parse(job.payload);
+          resultPayload = await ListeningFSRSService._optimizeParameters(payload);
+          break;
+        }
         case JobType.BULK_IMPORT_VOCABULARY: {
           const payload = BulkImportVocabularyPayloadSchema.parse(job.payload);
           resultPayload = await ContentService._bulkAddVocabularyCards(payload);
@@ -139,4 +145,3 @@ export async function processPendingJobs() {
 
   return { processedJobs: lockedJobs.length, jobResults };
 }
-

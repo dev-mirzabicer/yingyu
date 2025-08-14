@@ -215,6 +215,22 @@ export const StudentService = {
               data: cardStatesToCreate,
               skipDuplicates: true,
             });
+
+            // Initialize listening states in parallel for parity
+            const listeningStatesToCreate = cards.map((card) => ({
+              studentId: studentId,
+              cardId: card.id,
+              state: CardState.NEW,
+              due: now,
+              difficulty: defaultDifficulty,
+              stability: defaultStability,
+              reps: 0,
+              lapses: 0,
+            }));
+            await tx.studentListeningState.createMany({
+              data: listeningStatesToCreate as any,
+              skipDuplicates: true,
+            });
           }
 
           return { studentDeck: newAssignment, job: null };
@@ -523,6 +539,21 @@ export const StudentService = {
       data: cardStatesToCreate,
       skipDuplicates: true,
     });
+    // Initialize listening states as well for parity
+    const listeningStatesToCreate: Prisma.StudentListeningStateCreateManyInput[] = cards.map((card) => ({
+      studentId,
+      cardId: card.id,
+      state: CardState.NEW,
+      due: now,
+      difficulty: defaultDifficulty,
+      stability: defaultStability,
+      reps: 0,
+      lapses: 0,
+    }));
+    await prisma.studentListeningState.createMany({
+      data: listeningStatesToCreate,
+      skipDuplicates: true,
+    });
     return { cardsInitialized: result.count };
   },
 
@@ -703,4 +734,3 @@ export const StudentService = {
     return availableUnits;
   },
 };
-
