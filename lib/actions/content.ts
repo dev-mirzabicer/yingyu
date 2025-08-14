@@ -19,6 +19,7 @@ import { AuthorizationError } from '../auth';
 import {
   BulkImportVocabularyPayloadSchema,
   VocabularyExerciseConfigSchema,
+  ListeningExerciseConfigSchema,
 } from '../schemas';
 import { z } from 'zod';
 
@@ -546,7 +547,7 @@ export const ContentService = {
   async updateUnitItemConfig(
     unitItemId: string,
     teacherId: string,
-    config: VocabularyExerciseConfig
+    config: any
   ): Promise<UnitItem> {
     const unitItem = await prisma.unitItem.findUnique({
       where: { id: unitItemId },
@@ -558,8 +559,10 @@ export const ContentService = {
         'Unit item not found or you are not authorized to edit it.'
       );
     }
-
-    const validatedConfig = VocabularyExerciseConfigSchema.parse(config);
+    // Validate config based on item type
+    const validatedConfig = unitItem.type === 'LISTENING_EXERCISE'
+      ? ListeningExerciseConfigSchema.parse(config)
+      : VocabularyExerciseConfigSchema.parse(config);
     const updatedUnitItem = await prisma.unitItem.update({
       where: { id: unitItemId },
       data: { exerciseConfig: validatedConfig ?? Prisma.JsonNull },
@@ -698,4 +701,3 @@ export const ContentService = {
     });
   },
 };
-

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { NewUnitItemData } from '@/lib/types';
 import { requireAuth } from '@/lib/auth';
 
-// This schema can be expanded as you implement more exercise types.
+// Expanded schema supports more exercise types.
 const AddItemBodySchema = z.union([
   z.object({
     type: z.literal('VOCABULARY_DECK'),
@@ -27,6 +27,18 @@ const AddItemBodySchema = z.union([
       title: z.string().min(1),
       grammarTopic: z.string().optional(),
       exerciseData: z.any().optional(),
+      isPublic: z.boolean().optional(),
+    }),
+  }),
+  z.object({
+    type: z.literal('LISTENING_EXERCISE'),
+    data: z.object({
+      title: z.string().min(1),
+      audioUrl: z.string().min(1),
+      correctSpelling: z.string().min(1),
+      difficultyLevel: z.number().int().min(1).max(10).optional(),
+      explanation: z.string().optional(),
+      tags: z.array(z.string()).optional(),
       isPublic: z.boolean().optional(),
     }),
   }),
@@ -57,4 +69,3 @@ export async function POST(
     return handleApiError(error);
   }
 }
-

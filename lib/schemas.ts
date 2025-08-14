@@ -205,6 +205,11 @@ export const AddItemBodySchema = z.discriminatedUnion('itemType', [
     exerciseId: z.string().uuid().optional(),
     // exerciseData: CreateGrammarExerciseSchema.optional(), // Add this when the schema is created
   }),
+  z.object({
+    itemType: z.literal('LISTENING_EXERCISE'),
+    exerciseId: z.string().uuid().optional(),
+    // creation uses ContentService.addExerciseToUnit schema in route; here we only acknowledge type
+  }),
 ]);
 
 /**
