@@ -7,7 +7,8 @@ type User = {
   id: string; 
   name: string; 
   email: string; 
-  timezone: string; 
+  timezone: string;
+  validityUntil?: Date | null;
 };
 
 type AuthContextValue = {

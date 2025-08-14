@@ -8,12 +8,12 @@ const SetValiditySchema = z.object({
   validityUntil: z.coerce.date() 
 });
 
-export async function PUT(req: NextRequest, { params }: { params: { teacherId: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ teacherId: string }> }) {
   try {
     requireAdminReg(req);
     const body = await req.json();
     const { validityUntil } = SetValiditySchema.parse(body);
-    const { teacherId } = params;
+    const { teacherId } = await params;
 
     // Check if teacher exists
     const teacher = await prisma.teacher.findUnique({

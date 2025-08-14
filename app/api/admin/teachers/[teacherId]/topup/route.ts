@@ -8,12 +8,12 @@ const TopupSchema = z.object({
   days: z.number().int().positive() 
 });
 
-export async function POST(req: NextRequest, { params }: { params: { teacherId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ teacherId: string }> }) {
   try {
     requireAdminReg(req);
     const body = await req.json();
     const { days } = TopupSchema.parse(body);
-    const { teacherId } = params;
+    const { teacherId } = await params;
 
     // Get current teacher validity
     const teacher = await prisma.teacher.findUnique({
