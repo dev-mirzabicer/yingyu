@@ -38,6 +38,12 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://user:${POSTGRES_PASSWORD}@database:5432/english_app
       CRON_SECRET: ${CRON_SECRET}
+      ADMIN_REGISTRATION_KEY: ${ADMIN_REGISTRATION_KEY}
+      AUTH_COOKIE_NAME: ${AUTH_COOKIE_NAME:-yingyu_session}
+      SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-14}
+      ADMIN_REG_COOKIE_NAME: ${ADMIN_REG_COOKIE_NAME:-yingyu_admin_reg}
+      ADMIN_REG_TTL_MIN: ${ADMIN_REG_TTL_MIN:-15}
+      ALLOW_HEADER_AUTH: ${ALLOW_HEADER_AUTH:-}
       NEXT_TELEMETRY_DISABLED: "1"
     depends_on:
       database:
