@@ -58,7 +58,7 @@ export function getSessionTokenFromRequest(req: Request | NextRequest): string |
 
 export function attachSessionCookie(res: NextResponse, rawToken: string) {
   const maxAge = SESSION_TTL_DAYS * 24 * 60 * 60; // seconds
-  const secure = process.env.NODE_ENV === 'production';
+  const secure = process.env.FORCE_SECURE_COOKIES === 'false' ? false : process.env.NODE_ENV === 'production';
   res.cookies.set({
     name: AUTH_COOKIE_NAME,
     value: rawToken,
@@ -76,7 +76,7 @@ export function clearSessionCookie(res: NextResponse) {
     value: '',
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.FORCE_SECURE_COOKIES === 'false' ? false : process.env.NODE_ENV === 'production',
     path: '/',
     maxAge: 0,
   });
@@ -198,7 +198,7 @@ export function attachAdminRegCookie(res: NextResponse) {
     value: token,
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.FORCE_SECURE_COOKIES === 'false' ? false : process.env.NODE_ENV === 'production',
     path: '/',
     maxAge: ADMIN_REG_TTL_MIN * 60,
   });
@@ -210,7 +210,7 @@ export function clearAdminRegCookie(res: NextResponse) {
     value: '',
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.FORCE_SECURE_COOKIES === 'false' ? false : process.env.NODE_ENV === 'production',
     path: '/',
     maxAge: 0,
   });
