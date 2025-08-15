@@ -17,6 +17,7 @@ import {
   VocabularyCard,
 } from '@prisma/client';
 import { AuthorizationError } from '../auth';
+import { TransactionClient } from '@/lib/exercises/operators/base';
 import {
   BulkImportVocabularyPayloadSchema,
   VocabularyExerciseConfigSchema,
@@ -724,6 +725,150 @@ export const ContentService = {
         },
       },
     });
+  },
+
+  async updateCard(
+    cardId: string,
+    deckId: string,
+    teacherId: string,
+    cardData: Partial<Omit<Prisma.VocabularyCardUpdateInput, 'deck'>>
+  ): Promise<VocabularyCard> {
+    return prisma.$transaction(async (tx) => {
+      // First verify the card exists and belongs to the specified deck
+      const card = await tx.vocabularyCard.findUnique({
+        where: { id: cardId },
+        include: { deck: { select: { creatorId: true, id: true } } },
+      });
+
+      if (!card) {
+        throw new Error(`Card with ID ${cardId} not found.`);
+      }
+
+      if (card.deck.id !== deckId) {
+        throw new Error(`Card does not belong to deck ${deckId}.`);
+      }
+
+      if (card.deck.creatorId !== teacherId) {
+        throw new AuthorizationError(
+          'You are not authorized to update cards in this deck.'
+        );
+      }
+
+      // Check if listening-relevant fields are being changed
+      const hasListeningRelevantChanges = !!(
+        cardData.audioUrl !== undefined ||
+        cardData.englishWord !== undefined ||
+        cardData.chineseTranslation !== undefined ||
+        cardData.pinyin !== undefined
+      );
+
+      // Update the card
+      const updatedCard = await tx.vocabularyCard.update({
+        where: { id: cardId },
+        data: cardData,
+      });
+
+      // Handle listening exercise sync if relevant fields changed
+      if (hasListeningRelevantChanges) {
+        await this._syncListeningStatesAfterCardUpdate(tx, cardId, card, updatedCard);
+      }
+
+      return updatedCard;
+    });
+  },
+
+  async deleteCard(
+    cardId: string,
+    deckId: string,
+    teacherId: string
+  ): Promise<void> {
+    return prisma.$transaction(async (tx) => {
+      // First verify the card exists and belongs to the specified deck
+      const card = await tx.vocabularyCard.findUnique({
+        where: { id: cardId },
+        include: { deck: { select: { creatorId: true, id: true } } },
+      });
+
+      if (!card) {
+        throw new Error(`Card with ID ${cardId} not found.`);
+      }
+
+      if (card.deck.id !== deckId) {
+        throw new Error(`Card does not belong to deck ${deckId}.`);
+      }
+
+      if (card.deck.creatorId !== teacherId) {
+        throw new AuthorizationError(
+          'You are not authorized to delete cards from this deck.'
+        );
+      }
+
+      // Clean up related listening states before deleting the card
+      const deletedListeningStates = await tx.listeningCardState.deleteMany({
+        where: { cardId }
+      });
+
+      // Clean up listening review history
+      await tx.reviewHistory.deleteMany({
+        where: { 
+          cardId,
+          reviewType: 'LISTENING'
+        }
+      });
+
+      if (deletedListeningStates.count > 0) {
+        console.log(`Cleaned up ${deletedListeningStates.count} listening card states for deleted card ${cardId}`);
+      }
+
+      // Finally delete the card (this will be a soft-delete due to the Prisma extension)
+      await tx.vocabularyCard.delete({
+        where: { id: cardId },
+      });
+    });
+  },
+
+  /**
+   * Internal helper to sync listening card states when relevant vocabulary card fields change.
+   * Handles cases like audioUrl removal which makes cards ineligible for listening exercises.
+   * 
+   * @private
+   */
+  async _syncListeningStatesAfterCardUpdate(
+    tx: TransactionClient,
+    cardId: string,
+    originalCard: VocabularyCard,
+    updatedCard: VocabularyCard
+  ): Promise<void> {
+    const hadAudio = !!originalCard.audioUrl;
+    const hasAudio = !!updatedCard.audioUrl;
+    
+    // Critical case: Audio URL was removed - card can no longer be used for listening
+    if (hadAudio && !hasAudio) {
+      // Since ListeningCardState doesn't have an isArchived field, we delete invalid states
+      const deletedStates = await tx.listeningCardState.deleteMany({
+        where: { cardId }
+      });
+
+      // Also delete related review history entries for listening
+      await tx.reviewHistory.deleteMany({
+        where: { 
+          cardId,
+          reviewType: 'LISTENING'
+        }
+      });
+
+      if (deletedStates.count > 0) {
+        console.log(`Cleaned up ${deletedStates.count} listening card states for card ${cardId} after audio URL removal`);
+      }
+    }
+    
+    // Audio was added - card is now eligible for listening (no action needed, will be picked up dynamically)
+    else if (!hadAudio && hasAudio) {
+      console.log(`Card ${cardId} is now eligible for listening exercises (audio URL added)`);
+    }
+
+    // Other field changes (englishWord, chineseTranslation, pinyin) don't require state cleanup
+    // since they're referenced dynamically through the foreign key relationship
   },
 };
 

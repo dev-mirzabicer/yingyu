@@ -198,7 +198,7 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
         videoUrl: formData.videoUrl || undefined,
       }
 
-      await updateCard(editingCard.id, cardData)
+      await updateCard(editingCard.id, deckId, cardData)
 
       toast({
         title: "Card updated successfully",
@@ -226,7 +226,7 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
     }
 
     try {
-      await deleteCard(card.id)
+      await deleteCard(card.id, deckId)
       toast({
         title: "Card deleted",
         description: `"${card.englishWord}" has been removed from the deck.`,

@@ -9,6 +9,7 @@ import {
 import { Prisma, SessionStatus } from '@prisma/client';
 import { getHandler } from '../exercises/dispatcher';
 import { fullSessionStateInclude } from '../prisma-includes';
+import { TransactionClient } from '@/lib/exercises/operators/base';
 
 /**
  * The definitive service for orchestrating a live teaching session (v6.0).
@@ -139,6 +140,10 @@ export const SessionService = {
     const handler = getHandler(firstItem.type);
     sessionState = await handler.initialize(sessionState);
 
+    // Check if the first exercise is immediately complete (e.g., empty listening queue)
+    // and auto-progress to the next exercise if so
+    sessionState = await this._handleAutoProgression(sessionState);
+
     return sessionState;
   },
 
@@ -217,6 +222,9 @@ export const SessionService = {
       if (isItemComplete && nextItem) {
         const nextHandler = getHandler(nextItem.type);
         finalState = await nextHandler.initialize(finalState, tx);
+        
+        // Check if the next exercise is immediately complete and auto-progress if so
+        finalState = await this._handleAutoProgression(finalState, tx);
       }
 
       return { newState: finalState, submissionResult };
@@ -301,6 +309,70 @@ export const SessionService = {
         cardsReviewed,
       };
     });
+  },
+
+  /**
+   * Helper method to handle auto-progression when exercises are immediately complete.
+   * This prevents sessions from getting stuck on exercises with no content (e.g., empty listening queues).
+   * 
+   * @private
+   */
+  async _handleAutoProgression(
+    sessionState: FullSessionState, 
+    tx?: TransactionClient
+  ): Promise<FullSessionState> {
+    const db = tx || prisma;
+    let currentState = sessionState;
+    
+    // Keep checking and progressing until we find a non-empty exercise or complete the session
+    while (currentState.status === SessionStatus.IN_PROGRESS && currentState.currentUnitItem) {
+      const handler = getHandler(currentState.currentUnitItem.type);
+      const isComplete = await handler.isComplete(currentState);
+      
+      if (!isComplete) {
+        // Found an exercise with content, stop auto-progression
+        break;
+      }
+      
+      // Current exercise is empty, progress to next
+      const currentItemIndex = currentState.unit.items.findIndex(
+        (item) => item.id === currentState.currentUnitItemId
+      );
+      const nextItem = currentState.unit.items[currentItemIndex + 1];
+      
+      if (!nextItem) {
+        // No more exercises, complete the session
+        const completedSession = await db.session.update({
+          where: { id: currentState.id },
+          data: {
+            status: SessionStatus.COMPLETED,
+            endTime: new Date(),
+            currentUnitItemId: null,
+            progress: Prisma.JsonNull,
+          },
+          include: fullSessionStateInclude,
+        });
+        return completedSession as unknown as FullSessionState;
+      }
+      
+      // Move to next exercise
+      const updatedSession = await db.session.update({
+        where: { id: currentState.id },
+        data: {
+          currentUnitItemId: nextItem.id,
+          progress: Prisma.JsonNull,
+        },
+        include: fullSessionStateInclude,
+      });
+      
+      currentState = updatedSession as unknown as FullSessionState;
+      
+      // Initialize the next exercise
+      const nextHandler = getHandler(nextItem.type);
+      currentState = await nextHandler.initialize(currentState, tx);
+    }
+    
+    return currentState;
   },
 };
 

@@ -17,6 +17,12 @@ const SubmitAnswerBodySchema = z.discriminatedUnion('action', [
     // The data payload for this action is optional and can be an empty object.
     data: z.object({}).passthrough().optional(),
   }),
+  // Schema for when the action is 'PLAY_AUDIO' (for listening exercises)
+  z.object({
+    action: z.literal('PLAY_AUDIO'),
+    // The data payload for this action is optional and can be an empty object.
+    data: z.object({}).passthrough().optional(),
+  }),
   // Schema for when the action is 'SUBMIT_RATING'
   z.object({
     action: z.literal('SUBMIT_RATING'),

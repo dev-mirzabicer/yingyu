@@ -22,11 +22,43 @@ const AddItemBodySchema = z.union([
     existingDeckId: z.string().uuid(),
   }),
   z.object({
+    type: z.literal('LISTENING_EXERCISE'),
+    mode: z.literal('existing'),
+    existingDeckId: z.string().uuid(),
+    data: z.object({
+      title: z.string().min(1),
+      difficultyLevel: z.number().int().min(1).max(5).optional(),
+      explanation: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      isPublic: z.boolean().optional(),
+    }),
+    config: z.object({
+      deckId: z.string().uuid(),
+      newCards: z.number().int().min(0).optional(),
+      maxDue: z.number().int().min(0).optional(),
+      minDue: z.number().int().min(0).optional(),
+      vocabularyConfidenceThreshold: z.number().min(0).max(1).optional(),
+      listeningCandidateThreshold: z.number().min(0).max(1).optional(),
+      learningSteps: z.array(z.string()).optional(),
+    }).optional(),
+  }),
+  z.object({
     type: z.literal('GRAMMAR_EXERCISE'),
     data: z.object({
       title: z.string().min(1),
       grammarTopic: z.string().optional(),
       exerciseData: z.any().optional(),
+      isPublic: z.boolean().optional(),
+    }),
+  }),
+  z.object({
+    type: z.literal('VOCAB_FILL_IN_BLANK_EXERCISE'),
+    data: z.object({
+      title: z.string().min(1),
+      difficultyLevel: z.number().int().min(1).max(5).optional(),
+      exerciseData: z.any(),
+      explanation: z.string().optional(),
+      tags: z.array(z.string()).optional(),
       isPublic: z.boolean().optional(),
     }),
   }),

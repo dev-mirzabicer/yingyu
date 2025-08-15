@@ -138,7 +138,7 @@ export function ListeningExercise({
             </Badge>
           </div>
           <CardTitle className="text-4xl font-bold text-slate-900">
-            {currentCard.card.englishWord}
+            {progress.stage === "AWAITING_RATING" ? currentCard.card.englishWord : "?"}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -178,7 +178,7 @@ export function ListeningExercise({
                   </Button>
                 </div>
                 <p className="text-sm text-purple-600 mt-2">
-                  Listen to the audio and then proceed when ready
+                  Listen carefully and identify the English word you hear
                 </p>
               </div>
             </div>
@@ -187,15 +187,16 @@ export function ListeningExercise({
           {/* Answer Details - Show during AWAITING_RATING stage */}
           {progress.stage === "AWAITING_RATING" && (
             <>
-              <div className="p-4 bg-slate-50 rounded-lg">
-                <p className="text-2xl font-medium text-slate-900 mb-2">
-                  {currentCard.card.chineseTranslation}
+              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                <p className="text-sm text-green-600 font-medium mb-1">
+                  You heard:
                 </p>
-                {currentCard.card.exampleSentences && (
-                  <p className="text-slate-600">
-                    {typeof currentCard.card.exampleSentences === "string"
-                      ? currentCard.card.exampleSentences
-                      : JSON.stringify(currentCard.card.exampleSentences)}
+                <p className="text-3xl font-bold text-green-800">
+                  {currentCard.card.englishWord}
+                </p>
+                {currentCard.card.ipaPronunciation && (
+                  <p className="text-sm text-slate-600 mt-2">
+                    /{currentCard.card.ipaPronunciation}/
                   </p>
                 )}
               </div>

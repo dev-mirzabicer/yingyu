@@ -122,7 +122,7 @@ export async function addCardToDeck(
   return mutateWithOptimistic<VocabularyCard>(`/api/decks/${deckId}/cards`, "POST", cardData)
 }
 
-export async function updateCard(cardId: string, cardData: Partial<{
+export async function updateCard(cardId: string, deckId: string, cardData: Partial<{
   englishWord: string
   chineseTranslation: string
   pinyin: string
@@ -135,11 +135,11 @@ export async function updateCard(cardId: string, cardData: Partial<{
   videoUrl: string
   tags: string[]
 }>) {
-  return mutateWithOptimistic<VocabularyCard>(`/api/cards/${cardId}`, "PUT", cardData)
+  return mutateWithOptimistic<VocabularyCard>(`/api/decks/${deckId}/cards/${cardId}`, "PUT", cardData)
 }
 
-export async function deleteCard(cardId: string) {
-  return mutateWithOptimistic<VocabularyCard>(`/api/cards/${cardId}`, "DELETE")
+export async function deleteCard(cardId: string, deckId: string) {
+  return mutateWithOptimistic<VocabularyCard>(`/api/decks/${deckId}/cards/${cardId}`, "DELETE")
 }
 
 export async function forkDeck(deckId: string) {
