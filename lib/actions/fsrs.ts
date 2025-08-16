@@ -104,8 +104,10 @@ async function _recordReviewInternal(
 ): Promise<any> {
   return prisma.$transaction(async (tx) => {
     const now = new Date();
-    const stateDelegate = tx[context.stateModel];
-    const paramsDelegate = tx[context.paramsModel];
+    // Cast dynamic model delegates to `any` to avoid union call signature issues.
+    // This preserves behavior while keeping the refactor non-breaking.
+    const stateDelegate = tx[context.stateModel] as any;
+    const paramsDelegate = tx[context.paramsModel] as any;
 
     // 1. Get learning steps configuration
     let learningSteps = DEFAULT_LEARNING_STEPS;
