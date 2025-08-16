@@ -54,11 +54,6 @@ const exerciseTypeInfo = {
     icon: Mic,
     color: "bg-purple-100 text-purple-700 border-purple-200",
   },
-  [UnitItemType.VOCAB_FILL_IN_BLANK_EXERCISE]: {
-    label: "Fill in Blank",
-    icon: FileText,
-    color: "bg-orange-100 text-orange-700 border-orange-200",
-  },
 }
 
 export function SessionStartDialog({

@@ -53,7 +53,6 @@ export const ContentService = {
             vocabularyDeck: true,
             grammarExercise: true,
             listeningExercise: true,
-            vocabFillInBlankExercise: true,
           },
         },
       },
@@ -197,7 +196,6 @@ export const ContentService = {
           vocabularyDeck: { select: { isPublic: true } },
           grammarExercise: { select: { isPublic: true } },
           listeningExercise: { select: { isPublic: true } },
-          vocabFillInBlankExercise: { select: { isPublic: true } },
         },
       });
 
@@ -205,8 +203,7 @@ export const ContentService = {
         const exercise =
           item.vocabularyDeck ||
           item.grammarExercise ||
-          item.listeningExercise ||
-          item.vocabFillInBlankExercise;
+          item.listeningExercise;
         if (exercise && !exercise.isPublic) {
           throw new AuthorizationError(
             `Cannot make unit public. It contains a private exercise of type '${item.type}'.`
@@ -346,21 +343,6 @@ export const ContentService = {
           });
           break;
         }
-        case 'VOCAB_FILL_IN_BLANK_EXERCISE': {
-          const exercise = await tx.vocabFillInBlankExercise.create({
-            data: { ...itemData.data, creatorId },
-          });
-          newUnitItem = await tx.unitItem.create({
-            data: {
-              unitId,
-              order: newOrder,
-              type: 'VOCAB_FILL_IN_BLANK_EXERCISE',
-              vocabFillInBlankExerciseId: exercise.id,
-              exerciseConfig: itemData.config || Prisma.JsonNull,
-            },
-          });
-          break;
-        }
         default:
           throw new Error('Invalid exercise type provided.');
       }
@@ -381,8 +363,7 @@ export const ContentService = {
         model:
           | 'vocabularyDeck'
           | 'grammarExercise'
-          | 'listeningExercise'
-          | 'vocabFillInBlankExercise',
+          | 'listeningExercise',
         id: string
       ) => {
         const original = await (tx as any)[model].findUnique({
@@ -441,8 +422,6 @@ export const ContentService = {
           return findAndCopy('grammarExercise', exerciseId);
         case UnitItemType.LISTENING_EXERCISE:
           return findAndCopy('listeningExercise', exerciseId);
-        case UnitItemType.VOCAB_FILL_IN_BLANK_EXERCISE:
-          return findAndCopy('vocabFillInBlankExercise', exerciseId);
         default:
           throw new Error(`Forking not supported for type: ${exerciseType}`);
       }
@@ -466,8 +445,7 @@ export const ContentService = {
       model:
         | 'vocabularyDeck'
         | 'grammarExercise'
-        | 'listeningExercise'
-        | 'vocabFillInBlankExercise',
+        | 'listeningExercise',
       id: string
     ) => {
       const exercise = await (prisma[model] as any).findUnique({
@@ -494,8 +472,6 @@ export const ContentService = {
         return findAndArchive('grammarExercise', exerciseId);
       case UnitItemType.LISTENING_EXERCISE:
         return findAndArchive('listeningExercise', exerciseId);
-      case UnitItemType.VOCAB_FILL_IN_BLANK_EXERCISE:
-        return findAndArchive('vocabFillInBlankExercise', exerciseId);
       default:
         throw new Error(`Archiving not supported for type: ${exerciseType}`);
     }
@@ -667,10 +643,6 @@ export const ContentService = {
         case 'GRAMMAR_EXERCISE':
           minDuration += 10;
           maxDuration += 20;
-          break;
-        case 'VOCAB_FILL_IN_BLANK_EXERCISE':
-          minDuration += 5;
-          maxDuration += 15;
           break;
         default:
           break;

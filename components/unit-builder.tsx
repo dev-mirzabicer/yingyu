@@ -126,19 +126,6 @@ const unitItemTemplates: UnitItemTemplate[] = [
       difficulty: "INTERMEDIATE",
     },
   },
-  {
-    id: "fill-in-blank",
-    type: "VOCAB_FILL_IN_BLANK_EXERCISE",
-    title: "Fill in the Blank",
-    description: "Vocabulary in context exercises",
-    icon: Brain,
-    defaultConfig: {
-      title: "Fill in the Blank",
-      sentences: ["The cat is ____ the table."],
-      wordBank: ["on", "under", "in"],
-      allowWordBank: true,
-    },
-  },
 ]
 
 const difficultyLevels = [
@@ -192,7 +179,6 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               item.vocabularyDeck?.name ||
               item.listeningExercise?.title ||
               item.grammarExercise?.title ||
-              item.vocabFillInBlankExercise?.title ||
               "Untitled",
             config: item.config || {},
             order: item.order,
@@ -427,20 +413,6 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               data: {
                 title: item.title || "Untitled Grammar Exercise",
                 grammarTopic: item.config.grammarTopic || "General",
-                difficultyLevel: item.config.difficulty || 1,
-                exerciseData: item.config.exerciseData || {},
-                explanation: "",
-                tags: [],
-                isPublic: false,
-              },
-            }
-          } else if (item.type === 'VOCAB_FILL_IN_BLANK_EXERCISE') {
-            itemData = {
-              type: 'VOCAB_FILL_IN_BLANK_EXERCISE',
-              order: item.order,
-              config: item.config,
-              data: {
-                title: item.title || "Untitled Fill-in-Blank Exercise",
                 difficultyLevel: item.config.difficulty || 1,
                 exerciseData: item.config.exerciseData || {},
                 explanation: "",
@@ -869,7 +841,6 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               {editingItem.type === "VOCABULARY_DECK" && renderVocabularyDeckConfig()}
               {editingItem.type === "LISTENING_EXERCISE" && renderListeningExerciseConfig()}
               {editingItem.type === "GRAMMAR_EXERCISE" && renderGrammarExerciseConfig()}
-              {editingItem.type === "VOCAB_FILL_IN_BLANK_EXERCISE" && renderFillInBlankConfig()}
 
               <Separator />
 
@@ -1176,17 +1147,6 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
                                           </p>
                                           <p>
                                             <strong>Difficulty:</strong> {item.config.difficulty || "Intermediate"}
-                                          </p>
-                                        </div>
-                                      )}
-                                      {item.type === "VOCAB_FILL_IN_BLANK_EXERCISE" && (
-                                        <div className="space-y-1">
-                                          <p>
-                                            <strong>Sentences:</strong> {item.config.sentences?.length || 0}
-                                          </p>
-                                          <p>
-                                            <strong>Word Bank:</strong>{" "}
-                                            {item.config.allowWordBank ? "Enabled" : "Disabled"}
                                           </p>
                                         </div>
                                       )}

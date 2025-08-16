@@ -21,7 +21,6 @@ export const fullSessionStateInclude: Prisma.SessionInclude = {
           },
           grammarExercise: true,
           listeningExercise: true,
-          vocabFillInBlankExercise: true,
         },
       },
     },
@@ -34,7 +33,6 @@ export const fullSessionStateInclude: Prisma.SessionInclude = {
       },
       grammarExercise: true,
       listeningExercise: true,
-      vocabFillInBlankExercise: true,
     },
   },
 };
