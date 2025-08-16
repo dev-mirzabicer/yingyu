@@ -4,7 +4,6 @@ import {
   VocabularyDeck,
   GrammarExercise,
   ListeningExercise,
-  VocabFillInBlankExercise,
   Student,
   Payment,
   StudentDeck,
@@ -31,7 +30,6 @@ export type PopulatedUnitItem = UnitItem & {
   vocabularyDeck: (VocabularyDeck & { cards: { id: string }[] }) | null;
   grammarExercise: GrammarExercise | null;
   listeningExercise: ListeningExercise | null;
-  vocabFillInBlankExercise: VocabFillInBlankExercise | null;
   config?: VocabularyExerciseConfig;
 };
 

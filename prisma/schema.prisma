@@ -54,7 +54,6 @@ enum UnitItemType {
   VOCABULARY_DECK
   GRAMMAR_EXERCISE
   LISTENING_EXERCISE
-  VOCAB_FILL_IN_BLANK_EXERCISE
 }
 
 enum SessionStatus {
@@ -108,7 +107,6 @@ model Teacher {
   createdDecks          VocabularyDeck[]
   createdGrammar        GrammarExercise[]
   createdListening      ListeningExercise[]
-  createdVocabFillBlank VocabFillInBlankExercise[]
   createdUnits          Unit[]
   authSessions          AuthSession[]
 }
@@ -177,13 +175,11 @@ model UnitItem {
   vocabularyDeckId           String?      @unique @db.Uuid
   grammarExerciseId          String?      @unique @db.Uuid
   listeningExerciseId        String?      @unique @db.Uuid
-  vocabFillInBlankExerciseId String?      @unique @db.Uuid
 
   unit                     Unit                      @relation(fields: [unitId], references: [id], onDelete: Cascade)
   vocabularyDeck           VocabularyDeck?           @relation(fields: [vocabularyDeckId], references: [id], onDelete: SetNull)
   grammarExercise          GrammarExercise?          @relation(fields: [grammarExerciseId], references: [id], onDelete: SetNull)
   listeningExercise        ListeningExercise?        @relation(fields: [listeningExerciseId], references: [id], onDelete: SetNull)
-  vocabFillInBlankExercise VocabFillInBlankExercise? @relation(fields: [vocabFillInBlankExerciseId], references: [id], onDelete: SetNull)
 
   activeSession Session?
 
@@ -310,23 +306,6 @@ model ListeningExercise {
   unitItem        UnitItem?
 }
 
-model VocabFillInBlankExercise {
-  id               String   @id @default(uuid()) @db.Uuid
-  creatorId        String?  @db.Uuid
-  title            String
-  difficultyLevel  Int      @default(1)
-  exerciseData     Json
-  explanation      String?
-  tags             String[]
-  isPublic         Boolean  @default(false)
-  isArchived       Boolean  @default(false)
-  originExerciseId String?  @db.Uuid
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  creator  Teacher?  @relation(fields: [creatorId], references: [id], onDelete: SetNull)
-  unitItem UnitItem?
-}
 
 model StudentDeck {
   id           String   @id @default(uuid()) @db.Uuid

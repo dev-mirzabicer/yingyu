@@ -12,7 +12,6 @@ import {
   VocabularyDeck,
   GrammarExercise,
   ListeningExercise,
-  VocabFillInBlankExercise,
   Prisma,
   VocabularyCard,
 } from '@prisma/client';
@@ -27,8 +26,7 @@ import { z } from 'zod';
 type Exercise =
   | VocabularyDeck
   | GrammarExercise
-  | ListeningExercise
-  | VocabFillInBlankExercise;
+  | ListeningExercise;
 
 /**
  * Service responsible for managing the global repository of all learning materials.
