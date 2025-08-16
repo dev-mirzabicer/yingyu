@@ -62,6 +62,20 @@ const AddItemBodySchema = z.union([
       isPublic: z.boolean().optional(),
     }),
   }),
+  z.object({
+    type: z.literal('FILL_IN_BLANK_EXERCISE'),
+    mode: z.literal('existing'),
+    existingDeckId: z.string().uuid(),
+    data: z.object({
+      title: z.string().min(1),
+      isPublic: z.boolean().optional(),
+    }),
+    config: z.object({
+      maxCards: z.number().int().min(1).max(100).optional(),
+      vocabularyConfidenceThreshold: z.number().min(0).max(1).optional(),
+      shuffleCards: z.boolean().optional(),
+    }).optional(),
+  }),
 ]);
 
 export async function POST(

@@ -116,6 +116,18 @@ export const ListeningExerciseConfigSchema = z
   })
   .optional();
 
+/**
+ * Schema for fill-in-blank exercise configuration.
+ */
+export const FillInBlankExerciseConfigSchema = z
+  .object({
+    deckId: z.string().uuid().optional(), // Optional during parsing, gets injected by handler
+    maxCards: z.number().int().min(1).optional(),
+    vocabularyConfidenceThreshold: z.number().min(0).max(1).optional(),
+    shuffleCards: z.boolean().optional(),
+  })
+  .optional();
+
 // --- NEW SCHEMAS ---
 
 /**

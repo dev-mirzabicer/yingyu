@@ -627,6 +627,7 @@ export const StudentService = {
             },
             grammarExercise: true,
             listeningExercise: true,
+            fillInBlankExercise: true,
           },
           orderBy: { order: 'asc' },
         },

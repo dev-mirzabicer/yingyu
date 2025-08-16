@@ -1093,6 +1093,140 @@ export const FSRSService = {
   },
 
   /**
+   * Gets vocabulary cards suitable for fill-in-blank exercises based on vocabulary confidence.
+   * 
+   * Fill-in-blank exercises require high vocabulary confidence (≥0.8 retrievability) and
+   * exclude cards that have already been marked as "seen" in fill-in-blank exercises.
+   * 
+   * Unlike listening exercises, fill-in-blank cards are not tracked via FSRS - they're simply
+   * marked as "seen" once completed and never shown again to that student.
+   */
+  async getFillInBlankCandidatesFromVocabulary(
+    studentId: string,
+    deckId: string,
+    config: {
+      maxCards?: number;
+      vocabularyConfidenceThreshold?: number;
+    } = {}
+  ): Promise<{
+    candidates: VocabularyCard[];
+    warnings?: {
+      suboptimalCandidates: number;
+      recommendedMaxCards: number;
+    };
+  }> {
+    const {
+      maxCards = 20,
+      vocabularyConfidenceThreshold = 0.8, // High vocabulary confidence required
+    } = config;
+
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { status: true },
+    });
+    if (!student || student.status !== 'ACTIVE') {
+      return { candidates: [] };
+    }
+
+    // Get all cards from the specified deck with their vocabulary states and fill-in-blank completion status
+    const cardsWithStates = await prisma.$queryRaw<Array<{
+      id: string;
+      englishWord: string;
+      chineseTranslation: string;
+      pinyin: string | null;
+      audioUrl: string | null;
+      vocabularyRetrievability: number | null;
+      vocabularyStability: number | null;
+      hasBeenSeen: boolean;
+    }>>`
+      SELECT 
+        vc.id,
+        vc."englishWord",
+        vc."chineseTranslation",
+        vc.pinyin,
+        vc."audioUrl",
+        CASE 
+          WHEN scs.stability > 0 AND scs."lastReview" IS NOT NULL THEN
+            exp(-extract(epoch from (now() - scs."lastReview")) / (86400 * scs.stability))
+          ELSE NULL
+        END as "vocabularyRetrievability",
+        scs.stability as "vocabularyStability",
+        CASE WHEN fcs.id IS NOT NULL AND fcs."isSeen" = true THEN true ELSE false END as "hasBeenSeen"
+      FROM "VocabularyCard" vc
+      LEFT JOIN "StudentCardState" scs ON vc.id = scs."cardId" AND scs."studentId" = ${studentId}::uuid
+      LEFT JOIN "FillInBlankCardState" fcs ON vc.id = fcs."cardId" AND fcs."studentId" = ${studentId}::uuid
+      WHERE vc."deckId" = ${deckId}::uuid
+        AND vc."englishWord" IS NOT NULL -- Must have English word for fill-in-blank
+        AND vc."chineseTranslation" IS NOT NULL -- Must have Chinese translation to show as prompt
+        AND scs.id IS NOT NULL -- Must have learned this word vocabularily
+        AND scs.state = 'REVIEW' -- Must be in review state (not learning)
+    `;
+
+    // Filter and sort candidates
+    let candidates = cardsWithStates
+      // Filter: Must have high vocabulary confidence
+      .filter(card =>
+        card.vocabularyRetrievability !== null &&
+        card.vocabularyRetrievability >= vocabularyConfidenceThreshold
+      )
+      // Filter: Exclude cards already marked as "seen" in fill-in-blank exercises
+      .filter(card => !card.hasBeenSeen)
+      // Sort by vocabulary confidence (descending) - focus on best-known vocabulary
+      .sort((a, b) => (b.vocabularyRetrievability || 0) - (a.vocabularyRetrievability || 0));
+
+    // Analyze warnings for suboptimal candidates (optional for fill-in-blank)
+    let warnings: { suboptimalCandidates: number; recommendedMaxCards: number } | undefined;
+
+    if (candidates.length > 0) {
+      const requestedCandidates = candidates.slice(0, maxCards);
+      
+      // For fill-in-blank, we might warn if vocabulary confidence is below optimal
+      const suboptimalCount = requestedCandidates.filter(card =>
+        card.vocabularyRetrievability !== null && 
+        card.vocabularyRetrievability < 0.9 // Very high confidence preferred
+      ).length;
+
+      if (suboptimalCount > 0) {
+        // Find optimal session size with very high confidence cards
+        const optimalCandidates = candidates.filter(card =>
+          card.vocabularyRetrievability !== null &&
+          card.vocabularyRetrievability >= 0.9
+        );
+
+        warnings = {
+          suboptimalCandidates: suboptimalCount,
+          recommendedMaxCards: Math.max(1, optimalCandidates.length)
+        };
+      }
+    }
+
+    // Convert to VocabularyCard format
+    const finalCandidates: VocabularyCard[] = candidates.slice(0, maxCards).map(card => ({
+      id: card.id,
+      deckId,
+      englishWord: card.englishWord,
+      chineseTranslation: card.chineseTranslation,
+      pinyin: card.pinyin,
+      ipaPronunciation: null,
+      exampleSentences: null,
+      wordType: null,
+      difficultyLevel: 1,
+      audioUrl: card.audioUrl,
+      imageUrl: null,
+      videoUrl: null,
+      frequencyRank: null,
+      tags: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
+
+    return {
+      candidates: finalCandidates,
+      warnings
+    };
+  },
+
+  /**
    * Get the initial listening review queue for a session.
    * Similar to vocabulary but uses ListeningCardState.
    */

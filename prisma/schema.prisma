@@ -54,6 +54,7 @@ enum UnitItemType {
   VOCABULARY_DECK
   GRAMMAR_EXERCISE
   LISTENING_EXERCISE
+  FILL_IN_BLANK_EXERCISE
 }
 
 enum SessionStatus {
@@ -107,6 +108,7 @@ model Teacher {
   createdDecks          VocabularyDeck[]
   createdGrammar        GrammarExercise[]
   createdListening      ListeningExercise[]
+  createdFillInBlank    FillInBlankExercise[]
   createdUnits          Unit[]
   authSessions          AuthSession[]
 }
@@ -139,6 +141,7 @@ model Student {
   studentDecks         StudentDeck[]
   cardStates           StudentCardState[]
   listeningCardStates  ListeningCardState[]
+  fillInBlankCardStates FillInBlankCardState[]
   reviewHistory        ReviewHistory[]
   fsrsParams           StudentFsrsParams[]
   listeningFsrsParams  ListeningFsrsParams[]
@@ -175,11 +178,13 @@ model UnitItem {
   vocabularyDeckId           String?      @unique @db.Uuid
   grammarExerciseId          String?      @unique @db.Uuid
   listeningExerciseId        String?      @unique @db.Uuid
+  fillInBlankExerciseId      String?      @unique @db.Uuid
 
   unit                     Unit                      @relation(fields: [unitId], references: [id], onDelete: Cascade)
   vocabularyDeck           VocabularyDeck?           @relation(fields: [vocabularyDeckId], references: [id], onDelete: SetNull)
   grammarExercise          GrammarExercise?          @relation(fields: [grammarExerciseId], references: [id], onDelete: SetNull)
   listeningExercise        ListeningExercise?        @relation(fields: [listeningExerciseId], references: [id], onDelete: SetNull)
+  fillInBlankExercise      FillInBlankExercise?      @relation(fields: [fillInBlankExerciseId], references: [id], onDelete: SetNull)
 
   activeSession Session?
 
@@ -242,6 +247,7 @@ model VocabularyDeck {
   cards             VocabularyCard[]
   studentDecks      StudentDeck[]
   listeningExercises ListeningExercise[]
+  fillInBlankExercises FillInBlankExercise[]
   unitItem          UnitItem?
 }
 
@@ -266,6 +272,7 @@ model VocabularyCard {
   deck                 VocabularyDeck       @relation(fields: [deckId], references: [id], onDelete: Cascade)
   cardStates           StudentCardState[]
   listeningCardStates  ListeningCardState[]
+  fillInBlankCardStates FillInBlankCardState[]
 }
 
 model GrammarExercise {
@@ -288,6 +295,25 @@ model GrammarExercise {
 }
 
 model ListeningExercise {
+  id               String   @id @default(uuid()) @db.Uuid
+  creatorId        String?  @db.Uuid
+  title            String
+  vocabularyDeckId String   @db.Uuid
+  difficultyLevel  Int      @default(1)
+  explanation      String?
+  tags             String[]
+  isPublic         Boolean  @default(false)
+  isArchived       Boolean  @default(false)
+  originExerciseId String?  @db.Uuid
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  creator         Teacher?        @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  vocabularyDeck  VocabularyDeck  @relation(fields: [vocabularyDeckId], references: [id], onDelete: Restrict)
+  unitItem        UnitItem?
+}
+
+model FillInBlankExercise {
   id               String   @id @default(uuid()) @db.Uuid
   creatorId        String?  @db.Uuid
   title            String
@@ -424,6 +450,24 @@ model ListeningFsrsParams {
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([studentId, isActive])
+}
+
+model FillInBlankCardState {
+  id          String    @id @default(uuid()) @db.Uuid
+  studentId   String    @db.Uuid
+  cardId      String    @db.Uuid
+  isSeen      Boolean   @default(false)
+  completedAt DateTime?
+  lastResult  Boolean?  // true = correct, false = incorrect, null = not attempted
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  card    VocabularyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  
+  @@unique([studentId, cardId])
+  @@index([studentId, isSeen])
+  @@index([studentId, cardId])
 }
 
 model Payment {

@@ -48,6 +48,7 @@ export const SessionService = {
                 },
                 grammarExercise: true,
                 listeningExercise: true,
+                fillInBlankExercise: true,
               },
             },
           },
@@ -131,6 +132,7 @@ export const SessionService = {
           vocabularyDeck: null,
           grammarExercise: null,
           listeningExercise: null,
+          fillInBlankExercise: null,
         })),
       },
     };

@@ -4,6 +4,7 @@ import {
   VocabularyDeck,
   GrammarExercise,
   ListeningExercise,
+  FillInBlankExercise,
   Student,
   Payment,
   StudentDeck,
@@ -13,6 +14,7 @@ import {
   VocabularyCard,
   Teacher,
   StudentCardState,
+  FillInBlankCardState,
   Job,
 } from '@prisma/client';
 import { z } from 'zod';
@@ -30,6 +32,7 @@ export type PopulatedUnitItem = UnitItem & {
   vocabularyDeck: (VocabularyDeck & { cards: { id: string }[] }) | null;
   grammarExercise: GrammarExercise | null;
   listeningExercise: ListeningExercise | null;
+  fillInBlankExercise: FillInBlankExercise | null;
   config?: VocabularyExerciseConfig;
 };
 
@@ -99,7 +102,7 @@ export type AnswerPayload = {
    * The specific, enumerated action the user is performing. This determines
    * which ProgressOperator the handler will dispatch to.
    */
-  action: 'REVEAL_ANSWER' | 'SUBMIT_RATING' | 'SUBMIT_TEXT_ANSWER' | 'PLAY_AUDIO';
+  action: 'REVEAL_ANSWER' | 'SUBMIT_RATING' | 'SUBMIT_TEXT_ANSWER' | 'PLAY_AUDIO' | 'SUBMIT_STUDENT_ANSWER' | 'MARK_CORRECT' | 'MARK_INCORRECT';
   /**
    * The data associated with the action, to be validated by the specific operator.
    */
@@ -153,6 +156,16 @@ export type ListeningExerciseConfig = {
 };
 
 /**
+ * Configuration for fill-in-blank exercises, stored in UnitItem.exerciseConfig.
+ */
+export type FillInBlankExerciseConfig = {
+  deckId: string; // The vocabulary deck to use for fill-in-blank
+  maxCards?: number; // How many cards in session (default 20)
+  vocabularyConfidenceThreshold?: number; // Min vocab confidence (default 0.8)
+  shuffleCards?: boolean; // Randomize order (default true)
+};
+
+/**
  * Progress state for listening exercises.
  */
 export type ListeningDeckProgress = {
@@ -176,10 +189,35 @@ export type ListeningDeckProgress = {
 };
 
 /**
+ * Progress state for fill-in-blank exercises.
+ */
+export type FillInBlankExerciseProgress = {
+  type: 'FILL_IN_BLANK_EXERCISE';
+  stage: 'SHOWING_QUESTION' | 'SHOWING_ANSWER' | 'AWAITING_TEACHER_JUDGMENT';
+  payload: {
+    /** The dynamic queue of cards not yet seen */
+    queue: Array<{ cardId: string }>;
+    /** The full data for the current card */
+    currentCardData: {
+      cardId: string;
+      englishWord: string;
+      chineseTranslation: string;
+      pinyin?: string;
+    } | null;
+    /** The student's typed answer */
+    studentAnswer?: string;
+    /** The original configuration for this session */
+    config: FillInBlankExerciseConfig;
+    /** Warnings from candidate selection */
+    sessionWarnings?: any;
+  };
+};
+
+/**
  * A union type representing all possible progress states for any exercise.
  * The `Session.progress` field will always conform to one of these shapes.
  */
-export type SessionProgress = VocabularyDeckProgress | ListeningDeckProgress;
+export type SessionProgress = VocabularyDeckProgress | ListeningDeckProgress | FillInBlankExerciseProgress;
 // | GrammarExerciseProgress etc. will be added here.
 
 /**
@@ -244,15 +282,13 @@ export type NewUnitItemData =
     };
   }
   | {
-    type: 'VOCAB_FILL_IN_BLANK_EXERCISE';
+    type: 'FILL_IN_BLANK_EXERCISE';
     order?: number;
-    config?: any;
+    config?: FillInBlankExerciseConfig;
+    mode: 'existing';
+    existingDeckId: string;
     data: {
       title: string;
-      difficultyLevel?: number;
-      exerciseData: Prisma.InputJsonValue; // Use the correct input type
-      explanation?: string;
-      tags?: string[];
       isPublic?: boolean;
     };
   };
