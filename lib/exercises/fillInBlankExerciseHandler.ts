@@ -98,13 +98,14 @@ class FillInBlankExerciseHandler implements ExerciseHandler {
       shuffleCards: config?.shuffleCards ?? true,
     };
 
-    // Get eligible cards using vocabulary confidence threshold
-    const { candidates, warnings } = await FSRSService.getFillInBlankCandidatesFromVocabulary(
+    // Use the new flexible method that handles both bound and unbound cards
+    const { candidates, warnings } = await FSRSService.getFillInBlankCandidatesWithFlexibleBinding(
       sessionState.studentId,
       deckId,
       {
         maxCards: enhancedConfig.maxCards,
         vocabularyConfidenceThreshold: enhancedConfig.vocabularyConfidenceThreshold,
+        allowUnboundCards: true, // Allow cards not yet learned in vocabulary mode
       }
     );
 

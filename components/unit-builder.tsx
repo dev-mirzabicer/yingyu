@@ -20,6 +20,7 @@ import {
   Plus,
   GripVertical,
   Edit,
+  Edit3,
   Trash2,
   Copy,
   Eye,
@@ -123,6 +124,20 @@ const unitItemTemplates: UnitItemTemplate[] = [
         ]
       },
       difficulty: "INTERMEDIATE",
+    },
+  },
+  {
+    id: "fill-in-blank-exercise",
+    type: "FILL_IN_BLANK_EXERCISE",
+    title: "Fill in the Blanks",
+    description: "Vocabulary recall in context",
+    icon: Edit3,
+    defaultConfig: {
+      title: "Fill in the Blanks Practice",
+      deckId: "",
+      maxCards: 20,
+      vocabularyConfidenceThreshold: 0.8,
+      shuffleCards: true,
     },
   },
 ]
@@ -420,6 +435,21 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
                 isPublic: false,
               },
             }
+          } else if (item.type === 'FILL_IN_BLANK_EXERCISE') {
+            if (!item.config.deckId) {
+              throw new Error(`Fill-in-blank exercise "${item.title}" must have a vocabulary deck selected.`);
+            }
+            itemData = {
+              type: 'FILL_IN_BLANK_EXERCISE',
+              order: item.order,
+              config: item.config,
+              mode: 'existing',
+              existingDeckId: item.config.deckId,
+              data: {
+                title: item.title || "Untitled Fill-in-Blank Exercise",
+                isPublic: false,
+              },
+            };
           } else {
             // This should not happen with current exercise types
             throw new Error(`Unsupported exercise type: ${item.type}`)
@@ -889,6 +919,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               {editingItem.type === "VOCABULARY_DECK" && renderVocabularyDeckConfig()}
               {editingItem.type === "LISTENING_EXERCISE" && renderListeningExerciseConfig()}
               {editingItem.type === "GRAMMAR_EXERCISE" && renderGrammarExerciseConfig()}
+              {editingItem.type === "FILL_IN_BLANK_EXERCISE" && renderFillInBlankConfig()}
 
               <Separator />
 

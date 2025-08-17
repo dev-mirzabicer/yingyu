@@ -1227,6 +1227,160 @@ export const FSRSService = {
   },
 
   /**
+   * Enhanced method to get fill-in-blank candidates that can handle both bound and unbound cards.
+   * This allows for fill-in-blank exercises that include cards not yet learned in vocabulary mode.
+   */
+  async getFillInBlankCandidatesWithFlexibleBinding(
+    studentId: string,
+    deckId: string,
+    config: {
+      maxCards?: number;
+      vocabularyConfidenceThreshold?: number;
+      allowUnboundCards?: boolean;
+    } = {}
+  ): Promise<{
+    candidates: (VocabularyCard & { 
+      isVocabularyBound: boolean;
+      vocabularyRetrievability?: number;
+    })[];
+    warnings?: {
+      unboundCardsIncluded: number;
+      suboptimalCandidates: number;
+      recommendedMaxCards: number;
+    };
+  }> {
+    const {
+      maxCards = 20,
+      vocabularyConfidenceThreshold = 0.8,
+      allowUnboundCards = true, // Default to allowing unbound cards
+    } = config;
+
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { status: true },
+    });
+    if (!student || student.status !== 'ACTIVE') {
+      return { candidates: [] };
+    }
+
+    // Get all cards from the specified deck with their vocabulary states and fill-in-blank completion status
+    const cardsWithStates = await prisma.$queryRaw<Array<{
+      id: string;
+      englishWord: string;
+      chineseTranslation: string;
+      pinyin: string | null;
+      audioUrl: string | null;
+      vocabularyRetrievability: number | null;
+      vocabularyStability: number | null;
+      hasVocabularyState: boolean;
+      isInReviewState: boolean;
+      hasBeenSeen: boolean;
+    }>>`
+      SELECT 
+        vc.id,
+        vc."englishWord",
+        vc."chineseTranslation",
+        vc.pinyin,
+        vc."audioUrl",
+        CASE 
+          WHEN scs.stability > 0 AND scs."lastReview" IS NOT NULL THEN
+            exp(-extract(epoch from (now() - scs."lastReview")) / (86400 * scs.stability))
+          ELSE NULL
+        END as "vocabularyRetrievability",
+        scs.stability as "vocabularyStability",
+        CASE WHEN scs.id IS NOT NULL THEN true ELSE false END as "hasVocabularyState",
+        CASE WHEN scs.state = 'REVIEW' THEN true ELSE false END as "isInReviewState",
+        CASE WHEN fcs.id IS NOT NULL AND fcs."isSeen" = true THEN true ELSE false END as "hasBeenSeen"
+      FROM "VocabularyCard" vc
+      LEFT JOIN "StudentCardState" scs ON vc.id = scs."cardId" AND scs."studentId" = ${studentId}::uuid
+      LEFT JOIN "FillInBlankCardState" fcs ON vc.id = fcs."cardId" AND fcs."studentId" = ${studentId}::uuid
+      WHERE vc."deckId" = ${deckId}::uuid
+        AND vc."englishWord" IS NOT NULL -- Must have English word for fill-in-blank
+        AND vc."chineseTranslation" IS NOT NULL -- Must have Chinese translation to show as prompt
+    `;
+
+    // Separate bound and unbound cards
+    const boundCards = cardsWithStates.filter(card => 
+      card.hasVocabularyState && 
+      card.isInReviewState &&
+      card.vocabularyRetrievability !== null &&
+      card.vocabularyRetrievability >= vocabularyConfidenceThreshold
+    );
+
+    const unboundCards = allowUnboundCards 
+      ? cardsWithStates.filter(card => !card.hasVocabularyState || !card.isInReviewState)
+      : [];
+
+    // Filter out cards already seen in fill-in-blank
+    const boundCandidates = boundCards
+      .filter(card => !card.hasBeenSeen)
+      .sort((a, b) => (b.vocabularyRetrievability || 0) - (a.vocabularyRetrievability || 0));
+
+    const unboundCandidates = unboundCards
+      .filter(card => !card.hasBeenSeen)
+      .sort((a, b) => a.englishWord.localeCompare(b.englishWord)); // Sort alphabetically
+
+    // Prioritize bound cards, then add unbound cards if needed
+    const allCandidates = [...boundCandidates, ...unboundCandidates];
+    const selectedCandidates = allCandidates.slice(0, maxCards);
+
+    // Calculate warnings
+    let warnings: {
+      unboundCardsIncluded: number;
+      suboptimalCandidates: number;
+      recommendedMaxCards: number;
+    } | undefined;
+
+    const unboundCount = selectedCandidates.filter(card => !card.hasVocabularyState || !card.isInReviewState).length;
+    const suboptimalBoundCount = selectedCandidates.filter(card => 
+      card.hasVocabularyState && 
+      card.isInReviewState && 
+      card.vocabularyRetrievability !== null && 
+      card.vocabularyRetrievability < 0.9
+    ).length;
+
+    if (unboundCount > 0 || suboptimalBoundCount > 0) {
+      const optimalBoundCandidates = boundCandidates.filter(card =>
+        card.vocabularyRetrievability !== null &&
+        card.vocabularyRetrievability >= 0.9
+      );
+
+      warnings = {
+        unboundCardsIncluded: unboundCount,
+        suboptimalCandidates: suboptimalBoundCount,
+        recommendedMaxCards: Math.max(1, optimalBoundCandidates.length)
+      };
+    }
+
+    // Convert to required format
+    const finalCandidates = selectedCandidates.map(card => ({
+      id: card.id,
+      deckId,
+      englishWord: card.englishWord,
+      chineseTranslation: card.chineseTranslation,
+      pinyin: card.pinyin,
+      ipaPronunciation: null,
+      exampleSentences: null,
+      wordType: null,
+      difficultyLevel: 1,
+      audioUrl: card.audioUrl,
+      imageUrl: null,
+      videoUrl: null,
+      frequencyRank: null,
+      tags: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isVocabularyBound: card.hasVocabularyState && card.isInReviewState,
+      vocabularyRetrievability: card.vocabularyRetrievability || undefined,
+    }));
+
+    return {
+      candidates: finalCandidates,
+      warnings
+    };
+  },
+
+  /**
    * Get the initial listening review queue for a session.
    * Similar to vocabulary but uses ListeningCardState.
    */

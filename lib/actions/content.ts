@@ -898,5 +898,364 @@ export const ContentService = {
     // Other field changes (englishWord, chineseTranslation, pinyin) don't require state cleanup
     // since they're referenced dynamically through the foreign key relationship
   },
+
+  // ================================================================= //
+  // FILL-IN-BLANK EXERCISE CRUD OPERATIONS
+  // ================================================================= //
+
+  /**
+   * Create a new fill-in-blank exercise
+   */
+  async createFillInBlankExercise(data: {
+    title: string;
+    vocabularyDeckId: string;
+    difficultyLevel?: number;
+    explanation?: string;
+    tags?: string[];
+    isPublic?: boolean;
+    creatorId: string;
+  }): Promise<FillInBlankExercise> {
+    // Verify the creator has access to the vocabulary deck
+    const deck = await prisma.vocabularyDeck.findUnique({
+      where: { id: data.vocabularyDeckId },
+      select: { id: true, creatorId: true, isPublic: true },
+    });
+
+    if (!deck) {
+      throw new Error('Vocabulary deck not found');
+    }
+
+    if (!deck.isPublic && deck.creatorId !== data.creatorId) {
+      throw new AuthorizationError('You do not have permission to use this deck');
+    }
+
+    return await prisma.fillInBlankExercise.create({
+      data: {
+        title: data.title,
+        vocabularyDeckId: data.vocabularyDeckId,
+        difficultyLevel: data.difficultyLevel || 1,
+        explanation: data.explanation,
+        tags: data.tags || [],
+        isPublic: data.isPublic || false,
+        creatorId: data.creatorId,
+      },
+    });
+  },
+
+  /**
+   * Get fill-in-blank exercises for a teacher
+   */
+  async getFillInBlankExercises(options: {
+    creatorId: string;
+    page?: number;
+    limit?: number;
+    search?: string;
+    deckId?: string;
+    isPublic?: boolean;
+  }): Promise<{
+    exercises: (FillInBlankExercise & {
+      vocabularyDeck: { name: string; _count: { cards: number } };
+      unitItem: { id: string } | null;
+    })[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    const {
+      creatorId,
+      page = 1,
+      limit = 10,
+      search,
+      deckId,
+      isPublic,
+    } = options;
+
+    const skip = (page - 1) * limit;
+
+    // Build where clause
+    const where: any = {
+      OR: [
+        { creatorId }, // User's own exercises
+        { isPublic: true }, // Public exercises
+      ],
+    };
+
+    if (search) {
+      where.title = {
+        contains: search,
+        mode: 'insensitive',
+      };
+    }
+
+    if (deckId) {
+      where.vocabularyDeckId = deckId;
+    }
+
+    if (isPublic !== undefined) {
+      where.isPublic = isPublic;
+    }
+
+    const [exercises, total] = await Promise.all([
+      prisma.fillInBlankExercise.findMany({
+        where,
+        include: {
+          vocabularyDeck: {
+            select: {
+              name: true,
+              _count: {
+                select: { cards: true },
+              },
+            },
+          },
+          unitItem: {
+            select: { id: true },
+          },
+        },
+        orderBy: [
+          { createdAt: 'desc' },
+        ],
+        skip,
+        take: limit,
+      }),
+      prisma.fillInBlankExercise.count({ where }),
+    ]);
+
+    return {
+      exercises,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    };
+  },
+
+  /**
+   * Get a specific fill-in-blank exercise
+   */
+  async getFillInBlankExercise(
+    exerciseId: string,
+    userId: string
+  ): Promise<FillInBlankExercise & {
+    vocabularyDeck: VocabularyDeck & { _count: { cards: number } };
+    unitItem: { id: string } | null;
+  }> {
+    const exercise = await prisma.fillInBlankExercise.findUnique({
+      where: { id: exerciseId },
+      include: {
+        vocabularyDeck: {
+          include: {
+            _count: {
+              select: { cards: true },
+            },
+          },
+        },
+        unitItem: {
+          select: { id: true },
+        },
+      },
+    });
+
+    if (!exercise) {
+      throw new Error('Fill-in-blank exercise not found');
+    }
+
+    // Check access permissions
+    if (!exercise.isPublic && exercise.creatorId !== userId) {
+      throw new AuthorizationError('You do not have permission to access this exercise');
+    }
+
+    return exercise;
+  },
+
+  /**
+   * Update a fill-in-blank exercise
+   */
+  async updateFillInBlankExercise(
+    exerciseId: string,
+    userId: string,
+    updates: {
+      title?: string;
+      vocabularyDeckId?: string;
+      difficultyLevel?: number;
+      explanation?: string;
+      tags?: string[];
+      isPublic?: boolean;
+    }
+  ): Promise<FillInBlankExercise> {
+    const exercise = await prisma.fillInBlankExercise.findUnique({
+      where: { id: exerciseId },
+      select: { id: true, creatorId: true },
+    });
+
+    if (!exercise) {
+      throw new Error('Fill-in-blank exercise not found');
+    }
+
+    if (exercise.creatorId !== userId) {
+      throw new AuthorizationError('You do not have permission to update this exercise');
+    }
+
+    // If updating vocabularyDeckId, verify access to the new deck
+    if (updates.vocabularyDeckId) {
+      const deck = await prisma.vocabularyDeck.findUnique({
+        where: { id: updates.vocabularyDeckId },
+        select: { id: true, creatorId: true, isPublic: true },
+      });
+
+      if (!deck) {
+        throw new Error('Vocabulary deck not found');
+      }
+
+      if (!deck.isPublic && deck.creatorId !== userId) {
+        throw new AuthorizationError('You do not have permission to use this deck');
+      }
+    }
+
+    return await prisma.fillInBlankExercise.update({
+      where: { id: exerciseId },
+      data: updates,
+    });
+  },
+
+  /**
+   * Delete (archive) a fill-in-blank exercise
+   */
+  async deleteFillInBlankExercise(exerciseId: string, userId: string): Promise<void> {
+    const exercise = await prisma.fillInBlankExercise.findUnique({
+      where: { id: exerciseId },
+      select: { id: true, creatorId: true },
+    });
+
+    if (!exercise) {
+      throw new Error('Fill-in-blank exercise not found');
+    }
+
+    if (exercise.creatorId !== userId) {
+      throw new AuthorizationError('You do not have permission to delete this exercise');
+    }
+
+    // Soft delete via the global extension
+    await prisma.fillInBlankExercise.delete({
+      where: { id: exerciseId },
+    });
+  },
+
+  /**
+   * Search vocabulary cards for binding to fill-in-blank exercises
+   */
+  async searchVocabularyCardsForBinding(options: {
+    deckId: string;
+    query: string;
+    limit?: number;
+    creatorId: string;
+  }): Promise<{
+    cards: (VocabularyCard & { 
+      isExactMatch: boolean;
+      relevanceScore: number;
+    })[];
+    totalMatches: number;
+  }> {
+    const { deckId, query, limit = 10, creatorId } = options;
+
+    // Verify the user has access to this deck
+    const deck = await prisma.vocabularyDeck.findUnique({
+      where: { id: deckId },
+      select: { id: true, creatorId: true, isPublic: true },
+    });
+
+    if (!deck) {
+      throw new Error('Vocabulary deck not found');
+    }
+
+    if (!deck.isPublic && deck.creatorId !== creatorId) {
+      throw new AuthorizationError('You do not have permission to access this deck');
+    }
+
+    const searchQuery = query.toLowerCase().trim();
+
+    // Search for cards with sophisticated matching
+    const cards = await prisma.vocabularyCard.findMany({
+      where: {
+        deckId,
+        OR: [
+          {
+            englishWord: {
+              contains: searchQuery,
+              mode: 'insensitive',
+            },
+          },
+          {
+            chineseTranslation: {
+              contains: searchQuery,
+              mode: 'insensitive',
+            },
+          },
+          {
+            pinyin: {
+              contains: searchQuery,
+              mode: 'insensitive',
+            },
+          },
+        ],
+      },
+      orderBy: [
+        { englishWord: 'asc' },
+      ],
+      take: limit * 2, // Get more for scoring
+    });
+
+    // Score and sort the results
+    const scoredCards = cards.map(card => {
+      const englishLower = card.englishWord.toLowerCase();
+      const chineseLower = card.chineseTranslation.toLowerCase();
+      const pinyinLower = (card.pinyin || '').toLowerCase();
+
+      let relevanceScore = 0;
+      let isExactMatch = false;
+
+      // Exact match scoring
+      if (englishLower === searchQuery) {
+        relevanceScore = 100;
+        isExactMatch = true;
+      } else if (chineseLower === searchQuery) {
+        relevanceScore = 95;
+        isExactMatch = true;
+      } else if (pinyinLower === searchQuery) {
+        relevanceScore = 90;
+        isExactMatch = true;
+      }
+      // Prefix match scoring
+      else if (englishLower.startsWith(searchQuery)) {
+        relevanceScore = 80 - searchQuery.length; // Shorter prefixes score higher
+      } else if (chineseLower.startsWith(searchQuery)) {
+        relevanceScore = 75 - searchQuery.length;
+      } else if (pinyinLower.startsWith(searchQuery)) {
+        relevanceScore = 70 - searchQuery.length;
+      }
+      // Contains match scoring
+      else if (englishLower.includes(searchQuery)) {
+        relevanceScore = 50 - searchQuery.length;
+      } else if (chineseLower.includes(searchQuery)) {
+        relevanceScore = 45 - searchQuery.length;
+      } else if (pinyinLower.includes(searchQuery)) {
+        relevanceScore = 40 - searchQuery.length;
+      }
+
+      return {
+        ...card,
+        isExactMatch,
+        relevanceScore,
+      };
+    });
+
+    // Sort by relevance and take only the requested limit
+    const sortedCards = scoredCards
+      .sort((a, b) => b.relevanceScore - a.relevanceScore)
+      .slice(0, limit);
+
+    return {
+      cards: sortedCards,
+      totalMatches: cards.length,
+    };
+  },
 };
 

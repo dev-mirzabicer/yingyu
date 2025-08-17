@@ -44,6 +44,7 @@ import {
   ChevronUp,
   Bell,
   HelpCircle,
+  Edit3,
 } from "lucide-react"
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> { }
@@ -73,6 +74,12 @@ const navigationItems = [
         title: "Vocabulary Decks",
         url: "/decks",
         icon: BookOpen,
+        badge: null,
+      },
+      {
+        title: "Fill-in-Blank Exercises",
+        url: "/fill-in-blank",
+        icon: Edit3,
         badge: null,
       },
       {

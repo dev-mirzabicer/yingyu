@@ -12,6 +12,7 @@ import type {
   Unit,
   VocabularyDeck,
   VocabularyCard,
+  FillInBlankExercise,
   Job,
 } from "@prisma/client"
 import { fetcher, mutateWithOptimistic, ApiError } from "./utils"
@@ -186,4 +187,89 @@ export async function bulkImportVocabulary(deckId: string, cards: any[]) {
     deckId,
     cards,
   });
+}
+
+// ============================================================================
+// FILL-IN-BLANK EXERCISE HOOKS
+// ============================================================================
+
+export function useFillInBlankExercises() {
+  const { data, error, isLoading, mutate } = useSWR<{
+    exercises: (FillInBlankExercise & {
+      vocabularyDeck: { name: string; _count: { cards: number } };
+      unitItem: { id: string } | null;
+    })[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }>("/api/fill-in-blank", fetcher)
+
+  return {
+    exercises: data?.exercises || [],
+    total: data?.total || 0,
+    page: data?.page || 1,
+    totalPages: data?.totalPages || 1,
+    isLoading,
+    isError: error,
+    mutate,
+    error: error as ApiError | undefined,
+  }
+}
+
+export function useFillInBlankExercise(exerciseId: string) {
+  const { data, error, isLoading, mutate } = useSWR<FillInBlankExercise & {
+    vocabularyDeck: VocabularyDeck & { _count: { cards: number } };
+    unitItem: { id: string } | null;
+  }>(exerciseId ? `/api/fill-in-blank/${exerciseId}` : null, fetcher)
+
+  return {
+    exercise: data,
+    isLoading,
+    isError: error,
+    mutate,
+    error: error as ApiError | undefined,
+  }
+}
+
+export async function createFillInBlankExercise(exerciseData: {
+  title: string;
+  vocabularyDeckId: string;
+  difficultyLevel?: number;
+  explanation?: string;
+  tags?: string[];
+  isPublic?: boolean;
+}) {
+  return mutateWithOptimistic<FillInBlankExercise>("/api/fill-in-blank", "POST", exerciseData)
+}
+
+export async function updateFillInBlankExercise(
+  exerciseId: string,
+  updates: {
+    title?: string;
+    vocabularyDeckId?: string;
+    difficultyLevel?: number;
+    explanation?: string;
+    tags?: string[];
+    isPublic?: boolean;
+  }
+) {
+  return mutateWithOptimistic<FillInBlankExercise>(`/api/fill-in-blank/${exerciseId}`, "PUT", updates)
+}
+
+export async function deleteFillInBlankExercise(exerciseId: string) {
+  return mutateWithOptimistic<{ success: boolean }>(`/api/fill-in-blank/${exerciseId}`, "DELETE")
+}
+
+export async function searchVocabularyCardsForBinding(options: {
+  deckId: string;
+  query: string;
+  limit?: number;
+}) {
+  const params = new URLSearchParams({
+    deckId: options.deckId,
+    query: options.query,
+    ...(options.limit && { limit: options.limit.toString() }),
+  });
+  
+  return fetcher(`/api/fill-in-blank/search-vocab?${params}`)
 }
