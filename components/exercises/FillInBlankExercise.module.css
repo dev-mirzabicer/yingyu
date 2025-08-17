@@ -1,0 +1,126 @@
+/* Fill-in-Blank Exercise Animations and Mobile Optimizations */
+
+.stageTransition {
+  animation: fadeInScale 0.3s ease-out;
+}
+
+.loadingPulse {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.buttonPress {
+  transform: scale(0.98);
+  transition: transform 0.1s ease-out;
+}
+
+.focusRing {
+  transition: box-shadow 0.2s ease-out, border-color 0.2s ease-out;
+}
+
+.successFeedback {
+  animation: successPulse 0.6s ease-out;
+}
+
+.errorShake {
+  animation: shake 0.5s ease-out;
+}
+
+/* Keyframe animations */
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes successPulse {
+  0% {
+    transform: scale(1);
+    background-color: inherit;
+  }
+  50% {
+    transform: scale(1.02);
+    background-color: rgb(34, 197, 94, 0.1);
+  }
+  100% {
+    transform: scale(1);
+    background-color: inherit;
+  }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .mobileStack {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .mobileTouchTarget {
+    min-height: 44px;
+    padding: 0.75rem;
+  }
+  
+  .mobileText {
+    font-size: 1.125rem;
+    line-height: 1.5;
+  }
+  
+  .mobileSpacing {
+    padding: 1rem;
+    margin: 0.5rem 0;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .focusRing:focus-visible {
+    outline: 3px solid currentColor;
+    outline-offset: 2px;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .stageTransition,
+  .loadingPulse,
+  .successFeedback,
+  .errorShake {
+    animation: none;
+  }
+  
+  .focusRing {
+    transition: none;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .darkModeCard {
+    background-color: rgb(30, 30, 30);
+    border-color: rgb(60, 60, 60);
+  }
+  
+  .darkModeText {
+    color: rgb(220, 220, 220);
+  }
+}

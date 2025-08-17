@@ -17,20 +17,13 @@ import {
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
-
-type Rating = 1 | 2 | 3 | 4 // Again, Hard, Good, Easy
-
-export interface ExerciseProps {
-  sessionState: FullSessionState
-  onRevealAnswer: () => void
-  onSubmitRating: (rating: Rating) => void
-  isLoading: boolean
-}
+import { ExerciseProps } from "./types"
 
 export function VocabularyExercise({
   sessionState,
   onRevealAnswer,
   onSubmitRating,
+  onSubmitAction, // Note: not used in this component, but required by interface
   isLoading,
 }: ExerciseProps) {
   const progress = sessionState.progress as VocabularyDeckProgress

@@ -10,7 +10,7 @@ import { Clock, ArrowLeft, Pause, Play, CheckCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { useSession, submitAnswer, endSession } from "@/hooks/api/sessions"
-import { AnswerPayload, VocabularyDeckProgress, ListeningDeckProgress, SessionProgress } from "@/lib/types"
+import { AnswerPayload, VocabularyDeckProgress, ListeningDeckProgress, FillInBlankExerciseProgress, SessionProgress } from "@/lib/types"
 import { formatTime } from "@/lib/utils"
 import { useLiveSessionStore } from "@/hooks/stores/use-live-session-store"
 import { getExerciseComponent, exerciseTypeInfo } from "@/components/exercises/dispatcher"
@@ -67,7 +67,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     const completedCards = encounteredCards.size;
     const percentage = totalUniqueCardsInSession > 0 ? (completedCards / totalUniqueCardsInSession) * 100 : 0;
 
-    // Handle queue analysis differently for vocabulary vs listening
+    // Handle queue analysis differently for vocabulary vs listening vs fill-in-blank
     let queueAnalysis;
     if (progress.type === 'VOCABULARY_DECK') {
       queueAnalysis = {
@@ -83,6 +83,14 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
         newCards: queue.filter(c => c.state === 'NEW').length,
         learningCards: queue.filter(c => c.state === 'LEARNING' || c.state === 'RELEARNING').length,
         reviewCards: queue.filter(c => c.state === 'REVIEW').length,
+      };
+    } else if (progress.type === 'FILL_IN_BLANK_EXERCISE') {
+      // Fill-in-blank exercises don't use FSRS states, just a simple queue
+      queueAnalysis = {
+        totalInQueue: queue.length,
+        newCards: 0, // Not applicable for fill-in-blanks
+        learningCards: 0, // Not applicable
+        reviewCards: 0, // Not applicable
       };
     } else {
       queueAnalysis = { totalInQueue: queue.length, newCards: 0, learningCards: 0, reviewCards: 0 };
@@ -166,6 +174,32 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
       toast({
         title: "Error",
         description: "Failed to submit rating. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleSubmitAction = async (action: string, data?: any) => {
+    if (!session) return
+
+    setActionLoading(true)
+    try {
+      // For actions that increment review count (rating-type actions)
+      if (action === 'SUBMIT_RATING' || action === 'MARK_CORRECT' || action === 'MARK_INCORRECT') {
+        incrementReviewCount() // Optimistic update
+      }
+      
+      const payload: AnswerPayload = { action: action as any, data }
+      const result = await submitAnswer(sessionId, payload)
+      if (result.data.newState.progress) {
+        setProgress(result.data.newState.progress as SessionProgress)
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Action failed. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -407,6 +441,32 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
             </div>
           )}
 
+          {session?.progress?.type === 'FILL_IN_BLANK_EXERCISE' && (
+            <div className="space-y-3 border-t pt-4">
+              <h4 className="text-sm font-medium text-slate-700">Fill-in-Blank Status</h4>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">Cards Remaining</span>
+                  <span className="font-medium">{progressData.queueAnalysis.totalInQueue}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">Cards Completed</span>
+                  <span className="font-medium">{progressData.completedCards}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">Total Cards</span>
+                  <span className="font-medium">{progressData.totalCards}</span>
+                </div>
+                <div className="bg-orange-50 border border-orange-200 rounded p-2">
+                  <div className="text-xs text-orange-700 font-medium">One-Time Learning</div>
+                  <div className="text-xs text-orange-600">
+                    Cards marked as seen won't reappear for this student
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-3 border-t pt-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-slate-600">Current Exercise</span>
@@ -433,6 +493,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
               sessionState={session}
               onRevealAnswer={handleRevealAnswer}
               onSubmitRating={handleRating}
+              onSubmitAction={handleSubmitAction}
               isLoading={isActionLoading}
             />
           </div>

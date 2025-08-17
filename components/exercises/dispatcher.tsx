@@ -2,11 +2,13 @@
 
 import { UnitItemType } from "@prisma/client"
 import { ComponentType } from "react"
-import { ExerciseProps, VocabularyExercise } from "./VocabularyExercise"
+import { ExerciseProps } from "./types"
+import { VocabularyExercise } from "./VocabularyExercise"
 import { GrammarExercise } from "./GrammarExercise"
 import { ListeningExercise } from "./ListeningExercise"
+import { FillInBlankExercise } from "./FillInBlankExercise"
 import { UnsupportedExercise } from "./UnsupportedExercise"
-import { BookOpen, FileText, Mic } from "lucide-react"
+import { BookOpen, FileText, Mic, Edit3 } from "lucide-react"
 import { Card, CardContent } from "../ui/card"
 
 // Exercise type information mapping - modular and extensible
@@ -26,6 +28,11 @@ export const exerciseTypeInfo = {
     icon: Mic,
     color: "bg-purple-100 text-purple-700",
   },
+  [UnitItemType.FILL_IN_BLANK_EXERCISE]: {
+    label: "Fill in Blanks",
+    icon: Edit3,
+    color: "bg-orange-100 text-orange-700",
+  },
 }
 
 export const exerciseDispatcher: Record<
@@ -35,6 +42,7 @@ export const exerciseDispatcher: Record<
   [UnitItemType.VOCABULARY_DECK]: VocabularyExercise,
   [UnitItemType.GRAMMAR_EXERCISE]: GrammarExercise,
   [UnitItemType.LISTENING_EXERCISE]: ListeningExercise,
+  [UnitItemType.FILL_IN_BLANK_EXERCISE]: FillInBlankExercise,
 }
 
 export function getExerciseComponent(

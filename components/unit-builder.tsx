@@ -47,7 +47,6 @@ import {
 } from "@/hooks/api/content"
 import type { FullUnit, NewUnitItemData } from "@/lib/types"
 import type { Unit, UnitItemType } from "@prisma/client"
-import { FillInBlankExerciseEditor } from "./fill-in-blank-exercise-editor"
 import { GrammarExerciseEditor } from "./grammar-exercise-editor"
 import { AlertTriangle } from "lucide-react"
 
@@ -178,6 +177,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
             title:
               item.vocabularyDeck?.name ||
               item.listeningExercise?.title ||
+              item.fillInBlankExercise?.title ||
               item.grammarExercise?.title ||
               "Untitled",
             config: item.config || {},
@@ -780,52 +780,100 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
     const renderFillInBlankConfig = () => (
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="blankTitle">Exercise Title *</Label>
+          <Label htmlFor="fillBlankTitle">Exercise Title *</Label>
           <Input
-            id="blankTitle"
-            value={editingItem.config.title || ""}
+            id="fillBlankTitle"
+            value={editingItem.title || ""}
             onChange={(e) =>
               setEditingItem({
                 ...editingItem,
                 title: e.target.value,
-                config: { ...editingItem.config, title: e.target.value },
               })
             }
-            placeholder="Enter exercise title"
+            placeholder="Enter fill-in-blank exercise title"
           />
         </div>
 
-        <FillInBlankExerciseEditor
-          sentences={editingItem.config.sentences || []}
-          wordBank={editingItem.config.wordBank || []}
-          onSentencesChange={(sentences) => {
-            setEditingItem({
-              ...editingItem,
-              config: { ...editingItem.config, sentences },
-            })
-          }}
-          onWordBankChange={(wordBank) => {
-            setEditingItem({
-              ...editingItem,
-              config: { ...editingItem.config, wordBank },
-            })
-          }}
-        />
-
-        <div className="flex items-center justify-between pt-4 border-t">
-          <div className="space-y-1">
-            <Label>Allow Word Bank</Label>
-            <p className="text-sm text-slate-500">Show word bank to help students</p>
-          </div>
-          <Switch
-            checked={editingItem.config.allowWordBank ?? true}
-            onCheckedChange={(checked) =>
+        <div className="space-y-2">
+          <Label htmlFor="fillBlankDeckId">Vocabulary Deck *</Label>
+          <Select
+            value={editingItem.config.deckId || ""}
+            onValueChange={(value) =>
               setEditingItem({
                 ...editingItem,
-                config: { ...editingItem.config, allowWordBank: checked },
+                config: { ...editingItem.config, deckId: value },
               })
             }
-          />
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select a deck for fill-in-blank practice" />
+            </SelectTrigger>
+            <SelectContent>
+              {decks.map((deck) => (
+                <SelectItem key={deck.id} value={deck.id}>
+                  {deck.name} ({deck._count?.cards || 0} cards)
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-sm text-slate-500">
+            Students will see Chinese translations and type the English words
+          </p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="fillBlankMaxCards">Max Cards</Label>
+            <Input
+              id="fillBlankMaxCards"
+              type="number"
+              min="1"
+              max="100"
+              value={editingItem.config.maxCards || 20}
+              onChange={(e) =>
+                setEditingItem({
+                  ...editingItem,
+                  config: { ...editingItem.config, maxCards: Number.parseInt(e.target.value) },
+                })
+              }
+            />
+            <p className="text-xs text-slate-500">Maximum cards per session</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="fillBlankConfidenceThreshold">Confidence Threshold</Label>
+            <Input
+              id="fillBlankConfidenceThreshold"
+              type="number"
+              min="0"
+              max="1"
+              step="0.1"
+              value={editingItem.config.vocabularyConfidenceThreshold || 0.8}
+              onChange={(e) =>
+                setEditingItem({
+                  ...editingItem,
+                  config: { ...editingItem.config, vocabularyConfidenceThreshold: Number.parseFloat(e.target.value) },
+                })
+              }
+            />
+            <p className="text-xs text-slate-500">Min. vocab confidence (0.0-1.0)</p>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Shuffle Cards</Label>
+              <Switch
+                checked={editingItem.config.shuffleCards ?? true}
+                onCheckedChange={(checked) =>
+                  setEditingItem({
+                    ...editingItem,
+                    config: { ...editingItem.config, shuffleCards: checked },
+                  })
+                }
+              />
+            </div>
+            <p className="text-xs text-slate-500">Randomize card order</p>
+          </div>
         </div>
       </div>
     )
@@ -1140,6 +1188,25 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
                                           </p>
                                         </div>
                                       )}
+                                      {item.type === "FILL_IN_BLANK_EXERCISE" && (
+                                        <div className="space-y-1">
+                                          <p>
+                                            <strong>Deck:</strong>{" "}
+                                            {item.config.deckId 
+                                              ? decks.find(d => d.id === item.config.deckId)?.name || "Selected" 
+                                              : "⚠ Not selected"}
+                                          </p>
+                                          <p>
+                                            <strong>Max Cards:</strong> {item.config.maxCards || 20}
+                                          </p>
+                                          <p>
+                                            <strong>Confidence Threshold:</strong> {item.config.vocabularyConfidenceThreshold || 0.8}
+                                          </p>
+                                          <p>
+                                            <strong>Shuffle:</strong> {item.config.shuffleCards ? "Yes" : "No"}
+                                          </p>
+                                        </div>
+                                      )}
                                       {item.type === "GRAMMAR_EXERCISE" && (
                                         <div className="space-y-1">
                                           <p>
@@ -1176,6 +1243,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
         (item) =>
           (item.type === "VOCABULARY_DECK" && !item.config.deckId) ||
           (item.type === "LISTENING_EXERCISE" && !item.config.deckId) ||
+          (item.type === "FILL_IN_BLANK_EXERCISE" && !item.config.deckId) ||
           !item.config.title,
       ) && (
           <Alert>
