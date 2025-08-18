@@ -352,13 +352,11 @@ export async function createFillInBlankQuestion(exerciseId: string, questionData
 }) {
   const cacheKey = `/api/fill-in-blank/${exerciseId}/questions`;
   
-  return mutateWithOptimistic<FillInBlankQuestion & {
-    vocabularyCard: VocabularyCard | null;
-  }>(
+  return mutateWithOptimistic(
     cacheKey,
     "POST", 
     questionData,
-    (currentData) => {
+    (currentData: any) => {
       if (!currentData) return currentData;
       
       // Add the new question optimistically
@@ -401,16 +399,14 @@ export async function updateFillInBlankQuestion(
 ) {
   const cacheKey = `/api/fill-in-blank/${exerciseId}/questions`;
   
-  return mutateWithOptimistic<FillInBlankQuestion & {
-    vocabularyCard: VocabularyCard | null;
-  }>(
+  return mutateWithOptimistic(
     `/api/fill-in-blank/${exerciseId}/questions/${questionId}`,
     "PUT", 
     updates,
-    (currentData) => {
+    (currentData: any) => {
       if (!currentData) return currentData;
       
-      const questionIndex = currentData.questions.findIndex(q => q.id === questionId);
+      const questionIndex = currentData.questions.findIndex((q: any) => q.id === questionId);
       if (questionIndex === -1) return currentData;
 
       const updatedQuestions = [...currentData.questions];
@@ -431,16 +427,16 @@ export async function updateFillInBlankQuestion(
 export async function deleteFillInBlankQuestion(exerciseId: string, questionId: string) {
   const cacheKey = `/api/fill-in-blank/${exerciseId}/questions`;
   
-  return mutateWithOptimistic<{ success: boolean }>(
+  return mutateWithOptimistic(
     `/api/fill-in-blank/${exerciseId}/questions/${questionId}`,
     "DELETE",
     {},
-    (currentData) => {
+    (currentData: any) => {
       if (!currentData) return currentData;
       
       return {
         ...currentData,
-        questions: currentData.questions.filter(q => q.id !== questionId),
+        questions: currentData.questions.filter((q: any) => q.id !== questionId),
         total: currentData.total - 1,
       };
     }
@@ -456,16 +452,11 @@ export async function bulkCreateFillInBlankQuestions(exerciseId: string, questio
 }>) {
   const cacheKey = `/api/fill-in-blank/${exerciseId}/questions`;
   
-  return mutateWithOptimistic<{
-    createdQuestions: (FillInBlankQuestion & {
-      vocabularyCard: VocabularyCard | null;
-    })[];
-    count: number;
-  }>(
+  return mutateWithOptimistic(
     `/api/fill-in-blank/${exerciseId}/questions/bulk`,
     "POST",
     { questions },
-    (currentData) => {
+    (currentData: any) => {
       if (!currentData) return currentData;
       
       // Add new questions optimistically
@@ -504,19 +495,14 @@ export async function bulkUpdateFillInBlankQuestions(exerciseId: string, updates
 }>) {
   const cacheKey = `/api/fill-in-blank/${exerciseId}/questions`;
   
-  return mutateWithOptimistic<{
-    updatedQuestions: (FillInBlankQuestion & {
-      vocabularyCard: VocabularyCard | null;
-    })[];
-    count: number;
-  }>(
+  return mutateWithOptimistic(
     `/api/fill-in-blank/${exerciseId}/questions/bulk`,
     "PUT",
     { updates },
-    (currentData) => {
+    (currentData: any) => {
       if (!currentData) return currentData;
       
-      const updatedQuestions = currentData.questions.map(question => {
+      const updatedQuestions = currentData.questions.map((question: any) => {
         const update = updates.find(u => u.id === question.id);
         if (!update) return question;
         
@@ -538,17 +524,17 @@ export async function bulkUpdateFillInBlankQuestions(exerciseId: string, updates
 export async function bulkDeleteFillInBlankQuestions(exerciseId: string, questionIds: string[]) {
   const cacheKey = `/api/fill-in-blank/${exerciseId}/questions`;
   
-  return mutateWithOptimistic<{ success: boolean; deletedCount: number }>(
+  return mutateWithOptimistic(
     `/api/fill-in-blank/${exerciseId}/questions/bulk`,
     "DELETE",
     { questionIds },
-    (currentData) => {
+    (currentData: any) => {
       if (!currentData) return currentData;
       
       const questionIdSet = new Set(questionIds);
       return {
         ...currentData,
-        questions: currentData.questions.filter(q => !questionIdSet.has(q.id)),
+        questions: currentData.questions.filter((q: any) => !questionIdSet.has(q.id)),
         total: currentData.total - questionIds.length,
       };
     }
@@ -558,19 +544,19 @@ export async function bulkDeleteFillInBlankQuestions(exerciseId: string, questio
 export async function reorderFillInBlankQuestions(exerciseId: string, questionIds: string[]) {
   const cacheKey = `/api/fill-in-blank/${exerciseId}/questions`;
   
-  return mutateWithOptimistic<{ success: boolean }>(
+  return mutateWithOptimistic(
     `/api/fill-in-blank/${exerciseId}/questions/reorder`,
     "PUT",
     { questionIds },
-    (currentData) => {
+    (currentData: any) => {
       if (!currentData) return currentData;
       
       // Reorder questions optimistically
-      const questionMap = new Map(currentData.questions.map(q => [q.id, q]));
+      const questionMap = new Map(currentData.questions.map((q: any) => [q.id, q]));
       const reorderedQuestions = questionIds
         .map(id => questionMap.get(id))
-        .filter((q): q is NonNullable<typeof q> => !!q)
-        .map((q, index) => ({ ...q, order: index }));
+        .filter((q: any): q is NonNullable<typeof q> => !!q)
+        .map((q: any, index: number) => ({ ...q, order: index }));
 
       return {
         ...currentData,

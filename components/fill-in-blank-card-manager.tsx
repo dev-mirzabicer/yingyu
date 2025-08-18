@@ -450,7 +450,7 @@ export function FillInBlankCardManager({
               <Checkbox
                 id="show-inactive"
                 checked={showInactive}
-                onCheckedChange={setShowInactive}
+                onCheckedChange={(checked) => setShowInactive(checked === true)}
               />
               <Label htmlFor="show-inactive">Show inactive</Label>
             </div>
@@ -459,7 +459,7 @@ export function FillInBlankCardManager({
               <div className="flex items-center space-x-2">
                 <Checkbox
                   checked={selectedQuestions.size === questions.length}
-                  onCheckedChange={handleSelectAll}
+                  onCheckedChange={() => handleSelectAll()}
                 />
                 <Label>Select All</Label>
               </div>
