@@ -434,10 +434,14 @@ export async function deleteFillInBlankQuestion(exerciseId: string, questionId: 
     (currentData: any) => {
       if (!currentData) return currentData;
       
+      // Mark question as inactive instead of removing it
+      const updatedQuestions = currentData.questions.map((q: any) => 
+        q.id === questionId ? { ...q, isActive: false } : q
+      );
+
       return {
         ...currentData,
-        questions: currentData.questions.filter((q: any) => q.id !== questionId),
-        total: currentData.total - 1,
+        questions: updatedQuestions,
       };
     }
   );
@@ -532,10 +536,13 @@ export async function bulkDeleteFillInBlankQuestions(exerciseId: string, questio
       if (!currentData) return currentData;
       
       const questionIdSet = new Set(questionIds);
+      const updatedQuestions = currentData.questions.map((q: any) => 
+        questionIdSet.has(q.id) ? { ...q, isActive: false } : q
+      );
+
       return {
         ...currentData,
-        questions: currentData.questions.filter((q: any) => !questionIdSet.has(q.id)),
-        total: currentData.total - questionIds.length,
+        questions: updatedQuestions,
       };
     }
   );

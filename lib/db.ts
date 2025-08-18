@@ -8,7 +8,7 @@ const ARCHIVABLE_MODELS: Prisma.ModelName[] = [
   'GrammarExercise',
   'ListeningExercise',
   'FillInBlankExercise',
-  'FillInBlankQuestion',
+  // Note: FillInBlankQuestion is not included because it uses isActive field for soft state management
 ];
 
 /**

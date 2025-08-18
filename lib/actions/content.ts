@@ -1589,7 +1589,7 @@ export const ContentService = {
   },
 
   /**
-   * Delete (soft-delete) a fill-in-blank question
+   * Delete (soft-delete) a fill-in-blank question by setting isActive to false
    */
   async deleteFillInBlankQuestion(
     questionId: string,
@@ -1619,9 +1619,10 @@ export const ContentService = {
         throw new AuthorizationError('You do not have permission to delete this question');
       }
 
-      // Soft delete via the global extension
-      await tx.fillInBlankQuestion.delete({
+      // Soft delete by setting isActive to false
+      await tx.fillInBlankQuestion.update({
         where: { id: questionId },
+        data: { isActive: false },
       });
     });
   },
@@ -1807,7 +1808,7 @@ export const ContentService = {
   },
 
   /**
-   * Bulk delete fill-in-blank questions
+   * Bulk delete fill-in-blank questions by setting isActive to false
    */
   async bulkDeleteFillInBlankQuestions(data: {
     exerciseId: string;
@@ -1844,9 +1845,10 @@ export const ContentService = {
         throw new Error('Some questions were not found or do not belong to the exercise');
       }
 
-      // Soft delete via the global extension
-      const result = await tx.fillInBlankQuestion.deleteMany({
+      // Soft delete by setting isActive to false
+      const result = await tx.fillInBlankQuestion.updateMany({
         where: { id: { in: questionIds } },
+        data: { isActive: false },
       });
 
       return result.count;
