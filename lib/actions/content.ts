@@ -4,6 +4,7 @@ import {
   NewUnitItemData,
   VocabularyExerciseConfig,
   ListeningExerciseConfig,
+  FillInTheBlankExerciseConfig,
 } from '@/lib/types';
 import {
   Unit,
@@ -12,6 +13,8 @@ import {
   VocabularyDeck,
   GrammarExercise,
   ListeningExercise,
+  FillInTheBlankDeck,
+  FillInTheBlankCard,
   Prisma,
   VocabularyCard,
 } from '@prisma/client';
@@ -19,14 +22,17 @@ import { AuthorizationError } from '../auth';
 import { TransactionClient } from '@/lib/exercises/operators/base';
 import {
   BulkImportVocabularyPayloadSchema,
+  BulkImportFillInTheBlankPayloadSchema,
   VocabularyExerciseConfigSchema,
+  FillInTheBlankExerciseConfigSchema,
 } from '../schemas';
 import { z } from 'zod';
 
 type Exercise =
   | VocabularyDeck
   | GrammarExercise
-  | ListeningExercise;
+  | ListeningExercise
+  | FillInTheBlankDeck;
 
 /**
  * Service responsible for managing the global repository of all learning materials.
@@ -53,6 +59,7 @@ export const ContentService = {
             vocabularyDeck: true,
             grammarExercise: true,
             listeningExercise: true,
+            fillInTheBlankDeck: true,
           },
         },
       },
@@ -126,6 +133,108 @@ export const ContentService = {
         creator: true,
       },
       orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  /**
+   * Retrieves all Fill in the Blank decks for a given teacher.
+   * 
+   * @param teacherId The UUID of the teacher.
+   * @returns A promise that resolves to an array of Fill in the Blank decks created by the teacher.
+   */
+  async getFillInTheBlankDecksForTeacher(teacherId: string): Promise<FillInTheBlankDeck[]> {
+    return prisma.fillInTheBlankDeck.findMany({
+      where: {
+        creatorId: teacherId,
+        isArchived: false
+      },
+      include: {
+        _count: {
+          select: {
+            cards: true,
+          },
+        },
+        boundVocabularyDeck: {
+          select: {
+            id: true,
+            name: true,
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  /**
+   * Retrieves all public Fill in the Blank decks.
+   * 
+   * @returns A promise that resolves to an array of public Fill in the Blank decks.
+   */
+  async getPublicFillInTheBlankDecks(): Promise<FillInTheBlankDeck[]> {
+    return prisma.fillInTheBlankDeck.findMany({
+      where: {
+        isPublic: true,
+        isArchived: false
+      },
+      include: {
+        _count: {
+          select: {
+            cards: true,
+          },
+        },
+        creator: true,
+        boundVocabularyDeck: {
+          select: {
+            id: true,
+            name: true,
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  /**
+   * Creates a new Fill in the Blank deck for a given teacher.
+   * 
+   * @param data An object containing the necessary data to create the deck.
+   * @returns A promise that resolves to the newly created FillInTheBlankDeck object.
+   */
+  async createFillInTheBlankDeck(data: {
+    creatorId: string;
+    name: string;
+    description?: string;
+    isPublic?: boolean;
+    boundVocabularyDeckId?: string;
+  }): Promise<FillInTheBlankDeck> {
+    return prisma.fillInTheBlankDeck.create({ data });
+  },
+
+  /**
+   * Updates an existing Fill in the Blank deck.
+   * 
+   * @param deckId The UUID of the deck to update.
+   * @param teacherId The UUID of the teacher making the request.
+   * @param updateData The data to update.
+   * @returns A promise that resolves to the updated FillInTheBlankDeck object.
+   */
+  async updateFillInTheBlankDeck(
+    deckId: string,
+    teacherId: string,
+    updateData: Partial<Pick<FillInTheBlankDeck, 'name' | 'description' | 'isPublic' | 'boundVocabularyDeckId'>>
+  ): Promise<FillInTheBlankDeck> {
+    const deck = await prisma.fillInTheBlankDeck.findUnique({
+      where: { id: deckId },
+      select: { creatorId: true },
+    });
+
+    if (!deck || deck.creatorId !== teacherId) {
+      throw new AuthorizationError('Deck not found or you cannot edit it.');
+    }
+
+    return prisma.fillInTheBlankDeck.update({
+      where: { id: deckId },
+      data: updateData,
     });
   },
 
@@ -343,6 +452,33 @@ export const ContentService = {
           });
           break;
         }
+        case 'FILL_IN_THE_BLANK_EXERCISE': {
+          // Fill in the Blank exercises must reference an existing deck
+          const existingDeck = await tx.fillInTheBlankDeck.findUnique({
+            where: { id: itemData.existingDeckId },
+            select: { id: true, creatorId: true, isPublic: true },
+          });
+
+          if (!existingDeck) {
+            throw new Error('Selected Fill in the Blank deck not found.');
+          }
+
+          // Check if the teacher has access to this deck
+          if (!existingDeck.isPublic && existingDeck.creatorId !== creatorId) {
+            throw new AuthorizationError('You do not have permission to use this deck.');
+          }
+
+          newUnitItem = await tx.unitItem.create({
+            data: {
+              unitId,
+              order: newOrder,
+              type: 'FILL_IN_THE_BLANK_EXERCISE',
+              fillInTheBlankDeckId: existingDeck.id,
+              exerciseConfig: itemData.config || Prisma.JsonNull,
+            },
+          });
+          break;
+        }
         default:
           throw new Error('Invalid exercise type provided.');
       }
@@ -363,12 +499,13 @@ export const ContentService = {
         model:
           | 'vocabularyDeck'
           | 'grammarExercise'
-          | 'listeningExercise',
+          | 'listeningExercise'
+          | 'fillInTheBlankDeck',
         id: string
       ) => {
         const original = await (tx as any)[model].findUnique({
           where: { id, isArchived: false },
-          include: model === 'vocabularyDeck' ? { cards: true } : undefined,
+          include: (model === 'vocabularyDeck' || model === 'fillInTheBlankDeck') ? { cards: true } : undefined,
         });
 
         if (!original)
@@ -398,7 +535,7 @@ export const ContentService = {
           },
         });
 
-        // **Meticulous Deep Copy for Vocabulary Decks**
+        // **Meticulous Deep Copy for Vocabulary Decks and Fill in the Blank Decks**
         if (model === 'vocabularyDeck' && cards && cards.length > 0) {
           const cardsToCreate = cards.map((card: VocabularyCard) => {
             const { id: _cId, deckId: _dId, ...cardData } = card;
@@ -408,6 +545,19 @@ export const ContentService = {
             };
           });
           await tx.vocabularyCard.createMany({
+            data: cardsToCreate,
+          });
+        }
+        
+        if (model === 'fillInTheBlankDeck' && cards && cards.length > 0) {
+          const cardsToCreate = cards.map((card: FillInTheBlankCard) => {
+            const { id: _cId, deckId: _dId, ...cardData } = card;
+            return {
+              ...cardData,
+              deckId: newExercise.id, // Link to the new forked deck
+            };
+          });
+          await tx.fillInTheBlankCard.createMany({
             data: cardsToCreate,
           });
         }
@@ -422,6 +572,8 @@ export const ContentService = {
           return findAndCopy('grammarExercise', exerciseId);
         case UnitItemType.LISTENING_EXERCISE:
           return findAndCopy('listeningExercise', exerciseId);
+        case UnitItemType.FILL_IN_THE_BLANK_EXERCISE:
+          return findAndCopy('fillInTheBlankDeck', exerciseId);
         default:
           throw new Error(`Forking not supported for type: ${exerciseType}`);
       }
@@ -445,7 +597,8 @@ export const ContentService = {
       model:
         | 'vocabularyDeck'
         | 'grammarExercise'
-        | 'listeningExercise',
+        | 'listeningExercise'
+        | 'fillInTheBlankDeck',
       id: string
     ) => {
       const exercise = await (prisma[model] as any).findUnique({
@@ -472,6 +625,8 @@ export const ContentService = {
         return findAndArchive('grammarExercise', exerciseId);
       case UnitItemType.LISTENING_EXERCISE:
         return findAndArchive('listeningExercise', exerciseId);
+      case UnitItemType.FILL_IN_THE_BLANK_EXERCISE:
+        return findAndArchive('fillInTheBlankDeck', exerciseId);
       default:
         throw new Error(`Archiving not supported for type: ${exerciseType}`);
     }
@@ -549,7 +704,7 @@ export const ContentService = {
   async updateUnitItemConfig(
     unitItemId: string,
     teacherId: string,
-    config: VocabularyExerciseConfig
+    config: VocabularyExerciseConfig | FillInTheBlankExerciseConfig
   ): Promise<UnitItem> {
     const unitItem = await prisma.unitItem.findUnique({
       where: { id: unitItemId },
@@ -562,7 +717,14 @@ export const ContentService = {
       );
     }
 
-    const validatedConfig = VocabularyExerciseConfigSchema.parse(config);
+    // Validate config based on exercise type
+    let validatedConfig;
+    if (unitItem.type === 'FILL_IN_THE_BLANK_EXERCISE') {
+      validatedConfig = FillInTheBlankExerciseConfigSchema.parse(config);
+    } else {
+      validatedConfig = VocabularyExerciseConfigSchema.parse(config);
+    }
+
     const updatedUnitItem = await prisma.unitItem.update({
       where: { id: unitItemId },
       data: { exerciseConfig: validatedConfig ?? Prisma.JsonNull },
@@ -643,6 +805,12 @@ export const ContentService = {
         case 'GRAMMAR_EXERCISE':
           minDuration += 10;
           maxDuration += 20;
+          break;
+        case 'FILL_IN_THE_BLANK_EXERCISE':
+          // Similar to vocabulary but slightly longer per card for reading and thinking
+          const fibCardCount = item.fillInTheBlankDeck?._count?.cards || 0;
+          minDuration += Math.ceil(fibCardCount * 0.75); // 45s per card
+          maxDuration += Math.ceil(fibCardCount * 1.5); // 1.5m per card
           break;
         default:
           break;
@@ -795,6 +963,322 @@ export const ContentService = {
         where: { id: cardId },
       });
     });
+  },
+
+  /**
+   * Adds a new Fill in the Blank card to a specified deck.
+   */
+  async addCardToFillInTheBlankDeck(
+    deckId: string,
+    teacherId: string,
+    cardData: Omit<Prisma.FillInTheBlankCardCreateInput, 'deck'>
+  ): Promise<FillInTheBlankCard> {
+    const deck = await prisma.fillInTheBlankDeck.findUnique({
+      where: { id: deckId },
+      select: { creatorId: true },
+    });
+
+    if (!deck) {
+      throw new Error(`Fill in the Blank deck with ID ${deckId} not found.`);
+    }
+
+    if (deck.creatorId !== teacherId) {
+      throw new AuthorizationError(
+        'You are not authorized to add cards to this deck.'
+      );
+    }
+
+    return prisma.fillInTheBlankCard.create({
+      data: {
+        ...cardData,
+        deck: {
+          connect: { id: deckId },
+        },
+      },
+    });
+  },
+
+  /**
+   * Updates an existing Fill in the Blank card.
+   */
+  async updateFillInTheBlankCard(
+    cardId: string,
+    deckId: string,
+    teacherId: string,
+    cardData: Partial<Omit<Prisma.FillInTheBlankCardUpdateInput, 'deck'>>
+  ): Promise<FillInTheBlankCard> {
+    return prisma.$transaction(async (tx) => {
+      // First verify the card exists and belongs to the specified deck
+      const card = await tx.fillInTheBlankCard.findUnique({
+        where: { id: cardId },
+        include: { deck: { select: { creatorId: true, id: true } } },
+      });
+
+      if (!card) {
+        throw new Error(`Fill in the Blank card with ID ${cardId} not found.`);
+      }
+
+      if (card.deck.id !== deckId) {
+        throw new Error(`Card does not belong to deck ${deckId}.`);
+      }
+
+      if (card.deck.creatorId !== teacherId) {
+        throw new AuthorizationError(
+          'You are not authorized to update cards in this deck.'
+        );
+      }
+
+      // Update the card
+      return tx.fillInTheBlankCard.update({
+        where: { id: cardId },
+        data: cardData,
+      });
+    });
+  },
+
+  /**
+   * Deletes a Fill in the Blank card.
+   */
+  async deleteFillInTheBlankCard(
+    cardId: string,
+    deckId: string,
+    teacherId: string
+  ): Promise<void> {
+    return prisma.$transaction(async (tx) => {
+      // First verify the card exists and belongs to the specified deck
+      const card = await tx.fillInTheBlankCard.findUnique({
+        where: { id: cardId },
+        include: { deck: { select: { creatorId: true, id: true } } },
+      });
+
+      if (!card) {
+        throw new Error(`Fill in the Blank card with ID ${cardId} not found.`);
+      }
+
+      if (card.deck.id !== deckId) {
+        throw new Error(`Card does not belong to deck ${deckId}.`);
+      }
+
+      if (card.deck.creatorId !== teacherId) {
+        throw new AuthorizationError(
+          'You are not authorized to delete cards from this deck.'
+        );
+      }
+
+      // Clean up related "done" records before deleting the card
+      await tx.studentFillInTheBlankCardDone.deleteMany({
+        where: { cardId }
+      });
+
+      // Finally delete the card (this will be a soft-delete due to the Prisma extension)
+      await tx.fillInTheBlankCard.delete({
+        where: { id: cardId },
+      });
+    });
+  },
+
+  /**
+   * Bulk import method for Fill in the Blank cards.
+   */
+  async _bulkAddFillInTheBlankCards(
+    payload: z.infer<typeof BulkImportFillInTheBlankPayloadSchema>
+  ) {
+    const { deckId, cards } = payload;
+
+    const cardsToCreate = cards.map((card) => ({
+      ...card,
+      options: card.options ? card.options.split(',').map(o => o.trim()).filter(o => o) : undefined,
+      deckId,
+    }));
+
+    const result = await prisma.fillInTheBlankCard.createMany({
+      data: cardsToCreate,
+      skipDuplicates: true,
+    });
+
+    return { createdCount: result.count };
+  },
+
+  /**
+   * Auto-binds Fill in the Blank cards to vocabulary cards in the bound vocabulary deck.
+   * This is a sophisticated matching system that attempts to match the answers of Fill in the Blank
+   * cards with the English words in the vocabulary deck.
+   * 
+   * @param deckId The UUID of the Fill in the Blank deck to process.
+   * @param teacherId The UUID of the teacher making the request.
+   * @returns An object containing matches, ambiguities, and unmatched cards.
+   */
+  async autoBindVocabulary(deckId: string, teacherId: string): Promise<{
+    matches: Array<{
+      fillInTheBlankCardId: string;
+      fillInTheBlankAnswer: string;
+      vocabularyCardId: string;
+      vocabularyWord: string;
+    }>;
+    ambiguities: Array<{
+      fillInTheBlankCardId: string;
+      fillInTheBlankAnswer: string;
+      possibleMatches: Array<{
+        vocabularyCardId: string;
+        vocabularyWord: string;
+      }>;
+    }>;
+    noMatch: Array<{
+      fillInTheBlankCardId: string;
+      fillInTheBlankAnswer: string;
+    }>;
+  }> {
+    // 1. Authorize teacher owns the deck
+    const deck = await prisma.fillInTheBlankDeck.findUnique({
+      where: { id: deckId },
+      select: { 
+        creatorId: true, 
+        boundVocabularyDeckId: true,
+        cards: { 
+          select: { 
+            id: true, 
+            answer: true, 
+            boundVocabularyCardId: true 
+          } 
+        } 
+      },
+    });
+
+    if (!deck || deck.creatorId !== teacherId) {
+      throw new AuthorizationError('Fill in the Blank deck not found or you cannot edit it.');
+    }
+
+    if (!deck.boundVocabularyDeckId) {
+      throw new Error('This deck is not bound to a vocabulary deck. Please bind it first.');
+    }
+
+    // 2. Get the vocabulary cards from the bound deck
+    const vocabularyCards = await prisma.vocabularyCard.findMany({
+      where: { deckId: deck.boundVocabularyDeckId },
+      select: { id: true, englishWord: true },
+    });
+
+    // 3. Create a map of englishWord -> VocabularyCard[]
+    const vocabMap = new Map<string, Array<{ id: string; englishWord: string }>>();
+    vocabularyCards.forEach((card) => {
+      const normalizedWord = card.englishWord.toLowerCase().trim();
+      if (!vocabMap.has(normalizedWord)) {
+        vocabMap.set(normalizedWord, []);
+      }
+      vocabMap.get(normalizedWord)!.push({
+        id: card.id,
+        vocabularyWord: card.englishWord,
+      });
+    });
+
+    // 4. Process each Fill in the Blank card
+    const matches: Array<{
+      fillInTheBlankCardId: string;
+      fillInTheBlankAnswer: string;
+      vocabularyCardId: string;
+      vocabularyWord: string;
+    }> = [];
+    const ambiguities: Array<{
+      fillInTheBlankCardId: string;
+      fillInTheBlankAnswer: string;
+      possibleMatches: Array<{
+        vocabularyCardId: string;
+        vocabularyWord: string;
+      }>;
+    }> = [];
+    const noMatch: Array<{
+      fillInTheBlankCardId: string;
+      fillInTheBlankAnswer: string;
+    }> = [];
+
+    // Track cards that will be updated automatically
+    const autoUpdates: Array<{ cardId: string; vocabularyCardId: string }> = [];
+
+    for (const fibCard of deck.cards) {
+      const normalizedAnswer = fibCard.answer.toLowerCase().trim();
+      const possibleMatches = vocabMap.get(normalizedAnswer) || [];
+
+      if (possibleMatches.length === 1) {
+        // Perfect match - can be auto-bound
+        const match = possibleMatches[0];
+        matches.push({
+          fillInTheBlankCardId: fibCard.id,
+          fillInTheBlankAnswer: fibCard.answer,
+          vocabularyCardId: match.id,
+          vocabularyWord: match.vocabularyWord,
+        });
+        autoUpdates.push({
+          cardId: fibCard.id,
+          vocabularyCardId: match.id,
+        });
+      } else if (possibleMatches.length > 1) {
+        // Multiple matches - ambiguous, requires teacher input
+        ambiguities.push({
+          fillInTheBlankCardId: fibCard.id,
+          fillInTheBlankAnswer: fibCard.answer,
+          possibleMatches: possibleMatches.map(m => ({
+            vocabularyCardId: m.id,
+            vocabularyWord: m.vocabularyWord,
+          })),
+        });
+      } else {
+        // No match found
+        noMatch.push({
+          fillInTheBlankCardId: fibCard.id,
+          fillInTheBlankAnswer: fibCard.answer,
+        });
+      }
+    }
+
+    // 5. Apply automatic updates for perfect matches
+    if (autoUpdates.length > 0) {
+      await prisma.$transaction(
+        autoUpdates.map(({ cardId, vocabularyCardId }) =>
+          prisma.fillInTheBlankCard.update({
+            where: { id: cardId },
+            data: { boundVocabularyCardId: vocabularyCardId },
+          })
+        )
+      );
+    }
+
+    return { matches, ambiguities, noMatch };
+  },
+
+  /**
+   * Resolves vocabulary binding ambiguities by applying teacher selections.
+   * 
+   * @param deckId The UUID of the Fill in the Blank deck.
+   * @param teacherId The UUID of the teacher making the request.
+   * @param resolutions Array of resolutions for ambiguous cards.
+   */
+  async resolveVocabularyBindingAmbiguities(
+    deckId: string,
+    teacherId: string,
+    resolutions: Array<{
+      fillInTheBlankCardId: string;
+      vocabularyCardId: string | null; // null means don't bind this card
+    }>
+  ): Promise<void> {
+    // 1. Authorize teacher owns the deck
+    const deck = await prisma.fillInTheBlankDeck.findUnique({
+      where: { id: deckId },
+      select: { creatorId: true },
+    });
+
+    if (!deck || deck.creatorId !== teacherId) {
+      throw new AuthorizationError('Fill in the Blank deck not found or you cannot edit it.');
+    }
+
+    // 2. Apply resolutions
+    await prisma.$transaction(
+      resolutions.map(({ fillInTheBlankCardId, vocabularyCardId }) =>
+        prisma.fillInTheBlankCard.update({
+          where: { id: fillInTheBlankCardId },
+          data: { boundVocabularyCardId: vocabularyCardId },
+        })
+      )
+    );
   },
 
   /**

@@ -116,6 +116,41 @@ export const ListeningExerciseConfigSchema = z
   })
   .optional();
 
+/**
+ * Schema for fill-in-the-blank exercise configuration.
+ */
+export const FillInTheBlankExerciseConfigSchema = z
+  .object({
+    vocabularyConfidenceThreshold: z.number().min(0).max(1).optional(),
+  })
+  .optional();
+
+/**
+ * Schema for creating a new Fill in the Blank deck.
+ */
+export const CreateFillInTheBlankDeckSchema = z.object({
+  name: z.string().min(3, { message: 'Deck name must be at least 3 characters long.' }),
+  description: z.string().optional(),
+  isPublic: z.boolean().optional(),
+  boundVocabularyDeckId: z.string().uuid().optional(),
+});
+
+/**
+ * Schema for creating a new Fill in the Blank card.
+ */
+export const CreateFillInTheBlankCardSchema = z.object({
+  question: z.string().min(5, 'Question must be at least 5 characters.'),
+  answer: z.string().min(1, 'Answer cannot be empty.'),
+  options: z.array(z.string()).optional(), // For multiple choice
+  explanation: z.string().optional(),
+  boundVocabularyCardId: z.string().uuid().optional(),
+});
+
+/**
+ * Schema for updating a Fill in the Blank card.
+ */
+export const UpdateFillInTheBlankCardSchema = CreateFillInTheBlankCardSchema.partial();
+
 // --- NEW SCHEMAS ---
 
 /**
@@ -197,6 +232,19 @@ export const BulkImportSchedulesPayloadSchema = z.object({
   ),
 });
 
+export const BulkImportFillInTheBlankPayloadSchema = z.object({
+  deckId: z.string().uuid(),
+  cards: z.array(
+    z.object({
+      question: z.string(),
+      answer: z.string(),
+      options: z.string().optional(), // Comma-separated options for CSV import
+      explanation: z.string().optional(),
+      boundVocabularyCardId: z.string().uuid().optional(),
+    })
+  ),
+});
+
 /**
  * Validates the payload for adding a new item to a unit.
  * It's a discriminated union based on the `itemType`.
@@ -212,6 +260,12 @@ export const AddItemBodySchema = z.discriminatedUnion('itemType', [
     itemType: z.literal('GRAMMAR_EXERCISE'),
     exerciseId: z.string().uuid().optional(),
     // exerciseData: CreateGrammarExerciseSchema.optional(), // Add this when the schema is created
+  }),
+  z.object({
+    itemType: z.literal('FILL_IN_THE_BLANK_EXERCISE'),
+    exerciseId: z.string().uuid().optional(),
+    exerciseData: CreateFillInTheBlankDeckSchema.optional(),
+    exerciseConfig: FillInTheBlankExerciseConfigSchema,
   }),
 ]);
 

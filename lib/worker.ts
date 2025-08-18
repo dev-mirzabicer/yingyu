@@ -11,6 +11,7 @@ import {
   BulkImportSchedulesPayloadSchema,
   BulkImportStudentsPayloadSchema,
   BulkImportVocabularyPayloadSchema,
+  BulkImportFillInTheBlankPayloadSchema,
 } from './schemas';
 import { ContentService } from './actions/content';
 
@@ -117,6 +118,11 @@ export async function processPendingJobs() {
         case JobType.BULK_IMPORT_SCHEDULES: {
           const payload = BulkImportSchedulesPayloadSchema.parse(job.payload);
           resultPayload = await StudentService._bulkAddSchedules(payload);
+          break;
+        }
+        case JobType.BULK_IMPORT_FILL_IN_THE_BLANK: {
+          const payload = BulkImportFillInTheBlankPayloadSchema.parse(job.payload);
+          resultPayload = await ContentService._bulkAddFillInTheBlankCards(payload);
           break;
         }
         default:

@@ -4,6 +4,8 @@ import {
   VocabularyDeck,
   GrammarExercise,
   ListeningExercise,
+  FillInTheBlankDeck,
+  FillInTheBlankCard,
   Student,
   Payment,
   StudentDeck,
@@ -30,7 +32,8 @@ export type PopulatedUnitItem = UnitItem & {
   vocabularyDeck: (VocabularyDeck & { cards: { id: string }[] }) | null;
   grammarExercise: GrammarExercise | null;
   listeningExercise: ListeningExercise | null;
-  config?: VocabularyExerciseConfig;
+  fillInTheBlankDeck: (FillInTheBlankDeck & { cards: { id: string }[] }) | null;
+  config?: VocabularyExerciseConfig | FillInTheBlankExerciseConfig;
 };
 
 export type FullUnit = Unit & {
@@ -48,6 +51,12 @@ export type UnitWithCount = Unit & {
 };
 
 export type VocabularyDeckWithCount = VocabularyDeck & {
+  _count: {
+    cards: number;
+  };
+};
+
+export type FillInTheBlankDeckWithCount = FillInTheBlankDeck & {
   _count: {
     cards: number;
   };
@@ -153,6 +162,13 @@ export type ListeningExerciseConfig = {
 };
 
 /**
+ * Configuration for fill-in-the-blank exercises, stored in UnitItem.exerciseConfig.
+ */
+export type FillInTheBlankExerciseConfig = {
+  vocabularyConfidenceThreshold?: number; // Min vocabulary retrievability (e.g., 0.8)
+};
+
+/**
  * Progress state for listening exercises.
  */
 export type ListeningDeckProgress = {
@@ -176,10 +192,28 @@ export type ListeningDeckProgress = {
 };
 
 /**
+ * Progress state for fill-in-the-blank exercises.
+ */
+export type FillInTheBlankProgress = {
+  type: 'FILL_IN_THE_BLANK_EXERCISE';
+  stage: 'PRESENTING_CARD' | 'AWAITING_CORRECTNESS';
+  payload: {
+    /** The queue of fill-in-the-blank cards to be reviewed */
+    queue: FillInTheBlankCard[];
+    /** The full data for the current card (queue[0]) */
+    currentCardData?: FillInTheBlankCard;
+    /** The original configuration for this session */
+    config: FillInTheBlankExerciseConfig;
+    /** Static list of all card IDs included at the start of the session */
+    initialCardIds: string[];
+  };
+};
+
+/**
  * A union type representing all possible progress states for any exercise.
  * The `Session.progress` field will always conform to one of these shapes.
  */
-export type SessionProgress = VocabularyDeckProgress | ListeningDeckProgress;
+export type SessionProgress = VocabularyDeckProgress | ListeningDeckProgress | FillInTheBlankProgress;
 // | GrammarExerciseProgress etc. will be added here.
 
 /**
@@ -244,17 +278,11 @@ export type NewUnitItemData =
     };
   }
   | {
-    type: 'VOCAB_FILL_IN_BLANK_EXERCISE';
+    type: 'FILL_IN_THE_BLANK_EXERCISE';
+    mode: 'existing';
     order?: number;
-    config?: any;
-    data: {
-      title: string;
-      difficultyLevel?: number;
-      exerciseData: Prisma.InputJsonValue; // Use the correct input type
-      explanation?: string;
-      tags?: string[];
-      isPublic?: boolean;
-    };
+    config?: FillInTheBlankExerciseConfig;
+    existingDeckId: string;
   };
 
 // ================================================================= //
