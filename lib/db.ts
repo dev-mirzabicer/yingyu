@@ -8,6 +8,7 @@ const ARCHIVABLE_MODELS: Prisma.ModelName[] = [
   'GrammarExercise',
   'ListeningExercise',
   'FillInBlankExercise',
+  'FillInBlankQuestion',
 ];
 
 /**

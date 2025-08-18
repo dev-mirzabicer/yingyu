@@ -14,6 +14,7 @@ import {
   GrammarExercise,
   ListeningExercise,
   FillInBlankExercise,
+  FillInBlankQuestion,
   Prisma,
   VocabularyCard,
 } from '@prisma/client';
@@ -1256,6 +1257,652 @@ export const ContentService = {
       cards: sortedCards,
       totalMatches: cards.length,
     };
+  },
+
+  // ================================================================= //
+  // FILL-IN-BLANK QUESTION CRUD OPERATIONS
+  // ================================================================= //
+
+  /**
+   * Get fill-in-blank questions for an exercise with comprehensive filtering
+   */
+  async getFillInBlankQuestions(options: {
+    exerciseId: string;
+    teacherId: string;
+    page?: number;
+    limit?: number;
+    search?: string;
+    activeOnly?: boolean;
+    orderBy?: 'order' | 'createdAt' | 'sentence';
+    orderDirection?: 'asc' | 'desc';
+  }): Promise<{
+    questions: (FillInBlankQuestion & {
+      vocabularyCard: VocabularyCard | null;
+    })[];
+    total: number;
+    page: number;
+    totalPages: number;
+    exerciseInfo: {
+      id: string;
+      title: string;
+      placeholderToken: string;
+      vocabularyDeck: { name: string };
+    };
+  }> {
+    const {
+      exerciseId,
+      teacherId,
+      page = 1,
+      limit = 20,
+      search,
+      activeOnly = true,
+      orderBy = 'order',
+      orderDirection = 'asc',
+    } = options;
+
+    // Verify access to the exercise
+    const exercise = await prisma.fillInBlankExercise.findUnique({
+      where: { id: exerciseId },
+      include: {
+        vocabularyDeck: {
+          select: { name: true },
+        },
+      },
+    });
+
+    if (!exercise) {
+      throw new Error('Fill-in-blank exercise not found');
+    }
+
+    if (!exercise.isPublic && exercise.creatorId !== teacherId) {
+      throw new AuthorizationError('You do not have permission to access this exercise');
+    }
+
+    const skip = (page - 1) * limit;
+
+    // Build where clause
+    const where: any = {
+      exerciseId,
+    };
+
+    if (activeOnly) {
+      where.isActive = true;
+    }
+
+    if (search) {
+      where.OR = [
+        {
+          sentence: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          correctAnswer: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+      ];
+    }
+
+    // Build orderBy clause
+    const orderByClause: any = {};
+    if (orderBy === 'order') {
+      orderByClause.order = orderDirection;
+    } else if (orderBy === 'createdAt') {
+      orderByClause.createdAt = orderDirection;
+    } else if (orderBy === 'sentence') {
+      orderByClause.sentence = orderDirection;
+    }
+
+    const [questions, total] = await Promise.all([
+      prisma.fillInBlankQuestion.findMany({
+        where,
+        include: {
+          vocabularyCard: true,
+        },
+        orderBy: orderByClause,
+        skip,
+        take: limit,
+      }),
+      prisma.fillInBlankQuestion.count({ where }),
+    ]);
+
+    return {
+      questions,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      exerciseInfo: {
+        id: exercise.id,
+        title: exercise.title,
+        placeholderToken: exercise.placeholderToken,
+        vocabularyDeck: exercise.vocabularyDeck,
+      },
+    };
+  },
+
+  /**
+   * Get a specific fill-in-blank question
+   */
+  async getFillInBlankQuestion(
+    questionId: string,
+    exerciseId: string,
+    teacherId: string
+  ): Promise<FillInBlankQuestion & {
+    vocabularyCard: VocabularyCard | null;
+    exercise: {
+      id: string;
+      title: string;
+      placeholderToken: string;
+    };
+  }> {
+    const question = await prisma.fillInBlankQuestion.findUnique({
+      where: { id: questionId },
+      include: {
+        vocabularyCard: true,
+        exercise: {
+          select: {
+            id: true,
+            title: true,
+            placeholderToken: true,
+            creatorId: true,
+            isPublic: true,
+          },
+        },
+      },
+    });
+
+    if (!question) {
+      throw new Error('Fill-in-blank question not found');
+    }
+
+    if (question.exerciseId !== exerciseId) {
+      throw new Error('Question does not belong to the specified exercise');
+    }
+
+    if (!question.exercise.isPublic && question.exercise.creatorId !== teacherId) {
+      throw new AuthorizationError('You do not have permission to access this question');
+    }
+
+    return question;
+  },
+
+  /**
+   * Create a new fill-in-blank question
+   */
+  async createFillInBlankQuestion(data: {
+    exerciseId: string;
+    teacherId: string;
+    sentence: string;
+    correctAnswer: string;
+    vocabularyCardId?: string;
+    distractors?: string[];
+    difficultyLevel?: number;
+    order?: number;
+  }): Promise<FillInBlankQuestion & {
+    vocabularyCard: VocabularyCard | null;
+  }> {
+    const {
+      exerciseId,
+      teacherId,
+      sentence,
+      correctAnswer,
+      vocabularyCardId,
+      distractors = [],
+      difficultyLevel = 1,
+      order,
+    } = data;
+
+    return await prisma.$transaction(async (tx) => {
+      // Verify access to the exercise
+      const exercise = await tx.fillInBlankExercise.findUnique({
+        where: { id: exerciseId },
+        select: { id: true, creatorId: true, isPublic: true, vocabularyDeckId: true },
+      });
+
+      if (!exercise) {
+        throw new Error('Fill-in-blank exercise not found');
+      }
+
+      if (exercise.creatorId !== teacherId) {
+        throw new AuthorizationError('You do not have permission to add questions to this exercise');
+      }
+
+      // If vocabularyCardId is provided, verify it belongs to the exercise's vocabulary deck
+      if (vocabularyCardId) {
+        const card = await tx.vocabularyCard.findUnique({
+          where: { id: vocabularyCardId },
+          select: { id: true, deckId: true },
+        });
+
+        if (!card) {
+          throw new Error('Vocabulary card not found');
+        }
+
+        if (card.deckId !== exercise.vocabularyDeckId) {
+          throw new Error('Vocabulary card does not belong to the exercise\'s vocabulary deck');
+        }
+      }
+
+      // Determine the order if not provided
+      let finalOrder = order;
+      if (finalOrder === undefined) {
+        const lastQuestion = await tx.fillInBlankQuestion.findFirst({
+          where: { exerciseId },
+          orderBy: { order: 'desc' },
+          select: { order: true },
+        });
+        finalOrder = (lastQuestion?.order ?? -1) + 1;
+      }
+
+      // Create the question
+      const question = await tx.fillInBlankQuestion.create({
+        data: {
+          exerciseId,
+          sentence,
+          correctAnswer,
+          vocabularyCardId,
+          distractors,
+          difficultyLevel,
+          order: finalOrder,
+        },
+        include: {
+          vocabularyCard: true,
+        },
+      });
+
+      return question;
+    });
+  },
+
+  /**
+   * Update a fill-in-blank question
+   */
+  async updateFillInBlankQuestion(
+    questionId: string,
+    exerciseId: string,
+    teacherId: string,
+    updates: {
+      sentence?: string;
+      correctAnswer?: string;
+      vocabularyCardId?: string | null;
+      distractors?: string[];
+      difficultyLevel?: number;
+      order?: number;
+      isActive?: boolean;
+    }
+  ): Promise<FillInBlankQuestion & {
+    vocabularyCard: VocabularyCard | null;
+  }> {
+    return await prisma.$transaction(async (tx) => {
+      // Verify access to the question
+      const question = await tx.fillInBlankQuestion.findUnique({
+        where: { id: questionId },
+        include: {
+          exercise: {
+            select: { id: true, creatorId: true, vocabularyDeckId: true },
+          },
+        },
+      });
+
+      if (!question) {
+        throw new Error('Fill-in-blank question not found');
+      }
+
+      if (question.exerciseId !== exerciseId) {
+        throw new Error('Question does not belong to the specified exercise');
+      }
+
+      if (question.exercise.creatorId !== teacherId) {
+        throw new AuthorizationError('You do not have permission to update this question');
+      }
+
+      // If updating vocabularyCardId, verify it belongs to the exercise's vocabulary deck
+      if (updates.vocabularyCardId) {
+        const card = await tx.vocabularyCard.findUnique({
+          where: { id: updates.vocabularyCardId },
+          select: { id: true, deckId: true },
+        });
+
+        if (!card) {
+          throw new Error('Vocabulary card not found');
+        }
+
+        if (card.deckId !== question.exercise.vocabularyDeckId) {
+          throw new Error('Vocabulary card does not belong to the exercise\'s vocabulary deck');
+        }
+      }
+
+      // Update the question
+      const updatedQuestion = await tx.fillInBlankQuestion.update({
+        where: { id: questionId },
+        data: updates,
+        include: {
+          vocabularyCard: true,
+        },
+      });
+
+      return updatedQuestion;
+    });
+  },
+
+  /**
+   * Delete (soft-delete) a fill-in-blank question
+   */
+  async deleteFillInBlankQuestion(
+    questionId: string,
+    exerciseId: string,
+    teacherId: string
+  ): Promise<void> {
+    return await prisma.$transaction(async (tx) => {
+      // Verify access to the question
+      const question = await tx.fillInBlankQuestion.findUnique({
+        where: { id: questionId },
+        include: {
+          exercise: {
+            select: { id: true, creatorId: true },
+          },
+        },
+      });
+
+      if (!question) {
+        throw new Error('Fill-in-blank question not found');
+      }
+
+      if (question.exerciseId !== exerciseId) {
+        throw new Error('Question does not belong to the specified exercise');
+      }
+
+      if (question.exercise.creatorId !== teacherId) {
+        throw new AuthorizationError('You do not have permission to delete this question');
+      }
+
+      // Soft delete via the global extension
+      await tx.fillInBlankQuestion.delete({
+        where: { id: questionId },
+      });
+    });
+  },
+
+  /**
+   * Bulk create fill-in-blank questions
+   */
+  async bulkCreateFillInBlankQuestions(data: {
+    exerciseId: string;
+    teacherId: string;
+    questions: Array<{
+      sentence: string;
+      correctAnswer: string;
+      vocabularyCardId?: string;
+      distractors?: string[];
+      difficultyLevel?: number;
+    }>;
+  }): Promise<(FillInBlankQuestion & {
+    vocabularyCard: VocabularyCard | null;
+  })[]> {
+    const { exerciseId, teacherId, questions } = data;
+
+    return await prisma.$transaction(async (tx) => {
+      // Verify access to the exercise
+      const exercise = await tx.fillInBlankExercise.findUnique({
+        where: { id: exerciseId },
+        select: { id: true, creatorId: true, vocabularyDeckId: true },
+      });
+
+      if (!exercise) {
+        throw new Error('Fill-in-blank exercise not found');
+      }
+
+      if (exercise.creatorId !== teacherId) {
+        throw new AuthorizationError('You do not have permission to add questions to this exercise');
+      }
+
+      // Validate all vocabulary cards belong to the exercise's deck
+      const vocabularyCardIds = questions
+        .map(q => q.vocabularyCardId)
+        .filter(Boolean) as string[];
+
+      if (vocabularyCardIds.length > 0) {
+        const cards = await tx.vocabularyCard.findMany({
+          where: { id: { in: vocabularyCardIds } },
+          select: { id: true, deckId: true },
+        });
+
+        const invalidCards = cards.filter(card => card.deckId !== exercise.vocabularyDeckId);
+        if (invalidCards.length > 0) {
+          throw new Error(`Some vocabulary cards do not belong to the exercise's deck: ${invalidCards.map(c => c.id).join(', ')}`);
+        }
+
+        if (cards.length !== vocabularyCardIds.length) {
+          throw new Error('Some vocabulary cards were not found');
+        }
+      }
+
+      // Get the current max order
+      const lastQuestion = await tx.fillInBlankQuestion.findFirst({
+        where: { exerciseId },
+        orderBy: { order: 'desc' },
+        select: { order: true },
+      });
+      let currentOrder = (lastQuestion?.order ?? -1) + 1;
+
+      // Create all questions
+      const createdQuestions: (FillInBlankQuestion & {
+        vocabularyCard: VocabularyCard | null;
+      })[] = [];
+
+      for (const questionData of questions) {
+        const question = await tx.fillInBlankQuestion.create({
+          data: {
+            exerciseId,
+            sentence: questionData.sentence,
+            correctAnswer: questionData.correctAnswer,
+            vocabularyCardId: questionData.vocabularyCardId,
+            distractors: questionData.distractors || [],
+            difficultyLevel: questionData.difficultyLevel || 1,
+            order: currentOrder++,
+          },
+          include: {
+            vocabularyCard: true,
+          },
+        });
+
+        createdQuestions.push(question);
+      }
+
+      return createdQuestions;
+    });
+  },
+
+  /**
+   * Bulk update fill-in-blank questions
+   */
+  async bulkUpdateFillInBlankQuestions(data: {
+    exerciseId: string;
+    teacherId: string;
+    updates: Array<{
+      id: string;
+      sentence?: string;
+      correctAnswer?: string;
+      vocabularyCardId?: string | null;
+      distractors?: string[];
+      difficultyLevel?: number;
+      isActive?: boolean;
+    }>;
+  }): Promise<(FillInBlankQuestion & {
+    vocabularyCard: VocabularyCard | null;
+  })[]> {
+    const { exerciseId, teacherId, updates } = data;
+
+    return await prisma.$transaction(async (tx) => {
+      // Verify access to the exercise
+      const exercise = await tx.fillInBlankExercise.findUnique({
+        where: { id: exerciseId },
+        select: { id: true, creatorId: true, vocabularyDeckId: true },
+      });
+
+      if (!exercise) {
+        throw new Error('Fill-in-blank exercise not found');
+      }
+
+      if (exercise.creatorId !== teacherId) {
+        throw new AuthorizationError('You do not have permission to update questions in this exercise');
+      }
+
+      // Validate all questions belong to the exercise
+      const questionIds = updates.map(u => u.id);
+      const questions = await tx.fillInBlankQuestion.findMany({
+        where: { id: { in: questionIds } },
+        select: { id: true, exerciseId: true },
+      });
+
+      const invalidQuestions = questions.filter(q => q.exerciseId !== exerciseId);
+      if (invalidQuestions.length > 0) {
+        throw new Error(`Some questions do not belong to the specified exercise: ${invalidQuestions.map(q => q.id).join(', ')}`);
+      }
+
+      if (questions.length !== questionIds.length) {
+        throw new Error('Some questions were not found');
+      }
+
+      // Validate vocabulary cards if provided
+      const vocabularyCardIds = updates
+        .map(u => u.vocabularyCardId)
+        .filter(id => id !== null && id !== undefined) as string[];
+
+      if (vocabularyCardIds.length > 0) {
+        const cards = await tx.vocabularyCard.findMany({
+          where: { id: { in: vocabularyCardIds } },
+          select: { id: true, deckId: true },
+        });
+
+        const invalidCards = cards.filter(card => card.deckId !== exercise.vocabularyDeckId);
+        if (invalidCards.length > 0) {
+          throw new Error(`Some vocabulary cards do not belong to the exercise's deck: ${invalidCards.map(c => c.id).join(', ')}`);
+        }
+      }
+
+      // Update all questions
+      const updatedQuestions: (FillInBlankQuestion & {
+        vocabularyCard: VocabularyCard | null;
+      })[] = [];
+
+      for (const updateData of updates) {
+        const { id, ...updateFields } = updateData;
+        const question = await tx.fillInBlankQuestion.update({
+          where: { id },
+          data: updateFields,
+          include: {
+            vocabularyCard: true,
+          },
+        });
+
+        updatedQuestions.push(question);
+      }
+
+      return updatedQuestions;
+    });
+  },
+
+  /**
+   * Bulk delete fill-in-blank questions
+   */
+  async bulkDeleteFillInBlankQuestions(data: {
+    exerciseId: string;
+    teacherId: string;
+    questionIds: string[];
+  }): Promise<number> {
+    const { exerciseId, teacherId, questionIds } = data;
+
+    return await prisma.$transaction(async (tx) => {
+      // Verify access to the exercise
+      const exercise = await tx.fillInBlankExercise.findUnique({
+        where: { id: exerciseId },
+        select: { id: true, creatorId: true },
+      });
+
+      if (!exercise) {
+        throw new Error('Fill-in-blank exercise not found');
+      }
+
+      if (exercise.creatorId !== teacherId) {
+        throw new AuthorizationError('You do not have permission to delete questions from this exercise');
+      }
+
+      // Validate all questions belong to the exercise
+      const questions = await tx.fillInBlankQuestion.findMany({
+        where: { 
+          id: { in: questionIds },
+          exerciseId,
+        },
+        select: { id: true },
+      });
+
+      if (questions.length !== questionIds.length) {
+        throw new Error('Some questions were not found or do not belong to the exercise');
+      }
+
+      // Soft delete via the global extension
+      const result = await tx.fillInBlankQuestion.deleteMany({
+        where: { id: { in: questionIds } },
+      });
+
+      return result.count;
+    });
+  },
+
+  /**
+   * Reorder fill-in-blank questions
+   */
+  async reorderFillInBlankQuestions(
+    exerciseId: string,
+    teacherId: string,
+    questionIds: string[]
+  ): Promise<void> {
+    return await prisma.$transaction(async (tx) => {
+      // Verify access to the exercise
+      const exercise = await tx.fillInBlankExercise.findUnique({
+        where: { id: exerciseId },
+        select: { id: true, creatorId: true },
+      });
+
+      if (!exercise) {
+        throw new Error('Fill-in-blank exercise not found');
+      }
+
+      if (exercise.creatorId !== teacherId) {
+        throw new AuthorizationError('You do not have permission to reorder questions in this exercise');
+      }
+
+      // Validate all questions belong to the exercise
+      const questions = await tx.fillInBlankQuestion.findMany({
+        where: { 
+          exerciseId,
+          isActive: true, // Only consider active questions for reordering
+        },
+        select: { id: true },
+      });
+
+      const existingQuestionIds = new Set(questions.map(q => q.id));
+      const providedQuestionIds = new Set(questionIds);
+
+      if (existingQuestionIds.size !== providedQuestionIds.size || 
+          !questionIds.every(id => existingQuestionIds.has(id))) {
+        throw new Error("Provided question IDs do not match the exercise's current active questions");
+      }
+
+      // Update the order for each question
+      const updatePromises = questionIds.map((questionId, index) =>
+        tx.fillInBlankQuestion.update({
+          where: { id: questionId },
+          data: { order: index },
+        })
+      );
+
+      await Promise.all(updatePromises);
+    });
   },
 };
 
