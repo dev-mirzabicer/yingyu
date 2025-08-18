@@ -149,7 +149,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     } catch (error) {
       toast({
         title: "Error",
-        description: progress?.type === 'LISTENING_EXERCISE' 
+        description: progress?.type === 'LISTENING_EXERCISE'
           ? "Failed to play audio. Please try again."
           : "Failed to reveal answer. Please try again.",
         variant: "destructive",
@@ -190,7 +190,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
       if (action === 'SUBMIT_RATING' || action === 'MARK_CORRECT' || action === 'MARK_INCORRECT') {
         incrementReviewCount() // Optimistic update
       }
-      
+
       const payload: AnswerPayload = { action: action as any, data }
       const result = await submitAnswer(sessionId, payload)
       if (result.data.newState.progress) {
@@ -399,7 +399,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
                 {progressData.reviewsCompleted > progressData.uniqueCardsEncountered && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded p-2">
                     <div className="text-xs text-yellow-700 font-medium">
-                       Cards Cycling
+                      Cards Cycling
                     </div>
                     <div className="text-xs text-yellow-600">
                       {progressData.reviewsCompleted - progressData.uniqueCardsEncountered} repeat reviews
@@ -412,27 +412,27 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                       <div className="flex justify-between">
                         <span className="text-slate-500">Stability:</span>
-                        <span className="font-medium text-slate-700">{progressData.currentCard.stability.toFixed(2)}</span>
+                        <span className="font-medium text-slate-700">{progressData.currentCard.stability?.toFixed(2) || "?"}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Difficulty:</span>
-                        <span className="font-medium text-slate-700">{progressData.currentCard.difficulty.toFixed(2)}</span>
+                        <span className="font-medium text-slate-700">{progressData.currentCard.difficulty?.toFixed(2) || "?"}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Reps:</span>
-                        <span className="font-medium text-slate-700">{progressData.currentCard.reps}</span>
+                        <span className="font-medium text-slate-700">{progressData.currentCard.reps} || "?"</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Lapses:</span>
-                        <span className="font-medium text-slate-700">{progressData.currentCard.lapses}</span>
+                        <span className="font-medium text-slate-700">{progressData.currentCard.lapses || "?"}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">State:</span>
-                        <Badge variant="outline" className="text-xs">{progressData.currentCard.state}</Badge>
+                        <Badge variant="outline" className="text-xs">{progressData.currentCard.state || "?"}</Badge>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Due:</span>
-                        <span className="font-medium text-slate-700">{format(new Date(progressData.currentCard.due), "MMM dd, yyyy")}</span>
+                        <span className="font-medium text-slate-700">{format(new Date(progressData.currentCard.due), "MMM dd, yyyy") || "?"}</span>
                       </div>
                     </div>
                   </div>
