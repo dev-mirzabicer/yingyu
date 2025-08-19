@@ -258,7 +258,7 @@ export function FillInTheBlankCardManager({ deckId, deck, isReadOnly = false }: 
   }
 
   const handleAutoBinding = async () => {
-    if (!deck.boundVocabularyDeckId) {
+    if (!deck.boundVocabularyDeck) {
       toast({
         title: "No vocabulary deck bound",
         description: "This deck must be bound to a vocabulary deck to use auto-binding.",

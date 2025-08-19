@@ -55,7 +55,7 @@ export async function GET(
       return apiResponse(403, null, 'You do not have access to this deck');
     }
 
-    return apiResponse(200, { deck }, null);
+    return apiResponse(200, deck, null);
   } catch (error) {
     return handleApiError(error);
   }
@@ -78,7 +78,7 @@ export async function PUT(
 
     const deck = await ContentService.updateFillInTheBlankDeck(deckId, teacherId, validatedData);
 
-    return apiResponse(200, { deck }, null);
+    return apiResponse(200, deck, null);
   } catch (error) {
     return handleApiError(error);
   }

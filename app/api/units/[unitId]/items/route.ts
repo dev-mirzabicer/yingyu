@@ -52,15 +52,14 @@ const AddItemBodySchema = z.union([
     }),
   }),
   z.object({
-    type: z.literal('VOCAB_FILL_IN_BLANK_EXERCISE'),
-    data: z.object({
-      title: z.string().min(1),
-      difficultyLevel: z.number().int().min(1).max(5).optional(),
-      exerciseData: z.any(),
-      explanation: z.string().optional(),
-      tags: z.array(z.string()).optional(),
-      isPublic: z.boolean().optional(),
-    }),
+    type: z.literal('FILL_IN_THE_BLANK_EXERCISE'),
+    mode: z.literal('existing'),
+    order: z.number().optional(),
+    existingDeckId: z.string().uuid(),
+    config: z.object({
+      deckId: z.string().uuid(),
+      vocabularyConfidenceThreshold: z.number().min(0).max(1).optional(),
+    }).optional(),
   }),
 ]);
 
