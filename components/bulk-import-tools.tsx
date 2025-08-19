@@ -22,7 +22,7 @@ import {
   bulkImportSchedules,
   bulkImportStudents,
 } from "@/hooks/api/students";
-import { bulkImportVocabulary } from "@/hooks/api/content";
+import { bulkImportVocabulary, bulkImportFillInTheBlankCards } from "@/hooks/api/content";
 import {
   Upload,
   Download,
@@ -45,6 +45,7 @@ import { BulkImportResult, BulkImportError } from "@/lib/types";
 import { BulkImportResultSchema } from "@/lib/schemas/jobs";
 
 interface BulkImportToolsProps {
+  type?: 'vocabulary' | 'students' | 'schedules' | 'fill-in-the-blank';
   deckId?: string;
   onComplete?: () => void;
 }
@@ -105,13 +106,24 @@ const importTemplates = {
       },
     ],
   },
+  "fill-in-the-blank": {
+    name: "Fill in the Blank Cards",
+    description: "Import questions, answers, and optional choices",
+    requiredFields: ["question", "answer"],
+    optionalFields: ["options", "explanation"],
+    sampleData: [
+      {
+        question: "The sky is ____.",
+        answer: "blue",
+        options: "blue,red,green,yellow",
+        explanation: "The sky appears blue due to light scattering.",
+      },
+    ],
+  },
 };
 
-export function BulkImportTools({ deckId }: BulkImportToolsProps) {
-  const [selectedTemplate,
-    setSelectedTemplate] = useState<keyof typeof importTemplates>(
-    "vocabulary"
-  );
+export function BulkImportTools({ type = "vocabulary", deckId, onComplete }: BulkImportToolsProps) {
+  const [selectedTemplate, setSelectedTemplate] = useState<keyof typeof importTemplates>(type);
   const [jobId, setJobId] = useState<string | null>(null);
   const [importedData, setImportedData] = useState<BulkImportResult | null>(
     null
@@ -245,6 +257,17 @@ export function BulkImportTools({ deckId }: BulkImportToolsProps) {
           break;
         case "schedules":
           response = await bulkImportSchedules(previewData);
+          break;
+        case "fill-in-the-blank":
+          if (!deckId) {
+            toast({
+              title: "Cannot import fill-in-the-blank cards",
+              description: "No deck selected.",
+              variant: "destructive",
+            });
+            return;
+          }
+          response = await bulkImportFillInTheBlankCards(deckId, previewData);
           break;
         default:
           throw new Error("Invalid template selected");

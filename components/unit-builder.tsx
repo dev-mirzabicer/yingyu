@@ -27,6 +27,7 @@ import {
   BookOpen,
   Volume2,
   PenTool,
+  PencilLine,
   Brain,
   Target,
   Settings,
@@ -38,6 +39,7 @@ import {
   useUnits,
   useUnit,
   useDecks,
+  useFillInTheBlankDecks,
   createUnit,
   updateUnit,
   addExerciseToUnit,
@@ -126,6 +128,17 @@ const unitItemTemplates: UnitItemTemplate[] = [
       difficulty: "INTERMEDIATE",
     },
   },
+  {
+    id: "fill-in-the-blank",
+    type: "FILL_IN_THE_BLANK_EXERCISE",
+    title: "Fill in the Blank",
+    description: "Sentence completion practice",
+    icon: PencilLine,
+    defaultConfig: {
+      deckId: "",
+      vocabularyConfidenceThreshold: 0.8,
+    },
+  },
 ]
 
 const difficultyLevels = [
@@ -140,6 +153,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
   const { mutate: mutateUnits } = useUnits() // Keep for mutation
   const { unit: fullUnitData, isLoading: isUnitLoading } = useUnit(unitId || ""); // Use the specific hook
   const { decks } = useDecks()
+  const { decks: fillInTheBlankDecks } = useFillInTheBlankDecks()
 
   const [unitData, setUnitData] = useState({
     name: "",
@@ -419,6 +433,18 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
                 tags: [],
                 isPublic: false,
               },
+            }
+          } else if (item.type === 'FILL_IN_THE_BLANK_EXERCISE') {
+            // Fill in the blank exercises always reference existing decks
+            if (!item.config.deckId) {
+              throw new Error(`Fill-in-the-blank exercise "${item.title}" must have a deck selected.`)
+            }
+            itemData = {
+              type: 'FILL_IN_THE_BLANK_EXERCISE',
+              order: item.order,
+              config: item.config,
+              mode: 'existing',
+              existingDeckId: item.config.deckId,
             }
           } else {
             // This should not happen with current exercise types
@@ -777,56 +803,75 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
       </div>
     )
 
-    const renderFillInBlankConfig = () => (
+    const renderFillInTheBlankConfig = () => (
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="blankTitle">Exercise Title *</Label>
-          <Input
-            id="blankTitle"
-            value={editingItem.config.title || ""}
-            onChange={(e) =>
+          <Label htmlFor="fillInTheBlankDeckId">Fill-in-the-Blank Deck *</Label>
+          <Select
+            value={editingItem.config.deckId || ""}
+            onValueChange={(value) =>
               setEditingItem({
                 ...editingItem,
-                title: e.target.value,
-                config: { ...editingItem.config, title: e.target.value },
+                config: { ...editingItem.config, deckId: value },
               })
             }
-            placeholder="Enter exercise title"
-          />
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select a fill-in-the-blank deck" />
+            </SelectTrigger>
+            <SelectContent>
+              {fillInTheBlankDecks.map((deck) => (
+                <SelectItem key={deck.id} value={deck.id}>
+                  {deck.name} ({deck._count?.cards || 0} cards)
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-sm text-slate-500">
+            Students will practice with fill-in-the-blank cards from this deck
+          </p>
         </div>
 
-        <FillInBlankExerciseEditor
-          sentences={editingItem.config.sentences || []}
-          wordBank={editingItem.config.wordBank || []}
-          onSentencesChange={(sentences) => {
-            setEditingItem({
-              ...editingItem,
-              config: { ...editingItem.config, sentences },
-            })
-          }}
-          onWordBankChange={(wordBank) => {
-            setEditingItem({
-              ...editingItem,
-              config: { ...editingItem.config, wordBank },
-            })
-          }}
-        />
-
-        <div className="flex items-center justify-between pt-4 border-t">
-          <div className="space-y-1">
-            <Label>Allow Word Bank</Label>
-            <p className="text-sm text-slate-500">Show word bank to help students</p>
-          </div>
-          <Switch
-            checked={editingItem.config.allowWordBank ?? true}
-            onCheckedChange={(checked) =>
-              setEditingItem({
-                ...editingItem,
-                config: { ...editingItem.config, allowWordBank: checked },
-              })
-            }
-          />
-        </div>
+        {/* Conditional Vocabulary Confidence Threshold */}
+        {(() => {
+          const selectedDeck = fillInTheBlankDecks.find(deck => deck.id === editingItem.config.deckId)
+          const hasVocabularyBinding = selectedDeck && selectedDeck.boundVocabularyDeckId
+          
+          if (!hasVocabularyBinding) return null
+          
+          return (
+            <div className="space-y-2">
+              <Label htmlFor="vocabularyConfidenceThreshold">
+                Vocabulary Confidence Threshold ({editingItem.config.vocabularyConfidenceThreshold || 0.8})
+              </Label>
+              <div className="px-3">
+                <input
+                  id="vocabularyConfidenceThreshold"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={editingItem.config.vocabularyConfidenceThreshold || 0.8}
+                  onChange={(e) =>
+                    setEditingItem({
+                      ...editingItem,
+                      config: { ...editingItem.config, vocabularyConfidenceThreshold: parseFloat(e.target.value) },
+                    })
+                  }
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-slate-500 mt-1">
+                  <span>0.0 (All words)</span>
+                  <span>1.0 (Only confident)</span>
+                </div>
+              </div>
+              <p className="text-sm text-slate-500">
+                Only show fill-in-the-blank cards where the student's vocabulary confidence is above this threshold.
+                This deck is bound to a vocabulary deck, enabling smart card filtering.
+              </p>
+            </div>
+          )
+        })()}
       </div>
     )
 
@@ -841,6 +886,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               {editingItem.type === "VOCABULARY_DECK" && renderVocabularyDeckConfig()}
               {editingItem.type === "LISTENING_EXERCISE" && renderListeningExerciseConfig()}
               {editingItem.type === "GRAMMAR_EXERCISE" && renderGrammarExerciseConfig()}
+              {editingItem.type === "FILL_IN_THE_BLANK_EXERCISE" && renderFillInTheBlankConfig()}
 
               <Separator />
 
@@ -1150,6 +1196,26 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
                                           </p>
                                         </div>
                                       )}
+                                      {item.type === "FILL_IN_THE_BLANK_EXERCISE" && (
+                                        <div className="space-y-1">
+                                          <p>
+                                            <strong>Deck:</strong>{" "}
+                                            {fillInTheBlankDecks.find((d) => d.id === item.config.deckId)?.name || "Not selected"}
+                                          </p>
+                                          {(() => {
+                                            const selectedDeck = fillInTheBlankDecks.find(deck => deck.id === item.config.deckId)
+                                            const hasVocabularyBinding = selectedDeck && selectedDeck.boundVocabularyDeckId
+                                            
+                                            if (!hasVocabularyBinding) return null
+                                            
+                                            return (
+                                              <p>
+                                                <strong>Vocab Threshold:</strong> {item.config.vocabularyConfidenceThreshold || 0.8}
+                                              </p>
+                                            )
+                                          })()}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 )}
@@ -1176,6 +1242,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
         (item) =>
           (item.type === "VOCABULARY_DECK" && !item.config.deckId) ||
           (item.type === "LISTENING_EXERCISE" && !item.config.deckId) ||
+          (item.type === "FILL_IN_THE_BLANK_EXERCISE" && !item.config.deckId) ||
           !item.config.title,
       ) && (
           <Alert>

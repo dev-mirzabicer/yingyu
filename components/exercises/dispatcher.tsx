@@ -5,6 +5,7 @@ import { ComponentType } from "react"
 import { ExerciseProps, VocabularyExercise } from "./VocabularyExercise"
 import { GrammarExercise } from "./GrammarExercise"
 import { ListeningExercise } from "./ListeningExercise"
+import { FillInTheBlankExercise } from "./FillInTheBlankExercise"
 import { UnsupportedExercise } from "./UnsupportedExercise"
 import { BookOpen, FileText, Mic, PencilLine } from "lucide-react"
 import { Card, CardContent } from "../ui/card"
@@ -40,9 +41,7 @@ export const exerciseDispatcher: Record<
   [UnitItemType.VOCABULARY_DECK]: VocabularyExercise,
   [UnitItemType.GRAMMAR_EXERCISE]: GrammarExercise,
   [UnitItemType.LISTENING_EXERCISE]: ListeningExercise,
-  [UnitItemType.FILL_IN_THE_BLANK_EXERCISE]: (props: ExerciseProps) => (
-    <UnsupportedExercise type={UnitItemType.FILL_IN_THE_BLANK_EXERCISE} />
-  ),
+  [UnitItemType.FILL_IN_THE_BLANK_EXERCISE]: FillInTheBlankExercise,
 }
 
 export function getExerciseComponent(

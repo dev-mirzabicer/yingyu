@@ -10,7 +10,7 @@ import { Clock, ArrowLeft, Pause, Play, CheckCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { useSession, submitAnswer, endSession } from "@/hooks/api/sessions"
-import { AnswerPayload, VocabularyDeckProgress, ListeningDeckProgress, SessionProgress } from "@/lib/types"
+import { AnswerPayload, VocabularyDeckProgress, ListeningDeckProgress, FillInTheBlankProgress, SessionProgress } from "@/lib/types"
 import { formatTime } from "@/lib/utils"
 import { useLiveSessionStore } from "@/hooks/stores/use-live-session-store"
 import { getExerciseComponent, exerciseTypeInfo } from "@/components/exercises/dispatcher"
@@ -22,6 +22,8 @@ interface LiveSessionProps {
 }
 
 type Rating = 1 | 2 | 3 | 4
+type CorrectnessRating = { isCorrect: boolean }
+type AnyRating = Rating | CorrectnessRating
 type EnrichedStudentCardState = StudentCardState & { card: VocabularyCard };
 
 export function LiveSession({ sessionId }: LiveSessionProps) {
@@ -83,6 +85,14 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
         newCards: queue.filter(c => c.state === 'NEW').length,
         learningCards: queue.filter(c => c.state === 'LEARNING' || c.state === 'RELEARNING').length,
         reviewCards: queue.filter(c => c.state === 'REVIEW').length,
+      };
+    } else if (progress.type === 'FILL_IN_THE_BLANK_EXERCISE') {
+      // Fill in the blank exercises have a simple queue structure
+      queueAnalysis = {
+        totalInQueue: queue.length,
+        newCards: 0, // Fill in the blank cards don't have FSRS states
+        learningCards: 0,
+        reviewCards: queue.length, // All cards are considered review
       };
     } else {
       queueAnalysis = { totalInQueue: queue.length, newCards: 0, learningCards: 0, reviewCards: 0 };
@@ -151,7 +161,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     }
   }
 
-  const handleRating = async (rating: Rating) => {
+  const handleRating = async (rating: AnyRating) => {
     if (!session) return
 
     setActionLoading(true)

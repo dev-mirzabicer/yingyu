@@ -23,7 +23,7 @@ type Rating = 1 | 2 | 3 | 4 // Again, Hard, Good, Easy
 export interface ExerciseProps {
   sessionState: FullSessionState
   onRevealAnswer: () => void
-  onSubmitRating: (rating: Rating) => void
+  onSubmitRating: (rating: any) => void // Made generic to support both numeric and boolean ratings
   isLoading: boolean
 }
 

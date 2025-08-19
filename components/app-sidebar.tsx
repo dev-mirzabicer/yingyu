@@ -44,6 +44,7 @@ import {
   ChevronUp,
   Bell,
   HelpCircle,
+  PencilLine,
 } from "lucide-react"
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> { }
@@ -74,6 +75,12 @@ const navigationItems = [
         url: "/decks",
         icon: BookOpen,
         badge: null,
+      },
+      {
+        title: "Fill in the Blanks",
+        url: "/fill-in-the-blanks",
+        icon: PencilLine,
+        badge: "New",
       },
       {
         title: "Units",
