@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "UnitItemType" ADD VALUE 'FILL_IN_THE_BLANK_EXERCISE';
