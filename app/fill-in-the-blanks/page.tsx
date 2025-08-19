@@ -371,15 +371,15 @@ export default function FillInTheBlanksPage() {
             <div className="space-y-2">
               <Label htmlFor="vocab-deck-binding">Bind to Vocabulary Deck (Optional)</Label>
               <Select 
-                value={newDeck.boundVocabularyDeckId} 
-                onValueChange={(value) => setNewDeck({ ...newDeck, boundVocabularyDeckId: value })}
+                value={newDeck.boundVocabularyDeckId || "none"} 
+                onValueChange={(value) => setNewDeck({ ...newDeck, boundVocabularyDeckId: value === "none" ? "" : value })}
                 disabled={isSubmitting || vocabularyDecksLoading}
               >
                 <SelectTrigger id="vocab-deck-binding">
                   <SelectValue placeholder="Select a vocabulary deck..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No binding</SelectItem>
+                  <SelectItem value="none">No binding</SelectItem>
                   {vocabularyDecks.map(deck => (
                     <SelectItem key={deck.id} value={deck.id}>
                       {deck.name} ({deck._count?.cards || 0} cards)
