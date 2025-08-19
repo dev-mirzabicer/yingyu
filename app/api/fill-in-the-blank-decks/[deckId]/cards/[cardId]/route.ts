@@ -4,18 +4,17 @@ import { ContentService } from '@/lib/actions/content';
 import { UpdateFillInTheBlankCardSchema } from '@/lib/schemas';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
 
-interface RouteContext {
-  params: { deckId: string; cardId: string };
-}
-
 /**
  * PUT /api/fill-in-the-blank-decks/[deckId]/cards/[cardId]
  * Updates a specific Fill in the Blank card.
  */
-export async function PUT(request: NextRequest, { params }: RouteContext) {
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ deckId: string; cardId: string }> }
+) {
   try {
     const teacherId = await requireAuth(request);
-    const { deckId, cardId } = params;
+    const { deckId, cardId } = await params;
     
     const body = await request.json();
     const validatedData = UpdateFillInTheBlankCardSchema.parse(body);
@@ -37,10 +36,13 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
  * DELETE /api/fill-in-the-blank-decks/[deckId]/cards/[cardId]
  * Deletes a specific Fill in the Blank card.
  */
-export async function DELETE(request: NextRequest, { params }: RouteContext) {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ deckId: string; cardId: string }> }
+) {
   try {
     const teacherId = await requireAuth(request);
-    const { deckId, cardId } = params;
+    const { deckId, cardId } = await params;
 
     await ContentService.deleteFillInTheBlankCard(cardId, deckId, teacherId);
 

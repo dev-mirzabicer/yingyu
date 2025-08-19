@@ -6,18 +6,17 @@ import { apiResponse, handleApiError } from '@/lib/api-utils';
 import { UnitItemType } from '@prisma/client';
 import { prisma } from '@/lib/db';
 
-interface RouteContext {
-  params: { deckId: string };
-}
-
 /**
  * GET /api/fill-in-the-blank-decks/[deckId]
  * Retrieves a specific Fill in the Blank deck with its cards.
  */
-export async function GET(request: NextRequest, { params }: RouteContext) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ deckId: string }> }
+) {
   try {
     const teacherId = await requireAuth(request);
-    const { deckId } = params;
+    const { deckId } = await params;
 
     const deck = await prisma.fillInTheBlankDeck.findUnique({
       where: { id: deckId },
@@ -66,10 +65,13 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
  * PUT /api/fill-in-the-blank-decks/[deckId]
  * Updates a Fill in the Blank deck.
  */
-export async function PUT(request: NextRequest, { params }: RouteContext) {
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ deckId: string }> }
+) {
   try {
     const teacherId = await requireAuth(request);
-    const { deckId } = params;
+    const { deckId } = await params;
     
     const body = await request.json();
     const validatedData = CreateFillInTheBlankDeckSchema.partial().parse(body);
@@ -86,10 +88,13 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
  * DELETE /api/fill-in-the-blank-decks/[deckId]
  * Archives (soft-deletes) a Fill in the Blank deck.
  */
-export async function DELETE(request: NextRequest, { params }: RouteContext) {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ deckId: string }> }
+) {
   try {
     const teacherId = await requireAuth(request);
-    const { deckId } = params;
+    const { deckId } = await params;
 
     const archivedDeck = await ContentService.archiveExercise(
       UnitItemType.FILL_IN_THE_BLANK_EXERCISE,

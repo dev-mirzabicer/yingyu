@@ -4,19 +4,18 @@ import { ContentService } from '@/lib/actions/content';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
 import { z } from 'zod';
 
-interface RouteContext {
-  params: { deckId: string };
-}
-
 /**
  * POST /api/fill-in-the-blank-decks/[deckId]/bind
  * Auto-binds Fill in the Blank cards to vocabulary cards in the bound vocabulary deck.
  * Returns matches, ambiguities, and cards with no matches.
  */
-export async function POST(request: NextRequest, { params }: RouteContext) {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ deckId: string }> }
+) {
   try {
     const teacherId = await requireAuth(request);
-    const { deckId } = params;
+    const { deckId } = await params;
 
     const result = await ContentService.autoBindVocabulary(deckId, teacherId);
 
@@ -39,10 +38,13 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
  * PUT /api/fill-in-the-blank-decks/[deckId]/bind
  * Resolves vocabulary binding ambiguities by applying teacher selections.
  */
-export async function PUT(request: NextRequest, { params }: RouteContext) {
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ deckId: string }> }
+) {
   try {
     const teacherId = await requireAuth(request);
-    const { deckId } = params;
+    const { deckId } = await params;
     
     const body = await request.json();
     
