@@ -6,7 +6,7 @@ import { ExerciseProps, VocabularyExercise } from "./VocabularyExercise"
 import { GrammarExercise } from "./GrammarExercise"
 import { ListeningExercise } from "./ListeningExercise"
 import { UnsupportedExercise } from "./UnsupportedExercise"
-import { BookOpen, FileText, Mic } from "lucide-react"
+import { BookOpen, FileText, Mic, PencilLine } from "lucide-react"
 import { Card, CardContent } from "../ui/card"
 
 // Exercise type information mapping - modular and extensible
@@ -26,6 +26,11 @@ export const exerciseTypeInfo = {
     icon: Mic,
     color: "bg-purple-100 text-purple-700",
   },
+  [UnitItemType.FILL_IN_THE_BLANK_EXERCISE]: {
+    label: "Fill in the Blank",
+    icon: PencilLine,
+    color: "bg-orange-100 text-orange-700",
+  },
 }
 
 export const exerciseDispatcher: Record<
@@ -35,6 +40,9 @@ export const exerciseDispatcher: Record<
   [UnitItemType.VOCABULARY_DECK]: VocabularyExercise,
   [UnitItemType.GRAMMAR_EXERCISE]: GrammarExercise,
   [UnitItemType.LISTENING_EXERCISE]: ListeningExercise,
+  [UnitItemType.FILL_IN_THE_BLANK_EXERCISE]: (props: ExerciseProps) => (
+    <UnsupportedExercise type={UnitItemType.FILL_IN_THE_BLANK_EXERCISE} />
+  ),
 }
 
 export function getExerciseComponent(

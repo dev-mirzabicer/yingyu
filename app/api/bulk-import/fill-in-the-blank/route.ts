@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { JobService } from '@/lib/actions/jobs';
 import { BulkImportFillInTheBlankPayloadSchema } from '@/lib/schemas';
-import { apiResponse, apiError } from '@/lib/api-utils';
+import { apiResponse, handleApiError } from '@/lib/api-utils';
 
 /**
  * POST /api/bulk-import/fill-in-the-blank
@@ -22,18 +22,19 @@ import { apiResponse, apiError } from '@/lib/api-utils';
  */
 export async function POST(request: NextRequest) {
   try {
-    const { teacherId } = await requireAuth(request);
+    const teacherId = await requireAuth(request);
     
     const body = await request.json();
     const validatedPayload = BulkImportFillInTheBlankPayloadSchema.parse(body);
 
     // Create a background job for bulk import
-    const job = await JobService.createJob(teacherId, {
-      type: 'BULK_IMPORT_FILL_IN_THE_BLANK',
-      payload: validatedPayload,
-    });
+    const job = await JobService.createJob(
+      teacherId,
+      'BULK_IMPORT_FILL_IN_THE_BLANK',
+      validatedPayload
+    );
 
-    return apiResponse({ 
+    return apiResponse(202, { 
       job: {
         id: job.id,
         status: job.status,
@@ -41,8 +42,8 @@ export async function POST(request: NextRequest) {
       },
       message: `Bulk import job created for ${validatedPayload.cards.length} Fill in the Blank cards.`,
       cardsToImport: validatedPayload.cards.length,
-    }, { status: 202 }); // 202 Accepted for async processing
+    }, null); // 202 Accepted for async processing
   } catch (error) {
-    return apiError(error, 'Failed to create bulk import job for Fill in the Blank cards');
+    return handleApiError(error);
   }
 }

@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { ContentService } from '@/lib/actions/content';
 import { CreateFillInTheBlankDeckSchema } from '@/lib/schemas';
-import { apiResponse, apiError } from '@/lib/api-utils';
+import { apiResponse, handleApiError } from '@/lib/api-utils';
 import { UnitItemType } from '@prisma/client';
 import { prisma } from '@/lib/db';
 
@@ -16,7 +16,7 @@ interface RouteContext {
  */
 export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
-    const { teacherId } = await requireAuth(request);
+    const teacherId = await requireAuth(request);
     const { deckId } = params;
 
     const deck = await prisma.fillInTheBlankDeck.findUnique({
@@ -48,17 +48,17 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     });
 
     if (!deck) {
-      return apiError(new Error('Deck not found'), 'Fill in the Blank deck not found', { status: 404 });
+      return apiResponse(404, null, 'Fill in the Blank deck not found');
     }
 
     // Check if teacher has access (either owner or public deck)
     if (!deck.isPublic && deck.creatorId !== teacherId) {
-      return apiError(new Error('Access denied'), 'You do not have access to this deck', { status: 403 });
+      return apiResponse(403, null, 'You do not have access to this deck');
     }
 
-    return apiResponse({ deck });
+    return apiResponse(200, { deck }, null);
   } catch (error) {
-    return apiError(error, 'Failed to fetch Fill in the Blank deck');
+    return handleApiError(error);
   }
 }
 
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
  */
 export async function PUT(request: NextRequest, { params }: RouteContext) {
   try {
-    const { teacherId } = await requireAuth(request);
+    const teacherId = await requireAuth(request);
     const { deckId } = params;
     
     const body = await request.json();
@@ -76,9 +76,9 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
 
     const deck = await ContentService.updateFillInTheBlankDeck(deckId, teacherId, validatedData);
 
-    return apiResponse({ deck });
+    return apiResponse(200, { deck }, null);
   } catch (error) {
-    return apiError(error, 'Failed to update Fill in the Blank deck');
+    return handleApiError(error);
   }
 }
 
@@ -88,7 +88,7 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
-    const { teacherId } = await requireAuth(request);
+    const teacherId = await requireAuth(request);
     const { deckId } = params;
 
     const archivedDeck = await ContentService.archiveExercise(
@@ -97,8 +97,8 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
       teacherId
     );
 
-    return apiResponse({ deck: archivedDeck });
+    return apiResponse(200, { deck: archivedDeck }, null);
   } catch (error) {
-    return apiError(error, 'Failed to archive Fill in the Blank deck');
+    return handleApiError(error);
   }
 }

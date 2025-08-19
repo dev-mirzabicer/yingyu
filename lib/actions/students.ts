@@ -627,6 +627,11 @@ export const StudentService = {
             },
             grammarExercise: true,
             listeningExercise: true,
+            fillInTheBlankDeck: {
+              include: {
+                cards: { select: { id: true } },
+              },
+            },
           },
           orderBy: { order: 'asc' },
         },

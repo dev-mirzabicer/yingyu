@@ -131,6 +131,7 @@ export const SessionService = {
           vocabularyDeck: null,
           grammarExercise: null,
           listeningExercise: null,
+          fillInTheBlankDeck: null,
         })),
       },
     };

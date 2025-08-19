@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { ContentService } from '@/lib/actions/content';
-import { apiResponse, apiError } from '@/lib/api-utils';
+import { apiResponse, handleApiError } from '@/lib/api-utils';
 import { z } from 'zod';
 
 interface RouteContext {
@@ -15,12 +15,12 @@ interface RouteContext {
  */
 export async function POST(request: NextRequest, { params }: RouteContext) {
   try {
-    const { teacherId } = await requireAuth(request);
+    const teacherId = await requireAuth(request);
     const { deckId } = params;
 
     const result = await ContentService.autoBindVocabulary(deckId, teacherId);
 
-    return apiResponse({ 
+    return apiResponse(200, { 
       matches: result.matches,
       ambiguities: result.ambiguities,
       noMatch: result.noMatch,
@@ -29,9 +29,9 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
         ambiguousCards: result.ambiguities.length,
         unmatchedCards: result.noMatch.length,
       }
-    });
+    }, null);
   } catch (error) {
-    return apiError(error, 'Failed to auto-bind vocabulary');
+    return handleApiError(error);
   }
 }
 
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
  */
 export async function PUT(request: NextRequest, { params }: RouteContext) {
   try {
-    const { teacherId } = await requireAuth(request);
+    const teacherId = await requireAuth(request);
     const { deckId } = params;
     
     const body = await request.json();
@@ -62,12 +62,12 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
       resolutions
     );
 
-    return apiResponse({ 
+    return apiResponse(200, { 
       success: true, 
       resolvedCount: resolutions.length,
       message: 'Vocabulary binding ambiguities resolved successfully.' 
-    });
+    }, null);
   } catch (error) {
-    return apiError(error, 'Failed to resolve vocabulary binding ambiguities');
+    return handleApiError(error);
   }
 }

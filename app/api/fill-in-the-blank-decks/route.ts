@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { ContentService } from '@/lib/actions/content';
 import { CreateFillInTheBlankDeckSchema } from '@/lib/schemas';
-import { apiResponse, apiError } from '@/lib/api-utils';
+import { apiResponse, handleApiError } from '@/lib/api-utils';
 
 /**
  * GET /api/fill-in-the-blank-decks
@@ -10,13 +10,13 @@ import { apiResponse, apiError } from '@/lib/api-utils';
  */
 export async function GET(request: NextRequest) {
   try {
-    const { teacherId } = await requireAuth(request);
+    const teacherId = await requireAuth(request);
 
     const decks = await ContentService.getFillInTheBlankDecksForTeacher(teacherId);
     
-    return apiResponse({ decks });
+    return apiResponse(200, { decks }, null);
   } catch (error) {
-    return apiError(error, 'Failed to fetch Fill in the Blank decks');
+    return handleApiError(error);
   }
 }
 
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const { teacherId } = await requireAuth(request);
+    const teacherId = await requireAuth(request);
     
     const body = await request.json();
     const validatedData = CreateFillInTheBlankDeckSchema.parse(body);
@@ -36,8 +36,8 @@ export async function POST(request: NextRequest) {
       creatorId: teacherId,
     });
 
-    return apiResponse({ deck }, { status: 201 });
+    return apiResponse(201, { deck }, null);
   } catch (error) {
-    return apiError(error, 'Failed to create Fill in the Blank deck');
+    return handleApiError(error);
   }
 }

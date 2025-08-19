@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { ContentService } from '@/lib/actions/content';
 import { UpdateFillInTheBlankCardSchema } from '@/lib/schemas';
-import { apiResponse, apiError } from '@/lib/api-utils';
+import { apiResponse, handleApiError } from '@/lib/api-utils';
 
 interface RouteContext {
   params: { deckId: string; cardId: string };
@@ -14,7 +14,7 @@ interface RouteContext {
  */
 export async function PUT(request: NextRequest, { params }: RouteContext) {
   try {
-    const { teacherId } = await requireAuth(request);
+    const teacherId = await requireAuth(request);
     const { deckId, cardId } = params;
     
     const body = await request.json();
@@ -27,9 +27,9 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
       validatedData
     );
 
-    return apiResponse({ card });
+    return apiResponse(200, { card }, null);
   } catch (error) {
-    return apiError(error, 'Failed to update Fill in the Blank card');
+    return handleApiError(error);
   }
 }
 
@@ -39,13 +39,13 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
-    const { teacherId } = await requireAuth(request);
+    const teacherId = await requireAuth(request);
     const { deckId, cardId } = params;
 
     await ContentService.deleteFillInTheBlankCard(cardId, deckId, teacherId);
 
-    return apiResponse({ success: true });
+    return apiResponse(200, { success: true }, null);
   } catch (error) {
-    return apiError(error, 'Failed to delete Fill in the Blank card');
+    return handleApiError(error);
   }
 }

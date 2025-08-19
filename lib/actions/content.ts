@@ -779,6 +779,15 @@ export const ContentService = {
                 },
               },
             },
+            fillInTheBlankDeck: {
+              include: {
+                _count: {
+                  select: {
+                    cards: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -1167,7 +1176,7 @@ export const ContentService = {
       }
       vocabMap.get(normalizedWord)!.push({
         id: card.id,
-        vocabularyWord: card.englishWord,
+        englishWord: card.englishWord,
       });
     });
 
@@ -1205,7 +1214,7 @@ export const ContentService = {
           fillInTheBlankCardId: fibCard.id,
           fillInTheBlankAnswer: fibCard.answer,
           vocabularyCardId: match.id,
-          vocabularyWord: match.vocabularyWord,
+          vocabularyWord: match.englishWord,
         });
         autoUpdates.push({
           cardId: fibCard.id,
@@ -1218,7 +1227,7 @@ export const ContentService = {
           fillInTheBlankAnswer: fibCard.answer,
           possibleMatches: possibleMatches.map(m => ({
             vocabularyCardId: m.id,
-            vocabularyWord: m.vocabularyWord,
+            vocabularyWord: m.englishWord,
           })),
         });
       } else {

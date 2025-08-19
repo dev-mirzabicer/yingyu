@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { ContentService } from '@/lib/actions/content';
 import { CreateFillInTheBlankCardSchema } from '@/lib/schemas';
-import { apiResponse, apiError } from '@/lib/api-utils';
+import { apiResponse, handleApiError } from '@/lib/api-utils';
 import { prisma } from '@/lib/db';
 
 interface RouteContext {
@@ -15,7 +15,7 @@ interface RouteContext {
  */
 export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
-    const { teacherId } = await requireAuth(request);
+    const teacherId = await requireAuth(request);
     const { deckId } = params;
 
     // First check if the deck exists and if teacher has access
@@ -29,12 +29,12 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     });
 
     if (!deck) {
-      return apiError(new Error('Deck not found'), 'Fill in the Blank deck not found', { status: 404 });
+      return apiResponse(404, null, 'Fill in the Blank deck not found');
     }
 
     // Check access permissions
     if (!deck.isPublic && deck.creatorId !== teacherId) {
-      return apiError(new Error('Access denied'), 'You do not have access to this deck', { status: 403 });
+      return apiResponse(403, null, 'You do not have access to this deck');
     }
 
     const cards = await prisma.fillInTheBlankCard.findMany({
@@ -50,9 +50,9 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       orderBy: { createdAt: 'asc' },
     });
 
-    return apiResponse({ cards });
+    return apiResponse(200, { cards }, null);
   } catch (error) {
-    return apiError(error, 'Failed to fetch Fill in the Blank cards');
+    return handleApiError(error);
   }
 }
 
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
  */
 export async function POST(request: NextRequest, { params }: RouteContext) {
   try {
-    const { teacherId } = await requireAuth(request);
+    const teacherId = await requireAuth(request);
     const { deckId } = params;
     
     const body = await request.json();
@@ -74,8 +74,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       validatedData
     );
 
-    return apiResponse({ card }, { status: 201 });
+    return apiResponse(201, { card }, null);
   } catch (error) {
-    return apiError(error, 'Failed to create Fill in the Blank card');
+    return handleApiError(error);
   }
 }
