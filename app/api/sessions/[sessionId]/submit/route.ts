@@ -26,10 +26,15 @@ const SubmitAnswerBodySchema = z.discriminatedUnion('action', [
   // Schema for when the action is 'SUBMIT_RATING'
   z.object({
     action: z.literal('SUBMIT_RATING'),
-    // The data payload MUST contain a rating between 1 and 4.
-    data: z.object({
-      rating: z.number().min(1).max(4),
-    }),
+    // The data payload can contain either a numeric rating (1-4) or a boolean correctness rating
+    data: z.union([
+      z.object({
+        rating: z.number().min(1).max(4),
+      }),
+      z.object({
+        isCorrect: z.boolean(),
+      }),
+    ]),
   }),
 ]);
 

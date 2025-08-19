@@ -151,20 +151,20 @@ export function FillInTheBlankExercise({
               onClick={() => onSubmitRating({ isCorrect: false })}
               disabled={isLoading}
               variant="outline"
-              className="h-16 flex-col space-y-2 border-red-200 hover:bg-red-50"
+              className="h-16 flex flex-col items-center justify-center gap-1 border-red-200 hover:bg-red-50"
             >
-              <XCircle className="h-6 w-6 text-red-600" />
-              <span className="font-medium">Incorrect</span>
+              <XCircle className="h-5 w-5 text-red-600" />
+              <span className="font-medium text-sm">Incorrect</span>
               <span className="text-xs text-slate-500">I got it wrong</span>
             </Button>
             <Button
               onClick={() => onSubmitRating({ isCorrect: true })}
               disabled={isLoading}
               variant="outline"
-              className="h-16 flex-col space-y-2 border-green-200 hover:bg-green-50"
+              className="h-16 flex flex-col items-center justify-center gap-1 border-green-200 hover:bg-green-50"
             >
-              <CheckCircle className="h-6 w-6 text-green-600" />
-              <span className="font-medium">Correct</span>
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <span className="font-medium text-sm">Correct</span>
               <span className="text-xs text-slate-500">I got it right</span>
             </Button>
           </div>
