@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   try {
     const decks = await ContentService.getPublicFillInTheBlankDecks();
     
-    return apiResponse(200, { decks }, null);
+    return apiResponse(200, decks, null);
   } catch (error) {
     return handleApiError(error);
   }
