@@ -111,8 +111,9 @@ export type AnswerPayload = {
   action: 'REVEAL_ANSWER' | 'SUBMIT_RATING' | 'SUBMIT_TEXT_ANSWER' | 'PLAY_AUDIO';
   /**
    * The data associated with the action, to be validated by the specific operator.
+   * Can be an object, number (for legacy numeric ratings), or boolean (for correctness ratings).
    */
-  data?: { [key: string]: unknown };
+  data?: { [key: string]: unknown } | number | boolean;
 };
 
 // --- Session Progress State Machine Types ---
