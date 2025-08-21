@@ -167,7 +167,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     setActionLoading(true)
     try {
       incrementReviewCount() // Optimistic update
-      const payload: AnswerPayload = { action: 'SUBMIT_RATING', data: { rating } }
+      const payload: AnswerPayload = { action: 'SUBMIT_RATING', data: rating }
       const result = await submitAnswer(sessionId, payload)
       if (result.data.newState.progress) {
         setProgress(result.data.newState.progress as SessionProgress)
