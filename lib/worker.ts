@@ -81,29 +81,24 @@ export async function processPendingJobs() {
           resultPayload = await StudentService._initializeCardStates(payload);
           break;
         }
-        case JobType.REBUILD_FSRS_CACHE: {
+        case JobType.REBUILD_VOCABULARY_FSRS_CACHE: {
           const payload = RebuildCachePayloadSchema.parse(job.payload);
-          // Check if the payload has a context field to determine which rebuild method to use
-          const context = (payload as any).context;
-          if (context === 'GENERIC') {
-            resultPayload = await FSRSService._rebuildGenericCacheForStudent(payload);
-          } else {
-            // Default to vocabulary cache rebuild for backward compatibility
-            resultPayload = await FSRSService._rebuildCacheForStudent(payload);
-          }
+          resultPayload = await FSRSService._rebuildCacheForStudent(payload);
           break;
         }
-        // --- NEW JOB HANDLER ---
-        case JobType.OPTIMIZE_FSRS_PARAMS: {
+        case JobType.REBUILD_GENERIC_FSRS_CACHE: {
+          const payload = RebuildCachePayloadSchema.parse(job.payload);
+          resultPayload = await FSRSService._rebuildGenericCacheForStudent(payload);
+          break;
+        }
+        case JobType.OPTIMIZE_VOCABULARY_FSRS_PARAMS: {
           const payload = OptimizeParamsPayloadSchema.parse(job.payload);
-          // Check if the payload has a context field to determine which optimization method to use
-          const context = (payload as any).context;
-          if (context === 'GENERIC') {
-            resultPayload = await FSRSService._optimizeGenericParameters(payload);
-          } else {
-            // Default to vocabulary optimization for backward compatibility
-            resultPayload = await FSRSService._optimizeParameters(payload);
-          }
+          resultPayload = await FSRSService._optimizeParameters(payload);
+          break;
+        }
+        case JobType.OPTIMIZE_GENERIC_FSRS_PARAMS: {
+          const payload = OptimizeParamsPayloadSchema.parse(job.payload);
+          resultPayload = await FSRSService._optimizeGenericParameters(payload);
           break;
         }
         // --- LISTENING FSRS JOB HANDLERS ---

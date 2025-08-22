@@ -765,7 +765,7 @@ export const FSRSService = {
     teacherId: string
   ): Promise<Job> {
     await authorizeTeacherForStudent(teacherId, studentId);
-    return JobService.createJob(teacherId, 'REBUILD_FSRS_CACHE', {
+    return JobService.createJob(teacherId, 'REBUILD_VOCABULARY_FSRS_CACHE', {
       studentId,
     });
   },
@@ -784,7 +784,7 @@ export const FSRSService = {
     await authorizeTeacherForStudent(teacherId, studentId, {
       checkIsActive: true,
     });
-    return JobService.createJob(teacherId, 'OPTIMIZE_FSRS_PARAMS', {
+    return JobService.createJob(teacherId, 'OPTIMIZE_VOCABULARY_FSRS_PARAMS', {
       studentId,
     });
   },
@@ -1589,9 +1589,8 @@ export const FSRSService = {
     teacherId: string
   ): Promise<Job> {
     await authorizeTeacherForStudent(teacherId, studentId, { checkIsActive: true });
-    return JobService.createJob(teacherId, 'OPTIMIZE_FSRS_PARAMS', {
+    return JobService.createJob(teacherId, 'OPTIMIZE_GENERIC_FSRS_PARAMS', {
       studentId,
-      context: 'GENERIC' // Add context to the payload
     });
   },
 
@@ -1612,9 +1611,8 @@ export const FSRSService = {
     teacherId: string
   ): Promise<Job> {
     await authorizeTeacherForStudent(teacherId, studentId);
-    return JobService.createJob(teacherId, 'REBUILD_FSRS_CACHE', {
+    return JobService.createJob(teacherId, 'REBUILD_GENERIC_FSRS_CACHE', {
       studentId,
-      context: 'GENERIC' // Add context to the payload
     });
   },
 
