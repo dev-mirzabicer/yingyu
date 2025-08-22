@@ -1003,7 +1003,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               <SelectValue placeholder="Select a vocabulary deck to bind..." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">No binding</SelectItem>
+              <SelectItem value="none">No binding</SelectItem>
               {decks.map((deck) => (
                 <SelectItem key={deck.id} value={deck.id}>
                   {deck.name} ({deck._count?.cards || 0} cards)

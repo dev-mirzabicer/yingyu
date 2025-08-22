@@ -49,7 +49,7 @@ export default function GenericDecksPage() {
         name: newDeck.name,
         description: newDeck.description,
         isPublic: newDeck.isPublic,
-        ...(newDeck.boundVocabularyDeckId && { boundVocabularyDeckId: newDeck.boundVocabularyDeckId })
+        ...(newDeck.boundVocabularyDeckId && newDeck.boundVocabularyDeckId !== "none" && { boundVocabularyDeckId: newDeck.boundVocabularyDeckId })
       }
       await createGenericDeck(deckData)
       toast({
@@ -334,7 +334,7 @@ export default function GenericDecksPage() {
                   <SelectValue placeholder="Select a vocabulary deck to bind..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No binding</SelectItem>
+                  <SelectItem value="none">No binding</SelectItem>
                   {vocabularyDecksLoading ? (
                     <SelectItem value="loading" disabled>Loading vocabulary decks...</SelectItem>
                   ) : vocabularyDecks.length > 0 ? (

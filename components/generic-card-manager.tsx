@@ -295,7 +295,7 @@ export function GenericCardManager({ deckId, deckName, isReadOnly = false }: Gen
     try {
       const resolutionArray = Object.entries(resolutions).map(([cardId, vocabularyCardId]) => ({
         genericCardId: cardId,
-        vocabularyCardId: vocabularyCardId,
+        vocabularyCardId: vocabularyCardId === "none" ? null : vocabularyCardId,
       }))
 
       await resolveGenericBinding(deckId, resolutionArray)
@@ -507,7 +507,7 @@ export function GenericCardManager({ deckId, deckName, isReadOnly = false }: Gen
                               <SelectValue placeholder="Select vocabulary word..." />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">No binding</SelectItem>
+                              <SelectItem value="none">No binding</SelectItem>
                               {ambiguity.possibleMatches.map((match: { id: string; englishWord: string }) => (
                                 <SelectItem key={match.id} value={match.id}>
                                   {match.englishWord}

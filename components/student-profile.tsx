@@ -702,7 +702,7 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
                   <SelectValue placeholder="Select proficiency level" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Not specified</SelectItem>
+                  <SelectItem value="NOT_SPECIFIED">Not specified</SelectItem>
                   <SelectItem value="BEGINNER">Beginner</SelectItem>
                   <SelectItem value="ELEMENTARY">Elementary</SelectItem>
                   <SelectItem value="INTERMEDIATE">Intermediate</SelectItem>
