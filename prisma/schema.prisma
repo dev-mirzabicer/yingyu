@@ -48,6 +48,7 @@ enum ReviewType {
   LISTENING
   SPELLING
   GRAMMAR
+  GENERIC
 }
 
 enum UnitItemType {
@@ -55,6 +56,7 @@ enum UnitItemType {
   GRAMMAR_EXERCISE
   LISTENING_EXERCISE
   FILL_IN_THE_BLANK_EXERCISE
+  GENERIC_DECK
 }
 
 enum SessionStatus {
@@ -75,6 +77,7 @@ enum JobType {
   BULK_IMPORT_STUDENTS
   BULK_IMPORT_SCHEDULES
   BULK_IMPORT_FILL_IN_THE_BLANK
+  BULK_IMPORT_GENERIC_DECK
 }
 
 enum JobStatus {
@@ -110,6 +113,7 @@ model Teacher {
   createdGrammar                 GrammarExercise[]
   createdListening               ListeningExercise[]
   createdFillInTheBlankDecks     FillInTheBlankDeck[] @relation("TeacherCreatedFillInTheBlankDecks")
+  createdGenericDecks            GenericDeck[]       @relation("TeacherCreatedGenericDecks")
   createdUnits                   Unit[]
   authSessions                   AuthSession[]
 }
@@ -147,6 +151,8 @@ model Student {
   listeningFsrsParams           ListeningFsrsParams[]
   sessions                      Session[]
   fillInTheBlankDoneRecords     StudentFillInTheBlankCardDone[]
+  genericCardStates             StudentGenericCardState[]
+  genericFsrsParams             GenericFsrsParams[]
 }
 
 // ================================================================= //
@@ -180,12 +186,14 @@ model UnitItem {
   grammarExerciseId          String?      @unique @db.Uuid
   listeningExerciseId        String?      @unique @db.Uuid
   fillInTheBlankDeckId       String?      @unique @db.Uuid
+  genericDeckId              String?      @unique @db.Uuid
 
   unit                     Unit                      @relation(fields: [unitId], references: [id], onDelete: Cascade)
   vocabularyDeck           VocabularyDeck?           @relation(fields: [vocabularyDeckId], references: [id], onDelete: SetNull)
   grammarExercise          GrammarExercise?          @relation(fields: [grammarExerciseId], references: [id], onDelete: SetNull)
   listeningExercise        ListeningExercise?        @relation(fields: [listeningExerciseId], references: [id], onDelete: SetNull)
   fillInTheBlankDeck       FillInTheBlankDeck?       @relation(fields: [fillInTheBlankDeckId], references: [id], onDelete: SetNull)
+  genericDeck              GenericDeck?              @relation(fields: [genericDeckId], references: [id], onDelete: SetNull)
 
   activeSession Session?
 
@@ -249,6 +257,7 @@ model VocabularyDeck {
   studentDecks             StudentDeck[]
   listeningExercises       ListeningExercise[]
   boundFillInTheBlankDecks FillInTheBlankDeck[] @relation("BoundFillInTheBlankDecks")
+  boundGenericDecks        GenericDeck[]        @relation("BoundGenericDecks")
   unitItem                 UnitItem?
 }
 
@@ -274,6 +283,7 @@ model VocabularyCard {
   cardStates               StudentCardState[]
   listeningCardStates      ListeningCardState[]
   boundFillInTheBlankCards FillInTheBlankCard[]
+  boundGenericCards        GenericCard[]
 }
 
 model GrammarExercise {
@@ -363,6 +373,48 @@ model StudentFillInTheBlankCardDone {
   card    FillInTheBlankCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
 
   @@id([studentId, cardId]) // Composite primary key ensures one record per student-card pair
+}
+
+model GenericDeck {
+  id                     String   @id @default(uuid()) @db.Uuid
+  creatorId              String?  @db.Uuid
+  name                   String
+  description            String?
+  isPublic               Boolean  @default(false)
+  isArchived             Boolean  @default(false)
+  originExerciseId       String?  @db.Uuid
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  // For optional thresholding features
+  boundVocabularyDeckId  String?  @db.Uuid
+
+  creator                Teacher?         @relation("TeacherCreatedGenericDecks", fields: [creatorId], references: [id], onDelete: SetNull)
+  boundVocabularyDeck    VocabularyDeck?  @relation("BoundGenericDecks", fields: [boundVocabularyDeckId], references: [id], onDelete: SetNull)
+  cards                  GenericCard[]
+  unitItem               UnitItem?
+}
+
+model GenericCard {
+  id                 String   @id @default(uuid()) @db.Uuid
+  deckId             String   @db.Uuid
+  front              String   // Replaces englishWord
+  back               String   // Replaces chineseTranslation
+  exampleSentences   Json?    // Generic and useful
+  audioUrl           String?  // Generic and useful
+  imageUrl           String?  // Generic and useful
+  tags               String[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // For auto-binding feature
+  boundVocabularyCardId   String?  @db.Uuid
+
+  deck                    GenericDeck      @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  boundVocabularyCard     VocabularyCard?  @relation(fields: [boundVocabularyCardId], references: [id], onDelete: SetNull)
+  cardStates              StudentGenericCardState[]
+
+  @@index([deckId])
 }
 
 
@@ -471,6 +523,47 @@ model ListeningCardState {
 }
 
 model ListeningFsrsParams {
+  id                String   @id @default(uuid()) @db.Uuid
+  studentId         String   @db.Uuid
+  w                 Json
+  version           Int      @default(1)
+  optimizationScore Float?
+  trainingDataSize  Int?
+  lastOptimized     DateTime @default(now())
+  isActive          Boolean  @default(true)
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, isActive])
+}
+
+model StudentGenericCardState {
+  id                    String    @id @default(uuid()) @db.Uuid
+  studentId             String    @db.Uuid
+  cardId                String    @db.Uuid
+  stability             Float
+  difficulty            Float
+  due                   DateTime
+  lastReview            DateTime?
+  reps                  Int       @default(0)
+  lapses                Int       @default(0)
+  state                 CardState @default(NEW)
+  averageResponseTimeMs Int       @default(0)
+  consecutiveCorrect    Int       @default(0)
+  retrievability        Float?
+  intervalDays          Int?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  student Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  card    GenericCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  
+  @@unique([studentId, cardId])
+  @@index([studentId, due])
+  @@index([studentId, state])
+}
+
+model GenericFsrsParams {
   id                String   @id @default(uuid()) @db.Uuid
   studentId         String   @db.Uuid
   w                 Json

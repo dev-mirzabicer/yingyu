@@ -43,6 +43,15 @@ export const CreateDeckSchema = z.object({
   isPublic: z.boolean().optional(),
 });
 
+export const CreateGenericDeckSchema = z.object({
+  name: z
+    .string()
+    .min(3, { message: 'Generic deck name must be at least 3 characters long.' }),
+  description: z.string().optional(),
+  isPublic: z.boolean().optional(),
+  boundVocabularyDeckId: z.string().uuid().optional(),
+});
+
 // Schema for updating an existing Unit. All fields are optional.
 export const UpdateUnitSchema = z.object({
   name: z
@@ -208,6 +217,21 @@ export const BulkImportVocabularyPayloadSchema = z.object({
   ),
 });
 
+export const BulkImportGenericDeckPayloadSchema = z.object({
+  deckId: z.string().uuid(),
+  teacherId: z.string().uuid(),
+  cards: z.array(
+    z.object({
+      front: z.string(),
+      back: z.string(),
+      exampleSentences: z.any().optional(),
+      audioUrl: z.string().optional(),
+      imageUrl: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+    })
+  ),
+});
+
 export const BulkImportStudentsPayloadSchema = z.object({
   students: z.array(
     z.object({
@@ -266,6 +290,12 @@ export const AddItemBodySchema = z.discriminatedUnion('itemType', [
     exerciseId: z.string().uuid().optional(),
     exerciseData: CreateFillInTheBlankDeckSchema.optional(),
     exerciseConfig: FillInTheBlankExerciseConfigSchema,
+  }),
+  z.object({
+    itemType: z.literal('GENERIC_DECK'),
+    exerciseId: z.string().uuid().optional(),
+    exerciseData: CreateGenericDeckSchema.optional(),
+    exerciseConfig: VocabularyExerciseConfigSchema, // Uses the same config as vocabulary deck
   }),
 ]);
 
@@ -336,6 +366,27 @@ export const AddCardSchema = z.object({
   frequencyRank: z.number().int().optional(),
   tags: z.array(z.string()).optional(),
 });
+
+/**
+ * Validates the payload for adding a single generic card.
+ */
+export const CreateGenericCardSchema = z.object({
+  front: z.string().min(1),
+  back: z.string().min(1),
+  exampleSentences: z.array(z.object({
+    front: z.string(),
+    back: z.string(),
+  })).optional(),
+  audioUrl: z.string().url().optional().or(z.literal('')),
+  imageUrl: z.string().url().optional().or(z.literal('')),
+  tags: z.array(z.string()).optional(),
+  boundVocabularyCardId: z.string().uuid().optional(),
+});
+
+/**
+ * Schema for updating an existing generic card.
+ */
+export const UpdateGenericCardSchema = CreateGenericCardSchema.partial();
 
 /**
  * Validates the payload for updating a single vocabulary card.

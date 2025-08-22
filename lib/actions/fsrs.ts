@@ -64,8 +64,8 @@ function parseLearningStepDuration(step: string): number {
 // This interface defines the unique models and types for a specific FSRS context
 // (e.g., Vocabulary, Listening), allowing us to create generic, reusable functions.
 type FsrsContextConfig = {
-  stateModel: 'studentCardState' | 'listeningCardState';
-  paramsModel: 'studentFsrsParams' | 'listeningFsrsParams';
+  stateModel: 'studentCardState' | 'listeningCardState' | 'studentGenericCardState';
+  paramsModel: 'studentFsrsParams' | 'listeningFsrsParams' | 'genericFsrsParams';
   reviewType: ReviewType;
 };
 
@@ -79,6 +79,12 @@ const LISTENING_CONTEXT: FsrsContextConfig = {
   stateModel: 'listeningCardState',
   paramsModel: 'listeningFsrsParams',
   reviewType: 'LISTENING',
+};
+
+const GENERIC_CONTEXT: FsrsContextConfig = {
+  stateModel: 'studentGenericCardState',
+  paramsModel: 'genericFsrsParams',
+  reviewType: 'GENERIC',
 };
 
 // --- REFACTORING: Generic FSRS Core Logic ---
@@ -1397,6 +1403,393 @@ export const FSRSService = {
     await prisma.$transaction([
       prisma.listeningCardState.deleteMany({ where: { studentId } }),
       prisma.listeningCardState.createMany({ data: allStatesToCreate }),
+    ]);
+
+    return { cardsRebuilt: allStatesToCreate.length };
+  },
+
+  // ================================================================= //
+  // GENERIC DECK FSRS METHODS
+  // ================================================================= //
+
+  /**
+   * Get the initial generic review queue for a session.
+   * This implementation mirrors getInitialReviewQueue but works with GenericCard states.
+   */
+  async getInitialGenericReviewQueue(
+    studentId: string,
+    config: VocabularyExerciseConfig
+  ): Promise<{
+    dueItems: any[]; // StudentGenericCardState[]
+    newItems: any[]; // StudentGenericCardState[]
+  }> {
+    const now = new Date();
+    const defaults = { newCards: 10, maxDue: 50, minDue: 10 };
+    const finalConfig = { ...defaults, ...config };
+
+    let dueCards = await prisma.studentGenericCardState.findMany({
+      where: {
+        studentId,
+        due: { lte: now },
+        state: { not: 'NEW' },
+        card: { deckId: finalConfig.deckId },
+      },
+      take: finalConfig.maxDue,
+      orderBy: { due: 'asc' },
+    });
+
+    if (dueCards.length < finalConfig.minDue) {
+      const needed = finalConfig.minDue - dueCards.length;
+      const endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const supplementalCards = await prisma.studentGenericCardState.findMany({
+        where: {
+          studentId,
+          due: { gt: now, lte: endOfDay },
+          state: { not: 'NEW' },
+          cardId: { notIn: dueCards.map((c) => c.cardId) },
+          card: { deckId: finalConfig.deckId },
+        },
+        take: needed,
+        orderBy: { due: 'asc' },
+      });
+      dueCards = [...dueCards, ...supplementalCards];
+    }
+
+    // Get truly NEW cards (never reviewed)
+    const newCards = await prisma.studentGenericCardState.findMany({
+      where: {
+        studentId,
+        state: 'NEW',
+        card: { deckId: finalConfig.deckId },
+      },
+      take: finalConfig.newCards,
+      orderBy: { card: { createdAt: 'asc' } },
+    });
+
+    const dueItems: any[] = dueCards;
+    const newItems: any[] = newCards;
+
+    return { dueItems, newItems };
+  },
+
+  /**
+   * Record a generic review (wrapper for the internal generic implementation).
+   */
+  async recordGenericReview(
+    studentId: string,
+    cardId: string,
+    rating: FsrsRating,
+    sessionId?: string
+  ): Promise<any> { // Returns StudentGenericCardState
+    return _recordReviewInternal(
+      GENERIC_CONTEXT,
+      studentId,
+      cardId,
+      rating,
+      sessionId
+    );
+  },
+
+  /**
+   * Get generic-specific FSRS statistics.
+   * This implementation mirrors getFsrsStats but queries StudentGenericCardState.
+   */
+  async getGenericFsrsStats(
+    studentId: string,
+    teacherId: string
+  ): Promise<FsrsStats> {
+    await authorizeTeacherForStudent(teacherId, studentId);
+
+    const now = new Date();
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+    const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const stateCountsQuery = prisma.studentGenericCardState.groupBy({
+      by: ['state'],
+      where: { studentId },
+      _count: {
+        state: true,
+      },
+    });
+
+    const dueTodayQuery = prisma.studentGenericCardState.count({
+      where: {
+        studentId,
+        due: { lte: endOfToday },
+        state: { not: 'NEW' },
+      },
+    });
+
+    const dueThisWeekQuery = prisma.studentGenericCardState.count({
+      where: {
+        studentId,
+        due: { lte: nextWeek },
+        state: { not: 'NEW' },
+      }
+    });
+
+    const overdueQuery = prisma.studentGenericCardState.count({
+      where: {
+        studentId,
+        due: { lt: now },
+        state: { not: 'NEW' },
+      }
+    });
+
+    const aggregateStatsQuery = prisma.studentGenericCardState.aggregate({
+      where: { studentId },
+      _sum: {
+        reps: true,
+      },
+      _avg: {
+        retrievability: true,
+        averageResponseTimeMs: true,
+      },
+      _count: {
+        _all: true,
+      },
+    });
+
+    const [stateCounts, dueToday, dueThisWeek, overdue, aggregateStats] = await prisma.$transaction([
+      stateCountsQuery,
+      dueTodayQuery,
+      dueThisWeekQuery,
+      overdueQuery,
+      aggregateStatsQuery,
+    ]);
+
+    const statsMap = stateCounts.reduce((acc, record) => {
+      acc[record.state] = record._count.state;
+      return acc;
+    }, {} as Record<CardState, number>);
+
+    return {
+      totalCards: aggregateStats._count._all,
+      newCards: statsMap.NEW ?? 0,
+      learningCards: statsMap.LEARNING ?? 0,
+      reviewCards: statsMap.REVIEW ?? 0,
+      relearningCards: statsMap.RELEARNING ?? 0,
+      dueToday: dueToday,
+      dueThisWeek: dueThisWeek,
+      overdue: overdue,
+      totalReviews: aggregateStats._sum.reps ?? 0,
+      averageRetention: (aggregateStats._avg.retrievability ?? 0) * 100,
+      averageResponseTime: aggregateStats._avg.averageResponseTimeMs ?? 0,
+    };
+  },
+
+  /**
+   * Create a background job to optimize FSRS parameters for a student's generic cards.
+   */
+  async createOptimizeGenericParametersJob(
+    studentId: string,
+    teacherId: string
+  ): Promise<Job> {
+    await authorizeTeacherForStudent(teacherId, studentId, { checkIsActive: true });
+    return JobService.createJob(teacherId, 'OPTIMIZE_FSRS_PARAMS', {
+      studentId,
+      context: 'GENERIC' // Add context to the payload
+    });
+  },
+
+  /**
+   * Internal method for optimizing generic FSRS parameters (called by worker).
+   */
+  async _optimizeGenericParameters(
+    payload: Prisma.JsonValue
+  ): Promise<{ message: string; params?: any }> {
+    return _optimizeParametersInternal(GENERIC_CONTEXT, payload);
+  },
+
+  /**
+   * Create a background job to rebuild the generic FSRS cache for a student.
+   */
+  async createRebuildGenericCacheJob(
+    studentId: string,
+    teacherId: string
+  ): Promise<Job> {
+    await authorizeTeacherForStudent(teacherId, studentId);
+    return JobService.createJob(teacherId, 'REBUILD_FSRS_CACHE', {
+      studentId,
+      context: 'GENERIC' // Add context to the payload
+    });
+  },
+
+  /**
+   * Internal method for rebuilding generic FSRS cache from review history (called by worker).
+   * This implementation mirrors _rebuildCacheForStudent but works with StudentGenericCardState.
+   */
+  async _rebuildGenericCacheForStudent(
+    payload: Prisma.JsonValue
+  ): Promise<{ cardsRebuilt: number }> {
+    const { studentId } = payload as { studentId: string };
+    if (!studentId) {
+      throw new Error('Invalid payload: studentId is required.');
+    }
+
+    const [studentParams] = await Promise.all([
+      prisma.genericFsrsParams.findFirst({
+        where: { studentId, isActive: true },
+      }),
+    ]);
+
+    // Get all assigned generic cards for this student
+    const assignedGenericCards = await prisma.genericCard.findMany({
+      where: {
+        deck: {
+          unitItem: {
+            unit: {
+              sessions: {
+                some: { studentId }
+              }
+            }
+          }
+        }
+      },
+      select: { id: true }
+    });
+
+    const allAssignedCardIds = new Set(assignedGenericCards.map(c => c.id));
+
+    // Get ALL history (learning steps + FSRS) for complete reconstruction
+    const allHistory = await prisma.reviewHistory.findMany({
+      where: { 
+        studentId, 
+        reviewType: 'GENERIC'
+      },
+      orderBy: { reviewedAt: 'asc' },
+    });
+    const historyByCard = allHistory.reduce((acc, review) => {
+      if (!acc[review.cardId]) acc[review.cardId] = [];
+      acc[review.cardId].push(review);
+      return acc;
+    }, {} as Record<string, ReviewHistory[]>);
+
+    const w = (studentParams?.w as number[]) ?? FSRS_DEFAULT_PARAMETERS;
+    const engine = new FSRS(w);
+
+    const statesFromHistory: Prisma.StudentGenericCardStateCreateManyInput[] = [];
+    const reviewedCardIds = new Set<string>();
+
+    for (const cardId in historyByCard) {
+      reviewedCardIds.add(cardId);
+      const cardHistory = historyByCard[cardId];
+      const lastReview = cardHistory[cardHistory.length - 1];
+
+      // Check if this card should still be in learning steps
+      // Count only learning step reviews for GENERIC (not FSRS reviews)
+      const learningSteps = DEFAULT_LEARNING_STEPS;
+      const learningStepReviews = cardHistory.filter(h => h.isLearningStep && h.reviewType === 'GENERIC').length;
+      const shouldBeInLearningSteps = learningStepReviews < learningSteps.length &&
+        cardHistory.some(h => h.isLearningStep && h.reviewType === 'GENERIC'); // Has generic learning step history
+
+      if (shouldBeInLearningSteps) {
+        // Reconstruct learning steps state
+        let currentStepIndex = learningStepReviews - 1; // 0-based index of current step
+        let dueDate: Date;
+
+        if (lastReview.rating === 1 && lastReview.isLearningStep) {
+          // If last rating was "Again" in learning steps, reset to first step
+          currentStepIndex = 0;
+        }
+
+        // Calculate due date based on learning step
+        if (currentStepIndex >= 0 && currentStepIndex < learningSteps.length) {
+          const stepDuration = parseLearningStepDuration(learningSteps[currentStepIndex]);
+          dueDate = new Date(lastReview.reviewedAt.getTime() + stepDuration);
+        } else {
+          // Should have graduated - treat as FSRS
+          dueDate = new Date(); // Will be recalculated below
+        }
+
+        if (currentStepIndex >= 0 && currentStepIndex < learningSteps.length) {
+          // Still in learning steps
+          statesFromHistory.push({
+            studentId,
+            cardId,
+            stability: 1.0, // Default stability for learning cards
+            difficulty: 5.0, // Default difficulty for learning cards  
+            due: dueDate,
+            lastReview: lastReview.reviewedAt,
+            reps: cardHistory.filter(h => !h.isLearningStep).length, // Only count FSRS reviews
+            lapses: cardHistory.filter((h) => h.rating === 1).length,
+            state: cardHistory.some(h => !h.isLearningStep) ? 'RELEARNING' : 'NEW', // NEW if never graduated, RELEARNING if failed
+          });
+          continue; // Skip FSRS calculation
+        }
+      }
+
+      // Use FSRS calculation for graduated or non-learning cards
+      // Only use GENERIC FSRS reviews (exclude learning step reviews)
+      const fsrsOnlyHistory = cardHistory.filter(h => !h.isLearningStep && h.reviewType === 'GENERIC');
+      const fsrsReviews = _mapHistoryToFsrsReviews(fsrsOnlyHistory);
+      const fsrsItem = new FSRSItem(fsrsReviews);
+      const finalMemoryState = engine.memoryState(fsrsItem);
+
+      const nextStates = engine.nextStates(
+        finalMemoryState,
+        DEFAULT_DESIRED_RETENTION,
+        0
+      );
+      let nextState;
+      switch (lastReview.rating as FsrsRating) {
+        case 1:
+          nextState = nextStates.again;
+          break;
+        case 2:
+          nextState = nextStates.hard;
+          break;
+        case 3:
+          nextState = nextStates.good;
+          break;
+        case 4:
+          nextState = nextStates.easy;
+          break;
+        default:
+          throw new Error('Invalid rating in history');
+      }
+
+      const accurateDueDate = new Date(
+        lastReview.reviewedAt.getTime() +
+        nextState.interval * 24 * 60 * 60 * 1000
+      );
+
+      statesFromHistory.push({
+        studentId,
+        cardId,
+        stability: finalMemoryState.stability,
+        difficulty: finalMemoryState.difficulty,
+        due: accurateDueDate,
+        lastReview: lastReview.reviewedAt,
+        reps: fsrsOnlyHistory.length, // Only count FSRS reviews for reps
+        lapses: cardHistory.filter((h) => h.rating === 1).length,
+        state: lastReview.rating === 1 ? 'RELEARNING' : 'REVIEW',
+      });
+    }
+
+    const newCardIds = Array.from(allAssignedCardIds).filter(
+      (id) => !reviewedCardIds.has(id as string)
+    );
+    const newCardStates: Prisma.StudentGenericCardStateCreateManyInput[] =
+      newCardIds.map((cardId) => ({
+        studentId,
+        cardId: cardId as string,
+        state: 'NEW',
+        due: new Date(),
+        stability: 1.0,
+        difficulty: 5.0,
+        reps: 0,
+        lapses: 0,
+      }));
+
+    const allStatesToCreate = [...statesFromHistory, ...newCardStates];
+
+    await prisma.$transaction([
+      prisma.studentGenericCardState.deleteMany({ where: { studentId } }),
+      prisma.studentGenericCardState.createMany({ data: allStatesToCreate }),
     ]);
 
     return { cardsRebuilt: allStatesToCreate.length };

@@ -6,6 +6,8 @@ import {
   ListeningExercise,
   FillInTheBlankDeck,
   FillInTheBlankCard,
+  GenericDeck,
+  GenericCard,
   Student,
   Payment,
   StudentDeck,
@@ -15,6 +17,7 @@ import {
   VocabularyCard,
   Teacher,
   StudentCardState,
+  StudentGenericCardState,
   Job,
 } from '@prisma/client';
 import { z } from 'zod';
@@ -33,6 +36,7 @@ export type PopulatedUnitItem = UnitItem & {
   grammarExercise: GrammarExercise | null;
   listeningExercise: ListeningExercise | null;
   fillInTheBlankDeck: (FillInTheBlankDeck & { cards: { id: string }[] }) | null;
+  genericDeck: (GenericDeck & { cards: { id: string }[] }) | null;
   config?: VocabularyExerciseConfig | FillInTheBlankExerciseConfig;
 };
 
@@ -140,6 +144,28 @@ export type VocabularyDeckProgress = {
 };
 
 /**
+ * The progress state for the generic deck handler.
+ * This mirrors VocabularyDeckProgress but works with GenericCard states.
+ */
+export type GenericDeckProgress = {
+  type: 'GENERIC_DECK';
+  stage: 'PRESENTING_CARD' | 'AWAITING_RATING';
+  payload: {
+    /** The dynamic, sorted queue of cards to be reviewed. The card at index 0 is the current card. */
+    queue: (StudentGenericCardState & { card: GenericCard })[];
+    /** The full data for the current card (queue[0]). Pre-fetched for the UI. */
+    currentCardData?: StudentGenericCardState & { card: GenericCard };
+    /** The original configuration for this session, kept for reference. */
+    config: VocabularyExerciseConfig; // Uses the same config as vocabulary deck
+    /**
+     * A static list of all card IDs included at the start of the session.
+     * This is used to efficiently scope the dynamic re-evaluation of the queue.
+     */
+    initialCardIds: string[];
+  };
+};
+
+/**
  * Defines the result of an answer submission.
  * This provides a structured way to give feedback to the frontend.
  */
@@ -214,7 +240,7 @@ export type FillInTheBlankProgress = {
  * A union type representing all possible progress states for any exercise.
  * The `Session.progress` field will always conform to one of these shapes.
  */
-export type SessionProgress = VocabularyDeckProgress | ListeningDeckProgress | FillInTheBlankProgress;
+export type SessionProgress = VocabularyDeckProgress | ListeningDeckProgress | FillInTheBlankProgress | GenericDeckProgress;
 // | GrammarExerciseProgress etc. will be added here.
 
 /**
@@ -283,6 +309,25 @@ export type NewUnitItemData =
     mode: 'existing';
     order?: number;
     config?: FillInTheBlankExerciseConfig;
+    existingDeckId: string;
+  }
+  | {
+    type: 'GENERIC_DECK';
+    order?: number;
+    config?: VocabularyExerciseConfig;
+    mode: 'new';
+    data: {
+      name: string;
+      description?: string;
+      isPublic?: boolean;
+      boundVocabularyDeckId?: string;
+    };
+  }
+  | {
+    type: 'GENERIC_DECK';
+    order?: number;
+    config?: VocabularyExerciseConfig;
+    mode: 'existing';
     existingDeckId: string;
   };
 

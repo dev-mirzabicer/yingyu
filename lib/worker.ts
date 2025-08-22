@@ -12,6 +12,7 @@ import {
   BulkImportStudentsPayloadSchema,
   BulkImportVocabularyPayloadSchema,
   BulkImportFillInTheBlankPayloadSchema,
+  BulkImportGenericDeckPayloadSchema,
 } from './schemas';
 import { ContentService } from './actions/content';
 
@@ -82,13 +83,27 @@ export async function processPendingJobs() {
         }
         case JobType.REBUILD_FSRS_CACHE: {
           const payload = RebuildCachePayloadSchema.parse(job.payload);
-          resultPayload = await FSRSService._rebuildCacheForStudent(payload);
+          // Check if the payload has a context field to determine which rebuild method to use
+          const context = (payload as any).context;
+          if (context === 'GENERIC') {
+            resultPayload = await FSRSService._rebuildGenericCacheForStudent(payload);
+          } else {
+            // Default to vocabulary cache rebuild for backward compatibility
+            resultPayload = await FSRSService._rebuildCacheForStudent(payload);
+          }
           break;
         }
         // --- NEW JOB HANDLER ---
         case JobType.OPTIMIZE_FSRS_PARAMS: {
           const payload = OptimizeParamsPayloadSchema.parse(job.payload);
-          resultPayload = await FSRSService._optimizeParameters(payload);
+          // Check if the payload has a context field to determine which optimization method to use
+          const context = (payload as any).context;
+          if (context === 'GENERIC') {
+            resultPayload = await FSRSService._optimizeGenericParameters(payload);
+          } else {
+            // Default to vocabulary optimization for backward compatibility
+            resultPayload = await FSRSService._optimizeParameters(payload);
+          }
           break;
         }
         // --- LISTENING FSRS JOB HANDLERS ---
@@ -123,6 +138,11 @@ export async function processPendingJobs() {
         case JobType.BULK_IMPORT_FILL_IN_THE_BLANK: {
           const payload = BulkImportFillInTheBlankPayloadSchema.parse(job.payload);
           resultPayload = await ContentService._bulkAddFillInTheBlankCards(payload);
+          break;
+        }
+        case JobType.BULK_IMPORT_GENERIC_DECK: {
+          const payload = BulkImportGenericDeckPayloadSchema.parse(job.payload);
+          resultPayload = await ContentService._bulkAddGenericCards(payload);
           break;
         }
         default:

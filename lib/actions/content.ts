@@ -15,6 +15,8 @@ import {
   ListeningExercise,
   FillInTheBlankDeck,
   FillInTheBlankCard,
+  GenericDeck,
+  GenericCard,
   Prisma,
   VocabularyCard,
 } from '@prisma/client';
@@ -32,7 +34,8 @@ type Exercise =
   | VocabularyDeck
   | GrammarExercise
   | ListeningExercise
-  | FillInTheBlankDeck;
+  | FillInTheBlankDeck
+  | GenericDeck;
 
 /**
  * Service responsible for managing the global repository of all learning materials.
@@ -60,6 +63,7 @@ export const ContentService = {
             grammarExercise: true,
             listeningExercise: true,
             fillInTheBlankDeck: true,
+            genericDeck: true,
           },
         },
       },
@@ -479,6 +483,45 @@ export const ContentService = {
           });
           break;
         }
+        case 'GENERIC_DECK': {
+          let deckId: string;
+
+          if (itemData.mode === 'existing') {
+            // Link existing deck
+            const existingDeck = await tx.genericDeck.findUnique({
+              where: { id: itemData.existingDeckId },
+              select: { id: true, creatorId: true, isPublic: true },
+            });
+
+            if (!existingDeck) {
+              throw new Error('Selected generic deck not found.');
+            }
+
+            // Check if the teacher has access to this deck
+            if (!existingDeck.isPublic && existingDeck.creatorId !== creatorId) {
+              throw new AuthorizationError('You do not have permission to use this generic deck.');
+            }
+
+            deckId = existingDeck.id;
+          } else {
+            // Create new deck
+            const newDeck = await tx.genericDeck.create({
+              data: { ...itemData.data, creatorId },
+            });
+            deckId = newDeck.id;
+          }
+
+          newUnitItem = await tx.unitItem.create({
+            data: {
+              unitId,
+              order: newOrder,
+              type: 'GENERIC_DECK',
+              genericDeckId: deckId,
+              exerciseConfig: itemData.config || Prisma.JsonNull,
+            },
+          });
+          break;
+        }
         default:
           throw new Error('Invalid exercise type provided.');
       }
@@ -574,6 +617,8 @@ export const ContentService = {
           return findAndCopy('listeningExercise', exerciseId);
         case UnitItemType.FILL_IN_THE_BLANK_EXERCISE:
           return findAndCopy('fillInTheBlankDeck', exerciseId);
+        case UnitItemType.GENERIC_DECK:
+          return findAndCopy('genericDeck', exerciseId);
         default:
           throw new Error(`Forking not supported for type: ${exerciseType}`);
       }
@@ -627,6 +672,8 @@ export const ContentService = {
         return findAndArchive('listeningExercise', exerciseId);
       case UnitItemType.FILL_IN_THE_BLANK_EXERCISE:
         return findAndArchive('fillInTheBlankDeck', exerciseId);
+      case UnitItemType.GENERIC_DECK:
+        return findAndArchive('genericDeck', exerciseId);
       default:
         throw new Error(`Archiving not supported for type: ${exerciseType}`);
     }
@@ -820,6 +867,12 @@ export const ContentService = {
           const fibCardCount = item.fillInTheBlankDeck?._count?.cards || 0;
           minDuration += Math.ceil(fibCardCount * 0.75); // 45s per card
           maxDuration += Math.ceil(fibCardCount * 1.5); // 1.5m per card
+          break;
+        case 'GENERIC_DECK':
+          // Similar timing to vocabulary deck
+          const genericCardCount = item.genericDeck?._count?.cards || 0;
+          minDuration += Math.ceil(genericCardCount * 0.5); // 30s per card
+          maxDuration += genericCardCount; // 1m per card
           break;
         default:
           break;
@@ -1332,6 +1385,380 @@ export const ContentService = {
 
     // Other field changes (englishWord, chineseTranslation, pinyin) don't require state cleanup
     // since they're referenced dynamically through the foreign key relationship
+  },
+
+  // ================================================================= //
+  // GENERIC DECK CRUD METHODS
+  // ================================================================= //
+
+  /**
+   * Creates a new generic deck.
+   * This implementation mirrors createDeck but creates a GenericDeck.
+   */
+  async createGenericDeck(data: {
+    creatorId: string;
+    name: string;
+    description?: string;
+    isPublic?: boolean;
+    boundVocabularyDeckId?: string;
+  }): Promise<GenericDeck> {
+    return prisma.genericDeck.create({ data });
+  },
+
+  /**
+   * Updates an existing generic deck.
+   * Only the creator can update their own deck.
+   */
+  async updateGenericDeck(
+    deckId: string,
+    teacherId: string,
+    data: Partial<Omit<Prisma.GenericDeckUpdateInput, 'creator' | 'cards'>>
+  ): Promise<GenericDeck> {
+    const deck = await prisma.genericDeck.findUnique({
+      where: { id: deckId },
+      select: { creatorId: true },
+    });
+
+    if (!deck) {
+      throw new Error(`Generic deck with ID ${deckId} not found.`);
+    }
+
+    if (deck.creatorId !== teacherId) {
+      throw new AuthorizationError(
+        'You do not have permission to update this generic deck.'
+      );
+    }
+
+    return prisma.genericDeck.update({
+      where: { id: deckId },
+      data,
+    });
+  },
+
+  /**
+   * Retrieves all generic decks for a given teacher.
+   */
+  async getGenericDecksForTeacher(teacherId: string): Promise<GenericDeck[]> {
+    return prisma.genericDeck.findMany({
+      where: {
+        creatorId: teacherId,
+        isArchived: false
+      },
+      include: {
+        _count: {
+          select: {
+            cards: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  /**
+   * Retrieves all public generic decks.
+   */
+  async getPublicGenericDecks(): Promise<GenericDeck[]> {
+    return prisma.genericDeck.findMany({
+      where: {
+        isPublic: true,
+        isArchived: false
+      },
+      include: {
+        _count: {
+          select: {
+            cards: true,
+          },
+        },
+        creator: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  /**
+   * Adds a new card to a generic deck.
+   * This implementation mirrors addCardToDeck but works with GenericCard.
+   */
+  async addCardToGenericDeck(
+    deckId: string,
+    teacherId: string,
+    cardData: Omit<Prisma.GenericCardCreateInput, 'deck'>
+  ): Promise<GenericCard> {
+    const deck = await prisma.genericDeck.findUnique({
+      where: { id: deckId },
+      select: { creatorId: true },
+    });
+
+    if (!deck) {
+      throw new Error(`Generic deck with ID ${deckId} not found.`);
+    }
+
+    if (deck.creatorId !== teacherId) {
+      throw new AuthorizationError(
+        'You do not have permission to add cards to this generic deck.'
+      );
+    }
+
+    return prisma.genericCard.create({
+      data: {
+        ...cardData,
+        deckId,
+      },
+    });
+  },
+
+  /**
+   * Updates an existing generic card.
+   * This implementation mirrors updateCard but works with GenericCard.
+   */
+  async updateGenericCard(
+    cardId: string,
+    deckId: string,
+    teacherId: string,
+    cardData: Partial<Omit<Prisma.GenericCardUpdateInput, 'deck'>>
+  ): Promise<GenericCard> {
+    return prisma.$transaction(async (tx) => {
+      // First verify the card exists and belongs to the specified deck
+      const card = await tx.genericCard.findUnique({
+        where: { id: cardId },
+        include: { deck: { select: { creatorId: true, id: true } } },
+      });
+
+      if (!card) {
+        throw new Error(`Generic card with ID ${cardId} not found.`);
+      }
+
+      if (card.deck.id !== deckId) {
+        throw new Error('Card does not belong to the specified deck.');
+      }
+
+      if (card.deck.creatorId !== teacherId) {
+        throw new AuthorizationError(
+          'You do not have permission to update this generic card.'
+        );
+      }
+
+      return tx.genericCard.update({
+        where: { id: cardId },
+        data: cardData,
+      });
+    });
+  },
+
+  /**
+   * Deletes a generic card from a deck.
+   * This implementation mirrors the vocabulary card deletion pattern.
+   */
+  async deleteGenericCard(
+    cardId: string,
+    deckId: string,
+    teacherId: string
+  ): Promise<GenericCard> {
+    return prisma.$transaction(async (tx) => {
+      // First verify the card exists and belongs to the specified deck
+      const card = await tx.genericCard.findUnique({
+        where: { id: cardId },
+        include: { deck: { select: { creatorId: true, id: true } } },
+      });
+
+      if (!card) {
+        throw new Error(`Generic card with ID ${cardId} not found.`);
+      }
+
+      if (card.deck.id !== deckId) {
+        throw new Error('Card does not belong to the specified deck.');
+      }
+
+      if (card.deck.creatorId !== teacherId) {
+        throw new AuthorizationError(
+          'You do not have permission to delete this generic card.'
+        );
+      }
+
+      // Delete all related FSRS states first
+      await tx.studentGenericCardState.deleteMany({
+        where: { cardId },
+      });
+
+      // Delete review history for this card
+      await tx.reviewHistory.deleteMany({
+        where: { 
+          cardId,
+          reviewType: 'GENERIC'
+        },
+      });
+
+      // Finally delete the card itself
+      return tx.genericCard.delete({
+        where: { id: cardId },
+      });
+    });
+  },
+
+  /**
+   * Auto-binding logic for generic decks to vocabulary decks.
+   * This implementation mirrors autoBindFillInTheBlankToVocabulary.
+   */
+  async autoBindGenericToVocabulary(deckId: string, teacherId: string): Promise<{
+    matches: number;
+    ambiguities: Array<{ cardId: string; front: string; candidateIds: string[] }>;
+    noMatch: Array<{ cardId: string; front: string }>;
+  }> {
+    // 1. Authorize teacher and get the generic deck
+    const deck = await prisma.genericDeck.findUnique({
+      where: { id: deckId },
+      select: { creatorId: true, boundVocabularyDeckId: true, cards: { select: { id: true, front: true } } },
+    });
+
+    if (!deck) {
+      throw new Error('Generic deck not found.');
+    }
+
+    if (deck.creatorId !== teacherId) {
+      throw new AuthorizationError('You do not have permission to auto-bind this generic deck.');
+    }
+
+    if (!deck.boundVocabularyDeckId) {
+      throw new Error('This generic deck is not bound to a vocabulary deck.');
+    }
+
+    // 2. Get vocabulary cards from the bound deck
+    const vocabularyCards = await prisma.vocabularyCard.findMany({
+      where: { deckId: deck.boundVocabularyDeckId },
+      select: { id: true, englishWord: true },
+    });
+
+    // 3. Create a map of englishWord -> VocabularyCard[]
+    const vocabMap = new Map<string, Array<{ id: string; englishWord: string }>>();
+    vocabularyCards.forEach(card => {
+      const key = card.englishWord.toLowerCase().trim();
+      if (!vocabMap.has(key)) {
+        vocabMap.set(key, []);
+      }
+      vocabMap.get(key)!.push(card);
+    });
+
+    // 4. Process each GenericCard, matching card.front to vocabMap key
+    const matches: Array<{ cardId: string; vocabCardId: string }> = [];
+    const ambiguities: Array<{ cardId: string; front: string; candidateIds: string[] }> = [];
+    const noMatch: Array<{ cardId: string; front: string }> = [];
+
+    for (const genericCard of deck.cards) {
+      const searchKey = genericCard.front.toLowerCase().trim();
+      const candidates = vocabMap.get(searchKey) || [];
+
+      if (candidates.length === 0) {
+        noMatch.push({ cardId: genericCard.id, front: genericCard.front });
+      } else if (candidates.length === 1) {
+        matches.push({ cardId: genericCard.id, vocabCardId: candidates[0].id });
+      } else {
+        ambiguities.push({
+          cardId: genericCard.id,
+          front: genericCard.front,
+          candidateIds: candidates.map(c => c.id)
+        });
+      }
+    }
+
+    // 5. Apply automatic updates for perfect matches
+    await prisma.$transaction(
+      matches.map(match =>
+        prisma.genericCard.update({
+          where: { id: match.cardId },
+          data: { boundVocabularyCardId: match.vocabCardId }
+        })
+      )
+    );
+
+    return { 
+      matches: matches.length, 
+      ambiguities, 
+      noMatch 
+    };
+  },
+
+  /**
+   * Internal method to bulk add generic cards to a deck.
+   * This implementation mirrors _bulkAddVocabularyCards.
+   */
+  async _bulkAddGenericCards(
+    payload: Prisma.JsonValue
+  ): Promise<{ cardsAdded: number; errors: string[] }> {
+    const { deckId, teacherId, cards } = payload as {
+      deckId: string;
+      teacherId: string;
+      cards: Array<{
+        front: string;
+        back: string;
+        exampleSentences?: any;
+        audioUrl?: string;
+        imageUrl?: string;
+        tags?: string[];
+      }>;
+    };
+
+    if (!Array.isArray(cards) || cards.length === 0) {
+      throw new Error('Invalid payload: cards array is required and must not be empty.');
+    }
+
+    const deck = await prisma.genericDeck.findUnique({
+      where: { id: deckId },
+      select: { creatorId: true },
+    });
+
+    if (!deck) {
+      throw new Error(`Generic deck with ID ${deckId} not found.`);
+    }
+
+    if (deck.creatorId !== teacherId) {
+      throw new AuthorizationError(
+        'You do not have permission to add cards to this generic deck.'
+      );
+    }
+
+    const errors: string[] = [];
+    let cardsAdded = 0;
+
+    // Process cards in batches of 100 to avoid memory issues
+    const batchSize = 100;
+    for (let i = 0; i < cards.length; i += batchSize) {
+      const batch = cards.slice(i, i + batchSize);
+      
+      try {
+        const validCards = batch.filter(card => {
+          if (!card.front?.trim() || !card.back?.trim()) {
+            errors.push(`Card ${i + batch.indexOf(card) + 1}: front and back fields are required`);
+            return false;
+          }
+          return true;
+        });
+
+        if (validCards.length > 0) {
+          const cardsToCreate = validCards.map(card => ({
+            deckId,
+            front: card.front.trim(),
+            back: card.back.trim(),
+            exampleSentences: card.exampleSentences || null,
+            audioUrl: card.audioUrl || null,
+            imageUrl: card.imageUrl || null,
+            tags: card.tags || [],
+          }));
+
+          await prisma.genericCard.createMany({
+            data: cardsToCreate,
+            skipDuplicates: true,
+          });
+
+          cardsAdded += validCards.length;
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        errors.push(`Batch ${Math.floor(i / batchSize) + 1}: ${errorMessage}`);
+      }
+    }
+
+    return { cardsAdded, errors };
   },
 };
 

@@ -4,6 +4,7 @@ import {
   BulkImportSchedulesPayloadSchema,
   BulkImportStudentsPayloadSchema,
   BulkImportVocabularyPayloadSchema,
+  BulkImportGenericDeckPayloadSchema,
 } from '../schemas';
 
 /**
@@ -71,6 +72,18 @@ export const JobService = {
     return this.createJob(
       ownerId,
       JobType.BULK_IMPORT_SCHEDULES,
+      validatedPayload as any
+    );
+  },
+
+  async createBulkImportGenericDeckJob(
+    ownerId: string,
+    payload: Prisma.InputJsonValue
+  ) {
+    const validatedPayload = BulkImportGenericDeckPayloadSchema.parse(payload);
+    return this.createJob(
+      ownerId,
+      JobType.BULK_IMPORT_GENERIC_DECK,
       validatedPayload as any
     );
   },
