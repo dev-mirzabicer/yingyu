@@ -99,7 +99,7 @@ jobs:
             echo "✅ Cleanup completed"
 
   deploy:
-    needs: cleanup
+    needs: [build, cleanup]
     runs-on: ubuntu-latest
     steps:
       - name: SSH deploy
