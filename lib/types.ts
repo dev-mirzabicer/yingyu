@@ -66,6 +66,12 @@ export type FillInTheBlankDeckWithCount = FillInTheBlankDeck & {
   };
 };
 
+export type GenericDeckWithCount = GenericDeck & {
+  _count: {
+    cards: number;
+  };
+};
+
 export type PopulatedStudentDeck = StudentDeck & {
   deck: VocabularyDeck & {
     cards?: { id: string }[];

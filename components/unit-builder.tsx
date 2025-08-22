@@ -40,6 +40,7 @@ import {
   useUnit,
   useDecks,
   useFillInTheBlankDecks,
+  useGenericDecks,
   createUnit,
   updateUnit,
   addExerciseToUnit,
@@ -139,6 +140,20 @@ const unitItemTemplates: UnitItemTemplate[] = [
       vocabularyConfidenceThreshold: 0.8,
     },
   },
+  {
+    id: "generic-deck",
+    type: "GENERIC_DECK",
+    title: "Generic Deck",
+    description: "Spaced repetition practice with custom front/back cards",
+    icon: Layers,
+    defaultConfig: {
+      deckId: "",
+      newCards: 10,
+      maxDue: 50,
+      minDue: 10,
+      boundVocabularyDeckId: "",
+    },
+  },
 ]
 
 const difficultyLevels = [
@@ -154,6 +169,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
   const { unit: fullUnitData, isLoading: isUnitLoading } = useUnit(unitId || ""); // Use the specific hook
   const { decks } = useDecks()
   const { decks: fillInTheBlankDecks } = useFillInTheBlankDecks()
+  const { decks: genericDecks } = useGenericDecks()
 
   const [unitData, setUnitData] = useState({
     name: "",
@@ -193,6 +209,8 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               item.vocabularyDeck?.name ||
               item.listeningExercise?.title ||
               item.grammarExercise?.title ||
+              item.fillInTheBlankDeck?.name ||
+              item.genericDeck?.name ||
               "Untitled",
             config: item.config || {},
             order: item.order,
@@ -441,6 +459,18 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
             }
             itemData = {
               type: 'FILL_IN_THE_BLANK_EXERCISE',
+              order: item.order,
+              config: item.config,
+              mode: 'existing',
+              existingDeckId: item.config.deckId,
+            }
+          } else if (item.type === 'GENERIC_DECK') {
+            // Generic deck exercises always reference existing decks
+            if (!item.config.deckId) {
+              throw new Error(`Generic deck exercise "${item.title}" must have a deck selected.`)
+            }
+            itemData = {
+              type: 'GENERIC_DECK',
               order: item.order,
               config: item.config,
               mode: 'existing',
@@ -875,6 +905,119 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
       </div>
     )
 
+    const renderGenericDeckConfig = () => (
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="genericDeckId">Generic Deck *</Label>
+          <Select
+            value={editingItem.config.deckId || ""}
+            onValueChange={(value) =>
+              setEditingItem({
+                ...editingItem,
+                config: { ...editingItem.config, deckId: value },
+              })
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select a generic deck" />
+            </SelectTrigger>
+            <SelectContent>
+              {genericDecks.map((deck) => (
+                <SelectItem key={deck.id} value={deck.id}>
+                  {deck.name} ({deck._count?.cards || 0} cards)
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-sm text-slate-500">
+            Students will practice with generic cards from this deck
+          </p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="genericNewCards">New Cards</Label>
+            <Input
+              id="genericNewCards"
+              type="number"
+              min="0"
+              max="50"
+              value={editingItem.config.newCards || 10}
+              onChange={(e) =>
+                setEditingItem({
+                  ...editingItem,
+                  config: { ...editingItem.config, newCards: Number.parseInt(e.target.value) },
+                })
+              }
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="genericMaxDue">Max Due Cards</Label>
+            <Input
+              id="genericMaxDue"
+              type="number"
+              min="0"
+              max="200"
+              value={editingItem.config.maxDue || 50}
+              onChange={(e) =>
+                setEditingItem({
+                  ...editingItem,
+                  config: { ...editingItem.config, maxDue: Number.parseInt(e.target.value) },
+                })
+              }
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="genericMinDue">Min Due Cards</Label>
+            <Input
+              id="genericMinDue"
+              type="number"
+              min="0"
+              max="50"
+              value={editingItem.config.minDue || 10}
+              onChange={(e) =>
+                setEditingItem({
+                  ...editingItem,
+                  config: { ...editingItem.config, minDue: Number.parseInt(e.target.value) },
+                })
+              }
+            />
+          </div>
+        </div>
+
+        {/* Optional Vocabulary Deck Binding */}
+        <div className="space-y-2">
+          <Label htmlFor="boundVocabularyDeckId">Bind to Vocabulary Deck (Optional)</Label>
+          <Select
+            value={editingItem.config.boundVocabularyDeckId || ""}
+            onValueChange={(value) =>
+              setEditingItem({
+                ...editingItem,
+                config: { ...editingItem.config, boundVocabularyDeckId: value },
+              })
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select a vocabulary deck to bind..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">No binding</SelectItem>
+              {decks.map((deck) => (
+                <SelectItem key={deck.id} value={deck.id}>
+                  {deck.name} ({deck._count?.cards || 0} cards)
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-sm text-slate-500">
+            Bind to vocabulary deck for enhanced thresholding features
+          </p>
+        </div>
+      </div>
+    )
+
     return (
       <Dialog open={isConfigDialogOpen} onOpenChange={setIsConfigDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh]">
@@ -887,6 +1030,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               {editingItem.type === "LISTENING_EXERCISE" && renderListeningExerciseConfig()}
               {editingItem.type === "GRAMMAR_EXERCISE" && renderGrammarExerciseConfig()}
               {editingItem.type === "FILL_IN_THE_BLANK_EXERCISE" && renderFillInTheBlankConfig()}
+              {editingItem.type === "GENERIC_DECK" && renderGenericDeckConfig()}
 
               <Separator />
 
@@ -1216,6 +1360,29 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
                                           })()}
                                         </div>
                                       )}
+                                      {item.type === "GENERIC_DECK" && (
+                                        <div className="space-y-1">
+                                          <p>
+                                            <strong>Deck:</strong>{" "}
+                                            {genericDecks.find((d) => d.id === item.config.deckId)?.name || "Not selected"}
+                                          </p>
+                                          <p>
+                                            <strong>New Cards:</strong> {item.config.newCards || 10}
+                                          </p>
+                                          <p>
+                                            <strong>Max Due:</strong> {item.config.maxDue || 50}
+                                          </p>
+                                          <p>
+                                            <strong>Min Due:</strong> {item.config.minDue || 10}
+                                          </p>
+                                          {item.config.boundVocabularyDeckId && (
+                                            <p>
+                                              <strong>Bound to:</strong>{" "}
+                                              {decks.find((d) => d.id === item.config.boundVocabularyDeckId)?.name || "Unknown deck"}
+                                            </p>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 )}
@@ -1243,6 +1410,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
           (item.type === "VOCABULARY_DECK" && !item.config.deckId) ||
           (item.type === "LISTENING_EXERCISE" && !item.config.deckId) ||
           (item.type === "FILL_IN_THE_BLANK_EXERCISE" && !item.config.deckId) ||
+          (item.type === "GENERIC_DECK" && !item.config.deckId) ||
           !item.config.title,
       ) && (
           <Alert>

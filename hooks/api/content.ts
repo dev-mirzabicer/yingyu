@@ -6,6 +6,7 @@ import type {
   UnitWithCount,
   VocabularyDeckWithCount,
   FillInTheBlankDeckWithCount,
+  GenericDeckWithCount,
   VocabularyExerciseConfig,
   NewUnitItemData,
 } from "@/lib/types"
@@ -15,6 +16,8 @@ import type {
   VocabularyCard,
   FillInTheBlankDeck,
   FillInTheBlankCard,
+  GenericDeck,
+  GenericCard,
   Job,
 } from "@prisma/client"
 import { fetcher, mutateWithOptimistic, ApiError } from "./utils"
@@ -286,4 +289,103 @@ export async function resolveFillInTheBlankBinding(deckId: string, resolutions: 
 
 export async function bulkImportFillInTheBlankCards(deckId: string, cards: any[]) {
   return mutateWithOptimistic<Job>("/api/bulk-import/fill-in-the-blank", "POST", { deckId, cards });
+}
+
+// ============================================================================
+// GENERIC DECK MANAGEMENT HOOKS
+// ============================================================================
+
+export function useGenericDecks() {
+  const { data, error, isLoading, mutate } = useSWR<GenericDeckWithCount[]>("/api/generic-decks", fetcher);
+  return { decks: data || [], isLoading, isError: error, mutate, error: error as ApiError | undefined };
+}
+
+export function usePublicGenericDecks() {
+  const { data, error, isLoading, mutate } = useSWR<GenericDeckWithCount[]>("/api/public-generic-decks", fetcher);
+  return { publicDecks: data || [], isLoading, isError: error, mutate, error: error as ApiError | undefined };
+}
+
+export function useGenericDeck(deckId: string) {
+  const { data, error, isLoading, mutate } = useSWR<GenericDeck & { 
+    cards: GenericCard[]; 
+    boundVocabularyDeck: { id: string; name: string } | null;
+    _count: { cards: number };
+  }>(
+    deckId ? `/api/generic-decks/${deckId}` : null,
+    fetcher
+  );
+  return { deck: data, isLoading, isError: error, mutate, error: error as ApiError | undefined };
+}
+
+export function useGenericDeckCards(deckId: string) {
+  const { data, error, isLoading, mutate } = useSWR<{ cards: (GenericCard & {
+    boundVocabularyCard: { id: string; englishWord: string } | null;
+  })[] }>(
+    deckId ? `/api/generic-decks/${deckId}/cards` : null,
+    fetcher
+  );
+  return { cards: data?.cards || [], isLoading, isError: error, mutate, error: error as ApiError | undefined };
+}
+
+// --- Action Functions ---
+
+export async function createGenericDeck(deckData: { 
+  name: string; 
+  description?: string; 
+  isPublic?: boolean; 
+  boundVocabularyDeckId?: string 
+}) {
+  return mutateWithOptimistic<GenericDeckWithCount>("/api/generic-decks", "POST", deckData);
+}
+
+export async function updateGenericDeck(deckId: string, deckData: Partial<{ 
+  name: string; 
+  description?: string; 
+  isPublic?: boolean; 
+  boundVocabularyDeckId?: string 
+}>) {
+  return mutateWithOptimistic<GenericDeck>(`/api/generic-decks/${deckId}`, "PUT", deckData);
+}
+
+export async function addCardToGenericDeck(deckId: string, cardData: {
+  front: string;
+  back: string;
+  exampleSentences?: any;
+}) {
+  return mutateWithOptimistic<{ card: GenericCard }>(`/api/generic-decks/${deckId}/cards`, "POST", cardData);
+}
+
+export async function updateGenericCard(deckId: string, cardId: string, cardData: Partial<{
+  front: string;
+  back: string;
+  exampleSentences?: any;
+}>) {
+  return mutateWithOptimistic<{ card: GenericCard }>(`/api/generic-decks/${deckId}/cards/${cardId}`, "PUT", cardData);
+}
+
+export async function deleteGenericCard(deckId: string, cardId: string) {
+  return mutateWithOptimistic(`/api/generic-decks/${deckId}/cards/${cardId}`, "DELETE");
+}
+
+export async function forkGenericDeck(deckId: string) {
+  return mutateWithOptimistic<GenericDeck>("/api/generic-decks/fork", "POST", { deckId });
+}
+
+export async function autoBindGenericDeck(deckId: string) {
+  // This is a one-off action, not a typical SWR mutation
+  const response = await fetch(`/api/generic-decks/${deckId}/bind`, { method: 'POST' });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+  return result.data;
+}
+
+export async function resolveGenericBinding(deckId: string, resolutions: { 
+  genericCardId: string; 
+  vocabularyCardId: string | null 
+}[]) {
+  return mutateWithOptimistic(`/api/generic-decks/${deckId}/bind`, "PUT", { resolutions });
+}
+
+export async function bulkImportGenericCards(deckId: string, cards: any[]) {
+  return mutateWithOptimistic<Job>("/api/bulk-import/generic-deck", "POST", { deckId, cards });
 }

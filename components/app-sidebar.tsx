@@ -45,6 +45,7 @@ import {
   Bell,
   HelpCircle,
   PencilLine,
+  Package,
 } from "lucide-react"
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> { }
@@ -77,6 +78,12 @@ const navigationItems = [
         badge: null,
       },
       {
+        title: "Generic Decks",
+        url: "/generic-decks",
+        icon: Layers,
+        badge: "New",
+      },
+      {
         title: "Fill in the Blanks",
         url: "/fill-in-the-blanks",
         icon: PencilLine,
@@ -85,7 +92,7 @@ const navigationItems = [
       {
         title: "Units",
         url: "/units",
-        icon: Layers,
+        icon: Package,
         badge: null,
       },
       {

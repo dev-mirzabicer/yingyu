@@ -19,16 +19,7 @@ export async function POST(
 
     const result = await ContentService.autoBindGenericToVocabulary(deckId, teacherId);
 
-    return apiResponse(200, { 
-      matches: result.matchCount,
-      ambiguities: result.ambiguities,
-      noMatch: result.noMatch,
-      summary: {
-        automaticMatches: result.matchCount,
-        ambiguousCards: result.ambiguities.length,
-        unmatchedCards: result.noMatch.length,
-      }
-    }, null);
+    return apiResponse(200, result, null);
   } catch (error) {
     return handleApiError(error);
   }

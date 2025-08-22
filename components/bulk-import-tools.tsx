@@ -22,7 +22,7 @@ import {
   bulkImportSchedules,
   bulkImportStudents,
 } from "@/hooks/api/students";
-import { bulkImportVocabulary, bulkImportFillInTheBlankCards } from "@/hooks/api/content";
+import { bulkImportVocabulary, bulkImportFillInTheBlankCards, bulkImportGenericCards } from "@/hooks/api/content";
 import {
   Upload,
   Download,
@@ -45,7 +45,7 @@ import { BulkImportResult, BulkImportError } from "@/lib/types";
 import { BulkImportResultSchema } from "@/lib/schemas/jobs";
 
 interface BulkImportToolsProps {
-  type?: 'vocabulary' | 'students' | 'schedules' | 'fill-in-the-blank';
+  type?: 'vocabulary' | 'students' | 'schedules' | 'fill-in-the-blank' | 'generic-deck';
   deckId?: string;
   onComplete?: () => void;
 }
@@ -117,6 +117,19 @@ const importTemplates = {
         answer: "blue",
         options: "blue,red,green,yellow",
         explanation: "The sky appears blue due to light scattering.",
+      },
+    ],
+  },
+  "generic-deck": {
+    name: "Generic Deck Cards",
+    description: "Import generic cards with front/back content",
+    requiredFields: ["front", "back"],
+    optionalFields: ["exampleSentences"],
+    sampleData: [
+      {
+        front: "Hello",
+        back: "A greeting used when meeting someone",
+        exampleSentences: "Hello, how are you today?",
       },
     ],
   },
@@ -268,6 +281,17 @@ export function BulkImportTools({ type = "vocabulary", deckId, onComplete }: Bul
             return;
           }
           response = await bulkImportFillInTheBlankCards(deckId, previewData);
+          break;
+        case "generic-deck":
+          if (!deckId) {
+            toast({
+              title: "Cannot import generic deck cards",
+              description: "No deck selected.",
+              variant: "destructive",
+            });
+            return;
+          }
+          response = await bulkImportGenericCards(deckId, previewData);
           break;
         default:
           throw new Error("Invalid template selected");

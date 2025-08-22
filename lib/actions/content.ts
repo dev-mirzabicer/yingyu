@@ -1622,9 +1622,18 @@ export const ContentService = {
    * This implementation mirrors autoBindFillInTheBlankToVocabulary.
    */
   async autoBindGenericToVocabulary(deckId: string, teacherId: string): Promise<{
-    matchCount: number;
-    ambiguities: Array<{ cardId: string; front: string; candidateIds: string[] }>;
-    noMatch: Array<{ cardId: string; front: string }>;
+    automaticMatches: Array<{
+      genericCard: { id: string; front: string };
+      vocabularyCard: { id: string; englishWord: string };
+    }>;
+    ambiguities: Array<{
+      genericCard: { id: string; front: string };
+      possibleMatches: Array<{
+        id: string;
+        englishWord: string;
+      }>;
+    }>;
+    noMatches: Array<{ id: string; front: string }>;
   }> {
     // 1. Authorize teacher and get the generic deck
     const deck = await prisma.genericDeck.findUnique({
@@ -1661,41 +1670,62 @@ export const ContentService = {
     });
 
     // 4. Process each GenericCard, matching card.front to vocabMap key
-    const matches: Array<{ cardId: string; vocabCardId: string }> = [];
-    const ambiguities: Array<{ cardId: string; front: string; candidateIds: string[] }> = [];
-    const noMatch: Array<{ cardId: string; front: string }> = [];
+    const automaticMatches: Array<{
+      genericCard: { id: string; front: string };
+      vocabularyCard: { id: string; englishWord: string };
+    }> = [];
+    const ambiguities: Array<{
+      genericCard: { id: string; front: string };
+      possibleMatches: Array<{ id: string; englishWord: string }>;
+    }> = [];
+    const noMatches: Array<{ id: string; front: string }> = [];
+    const autoUpdates: Array<{ cardId: string; vocabularyCardId: string }> = [];
 
     for (const genericCard of deck.cards) {
       const searchKey = genericCard.front.toLowerCase().trim();
       const candidates = vocabMap.get(searchKey) || [];
 
       if (candidates.length === 0) {
-        noMatch.push({ cardId: genericCard.id, front: genericCard.front });
+        noMatches.push({ id: genericCard.id, front: genericCard.front });
       } else if (candidates.length === 1) {
-        matches.push({ cardId: genericCard.id, vocabCardId: candidates[0].id });
-      } else {
-        ambiguities.push({
+        // Perfect match - can be auto-bound
+        const match = candidates[0];
+        automaticMatches.push({
+          genericCard: { id: genericCard.id, front: genericCard.front },
+          vocabularyCard: { id: match.id, englishWord: match.englishWord }
+        });
+        autoUpdates.push({
           cardId: genericCard.id,
-          front: genericCard.front,
-          candidateIds: candidates.map(c => c.id)
+          vocabularyCardId: match.id
+        });
+      } else {
+        // Multiple matches - ambiguous, requires teacher input
+        ambiguities.push({
+          genericCard: { id: genericCard.id, front: genericCard.front },
+          possibleMatches: candidates.map(c => ({
+            id: c.id,
+            englishWord: c.englishWord
+          }))
         });
       }
     }
 
     // 5. Apply automatic updates for perfect matches
-    await prisma.$transaction(
-      matches.map(match =>
-        prisma.genericCard.update({
-          where: { id: match.cardId },
-          data: { boundVocabularyCardId: match.vocabCardId }
-        })
-      )
-    );
+    if (autoUpdates.length > 0) {
+      await prisma.$transaction(
+        autoUpdates.map(update =>
+          prisma.genericCard.update({
+            where: { id: update.cardId },
+            data: { boundVocabularyCardId: update.vocabularyCardId }
+          })
+        )
+      );
+    }
 
     return { 
-      matchCount: matches.length, 
+      automaticMatches, 
       ambiguities, 
-      noMatch 
+      noMatches 
     };
   },
 

@@ -6,8 +6,9 @@ import { ExerciseProps, VocabularyExercise } from "./VocabularyExercise"
 import { GrammarExercise } from "./GrammarExercise"
 import { ListeningExercise } from "./ListeningExercise"
 import { FillInTheBlankExercise } from "./FillInTheBlankExercise"
+import { GenericExercise } from "./GenericExercise"
 import { UnsupportedExercise } from "./UnsupportedExercise"
-import { BookOpen, FileText, Mic, PencilLine } from "lucide-react"
+import { BookOpen, FileText, Mic, PencilLine, Layers } from "lucide-react"
 import { Card, CardContent } from "../ui/card"
 
 // Exercise type information mapping - modular and extensible
@@ -32,6 +33,11 @@ export const exerciseTypeInfo = {
     icon: PencilLine,
     color: "bg-orange-100 text-orange-700",
   },
+  [UnitItemType.GENERIC_DECK]: {
+    label: "Generic Deck",
+    icon: Layers,
+    color: "bg-teal-100 text-teal-700",
+  },
 }
 
 export const exerciseDispatcher: Record<
@@ -42,6 +48,7 @@ export const exerciseDispatcher: Record<
   [UnitItemType.GRAMMAR_EXERCISE]: GrammarExercise,
   [UnitItemType.LISTENING_EXERCISE]: ListeningExercise,
   [UnitItemType.FILL_IN_THE_BLANK_EXERCISE]: FillInTheBlankExercise,
+  [UnitItemType.GENERIC_DECK]: GenericExercise,
 }
 
 export function getExerciseComponent(

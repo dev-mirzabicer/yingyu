@@ -191,6 +191,21 @@ export function useFsrsStats(studentId: string) {
   };
 }
 
+export function useGenericFsrsStats(studentId: string) {
+  const { data, error, isLoading, mutate } = useSWR<FsrsStats>(
+    studentId ? `/api/students/${studentId}/fsrs/generic-stats` : null,
+    fetcher
+  );
+
+  return {
+    stats: data,
+    isLoading,
+    isError: error,
+    mutate,
+    error: error as ApiError | undefined,
+  };
+}
+
 export function useAvailableUnits(studentId: string, options?: { skip?: boolean }) {
   const { data, error, isLoading, mutate } = useSWR<AvailableUnit[]>(
     studentId && !options?.skip ? `/api/students/${studentId}/available-units` : null,
@@ -208,6 +223,10 @@ export function useAvailableUnits(studentId: string, options?: { skip?: boolean 
 
 export async function optimizeFsrsParameters(studentId: string) {
   return mutateWithOptimistic<Job>(`/api/students/${studentId}/fsrs/optimize-parameters`, "POST")
+}
+
+export async function optimizeGenericFsrsParameters(studentId: string) {
+  return mutateWithOptimistic<Job>(`/api/students/${studentId}/fsrs/optimize-generic-parameters`, "POST")
 }
 
 export async function rebuildFsrsCache(studentId: string) {
