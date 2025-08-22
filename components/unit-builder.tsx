@@ -151,7 +151,6 @@ const unitItemTemplates: UnitItemTemplate[] = [
       newCards: 10,
       maxDue: 50,
       minDue: 10,
-      boundVocabularyDeckId: "",
     },
   },
 ]
@@ -987,32 +986,11 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
           </div>
         </div>
 
-        {/* Optional Vocabulary Deck Binding */}
-        <div className="space-y-2">
-          <Label htmlFor="boundVocabularyDeckId">Bind to Vocabulary Deck (Optional)</Label>
-          <Select
-            value={editingItem.config.boundVocabularyDeckId || ""}
-            onValueChange={(value) =>
-              setEditingItem({
-                ...editingItem,
-                config: { ...editingItem.config, boundVocabularyDeckId: value },
-              })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select a vocabulary deck to bind..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">No binding</SelectItem>
-              {decks.map((deck) => (
-                <SelectItem key={deck.id} value={deck.id}>
-                  {deck.name} ({deck._count?.cards || 0} cards)
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-sm text-slate-500">
-            Bind to vocabulary deck for enhanced thresholding features
+        {/* Note about vocabulary binding */}
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm text-blue-800">
+            <strong>Vocabulary Binding:</strong> To bind this generic deck to a vocabulary deck for enhanced features, 
+            use the auto-bind function in the Generic Deck management page.
           </p>
         </div>
       </div>
@@ -1375,12 +1353,6 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
                                           <p>
                                             <strong>Min Due:</strong> {item.config.minDue || 10}
                                           </p>
-                                          {item.config.boundVocabularyDeckId && (
-                                            <p>
-                                              <strong>Bound to:</strong>{" "}
-                                              {decks.find((d) => d.id === item.config.boundVocabularyDeckId)?.name || "Unknown deck"}
-                                            </p>
-                                          )}
                                         </div>
                                       )}
                                     </div>

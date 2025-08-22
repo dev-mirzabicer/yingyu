@@ -61,6 +61,18 @@ const AddItemBodySchema = z.union([
       vocabularyConfidenceThreshold: z.number().min(0).max(1).optional(),
     }).optional(),
   }),
+  z.object({
+    type: z.literal('GENERIC_DECK'),
+    mode: z.literal('existing'),
+    order: z.number().optional(),
+    existingDeckId: z.string().uuid(),
+    config: z.object({
+      deckId: z.string().uuid(),
+      newCards: z.number().int().min(0).optional(),
+      maxDue: z.number().int().min(0).optional(),
+      minDue: z.number().int().min(0).optional(),
+    }).optional(),
+  }),
 ]);
 
 export async function POST(
