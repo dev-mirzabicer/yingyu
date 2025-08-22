@@ -69,7 +69,7 @@ export async function POST(
     const newCard = await ContentService.addCardToGenericDeck(
       deckId,
       teacherId,
-      cardData as Prisma.GenericCardCreateInput
+      cardData
     );
 
     // 4. Return Success Response

@@ -632,6 +632,14 @@ export const StudentService = {
                 cards: { select: { id: true } },
               },
             },
+            genericDeck: {
+              include: {
+                cards: { select: { id: true } },
+                _count: {
+                  select: { cards: true },
+                },
+              },
+            },
           },
           orderBy: { order: 'asc' },
         },

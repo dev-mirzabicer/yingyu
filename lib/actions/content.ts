@@ -543,12 +543,13 @@ export const ContentService = {
           | 'vocabularyDeck'
           | 'grammarExercise'
           | 'listeningExercise'
-          | 'fillInTheBlankDeck',
+          | 'fillInTheBlankDeck'
+          | 'genericDeck',
         id: string
       ) => {
         const original = await (tx as any)[model].findUnique({
           where: { id, isArchived: false },
-          include: (model === 'vocabularyDeck' || model === 'fillInTheBlankDeck') ? { cards: true } : undefined,
+          include: (model === 'vocabularyDeck' || model === 'fillInTheBlankDeck' || model === 'genericDeck') ? { cards: true } : undefined,
         });
 
         if (!original)
@@ -643,7 +644,8 @@ export const ContentService = {
         | 'vocabularyDeck'
         | 'grammarExercise'
         | 'listeningExercise'
-        | 'fillInTheBlankDeck',
+        | 'fillInTheBlankDeck'
+        | 'genericDeck',
       id: string
     ) => {
       const exercise = await (prisma[model] as any).findUnique({
@@ -827,6 +829,15 @@ export const ContentService = {
               },
             },
             fillInTheBlankDeck: {
+              include: {
+                _count: {
+                  select: {
+                    cards: true,
+                  },
+                },
+              },
+            },
+            genericDeck: {
               include: {
                 _count: {
                   select: {
@@ -1483,7 +1494,7 @@ export const ContentService = {
   async addCardToGenericDeck(
     deckId: string,
     teacherId: string,
-    cardData: Omit<Prisma.GenericCardCreateInput, 'deck'>
+    cardData: Omit<Prisma.GenericCardCreateInput, 'deck' | 'deckId'>
   ): Promise<GenericCard> {
     const deck = await prisma.genericDeck.findUnique({
       where: { id: deckId },
@@ -1502,8 +1513,18 @@ export const ContentService = {
 
     return prisma.genericCard.create({
       data: {
-        ...cardData,
-        deckId,
+        front: cardData.front,
+        back: cardData.back,
+        exampleSentences: cardData.exampleSentences,
+        tags: cardData.tags,
+        audioUrl: cardData.audioUrl,
+        imageUrl: cardData.imageUrl,
+        deck: {
+          connect: { id: deckId }
+        },
+        ...(cardData.boundVocabularyCard && {
+          boundVocabularyCard: cardData.boundVocabularyCard
+        })
       },
     });
   },
@@ -1516,7 +1537,7 @@ export const ContentService = {
     cardId: string,
     deckId: string,
     teacherId: string,
-    cardData: Partial<Omit<Prisma.GenericCardUpdateInput, 'deck'>>
+    cardData: Prisma.GenericCardUpdateInput
   ): Promise<GenericCard> {
     return prisma.$transaction(async (tx) => {
       // First verify the card exists and belongs to the specified deck
@@ -1601,7 +1622,7 @@ export const ContentService = {
    * This implementation mirrors autoBindFillInTheBlankToVocabulary.
    */
   async autoBindGenericToVocabulary(deckId: string, teacherId: string): Promise<{
-    matches: number;
+    matchCount: number;
     ambiguities: Array<{ cardId: string; front: string; candidateIds: string[] }>;
     noMatch: Array<{ cardId: string; front: string }>;
   }> {
@@ -1672,7 +1693,7 @@ export const ContentService = {
     );
 
     return { 
-      matches: matches.length, 
+      matchCount: matches.length, 
       ambiguities, 
       noMatch 
     };

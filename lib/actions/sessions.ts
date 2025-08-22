@@ -132,6 +132,7 @@ export const SessionService = {
           grammarExercise: null,
           listeningExercise: null,
           fillInTheBlankDeck: null,
+          genericDeck: null,
         })),
       },
     };

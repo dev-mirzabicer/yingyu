@@ -20,11 +20,11 @@ export async function POST(
     const result = await ContentService.autoBindGenericToVocabulary(deckId, teacherId);
 
     return apiResponse(200, { 
-      matches: result.matches,
+      matches: result.matchCount,
       ambiguities: result.ambiguities,
       noMatch: result.noMatch,
       summary: {
-        automaticMatches: result.matches,
+        automaticMatches: result.matchCount,
         ambiguousCards: result.ambiguities.length,
         unmatchedCards: result.noMatch.length,
       }
@@ -66,7 +66,11 @@ export async function PUT(
           resolution.genericCardId,
           deckId,
           teacherId,
-          { boundVocabularyCardId: resolution.vocabularyCardId }
+          { 
+            boundVocabularyCard: resolution.vocabularyCardId 
+              ? { connect: { id: resolution.vocabularyCardId } }
+              : { disconnect: true }
+          }
         )
       )
     );
