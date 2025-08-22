@@ -38,11 +38,16 @@ export async function GET(
     // 4. Fetch all cards for this deck
     const cards = await prisma.genericCard.findMany({
       where: { deckId },
+      include: {
+        boundVocabularyCard: {
+          select: { id: true, englishWord: true }
+        }
+      },
       orderBy: { createdAt: 'desc' },
     });
 
     // 5. Return Success Response
-    return apiResponse(200, cards, null);
+    return apiResponse(200, { cards }, null);
   } catch (error) {
     // 6. Centralized Error Handling
     return handleApiError(error);
