@@ -69,8 +69,37 @@ jobs:
           cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
 
-  deploy:
+  cleanup:
     needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH cleanup
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.ECS_HOST }}
+          username: ${{ secrets.ECS_USER }}
+          key: ${{ secrets.ECS_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -Eeuo pipefail
+            echo "🧹 Cleaning up Docker artifacts..."
+            
+            # Clean unused Docker images (keep current and previous)
+            docker image prune -a -f --filter "until=168h" || true
+            
+            # Clean build cache
+            docker builder prune -a -f || true
+            
+            # Clean system logs (keep last 7 days)
+            sudo journalctl --vacuum-time=7d || true
+            
+            # Clean temp files
+            sudo rm -rf /tmp/* || true
+            
+            echo "✅ Cleanup completed"
+
+  deploy:
+    needs: cleanup
     runs-on: ubuntu-latest
     steps:
       - name: SSH deploy
