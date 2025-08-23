@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Layers, Plus, Search, FileText, Users, Globe, Lock } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useGenericDecks, createGenericDeck, useStudents, assignDeck, useDecks } from "@/hooks/api"
+import { useGenericDecks, createGenericDeck, useStudents, assignGenericDeck, useDecks } from "@/hooks/api"
 import { format } from "date-fns"
 import Link from "next/link"
 
@@ -75,7 +75,7 @@ export default function GenericDecksPage() {
 
     setIsAssigning(true)
     try {
-      await assignDeck(selectedStudentId, selectedDeckForAssignment.id)
+      await assignGenericDeck(selectedStudentId, selectedDeckForAssignment.id)
       toast({
         title: "Deck assigned successfully",
         description: `${selectedDeckForAssignment.name} has been assigned to the student.`,

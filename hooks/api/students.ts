@@ -241,6 +241,10 @@ export async function assignDeck(studentId: string, deckId: string) {
   return mutateWithOptimistic<{ studentDeck: any; job: Job }>(`/api/students/${studentId}/decks`, "POST", { deckId })
 }
 
+export async function assignGenericDeck(studentId: string, deckId: string) {
+  return mutateWithOptimistic<{ studentGenericDeck: any; job: Job }>(`/api/students/${studentId}/generic-decks`, "POST", { deckId })
+}
+
 export async function bulkImportStudents(students: any[]) {
   return mutateWithOptimistic<Job>("/api/bulk-import/students", "POST", {
     students,
