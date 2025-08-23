@@ -123,6 +123,21 @@ export const StudentService = {
           },
           orderBy: { assignedAt: 'desc' },
         },
+        studentGenericDecks: {
+          where: { deck: { isArchived: false } },
+          include: {
+            deck: {
+              include: {
+                _count: {
+                  select: {
+                    cards: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: { assignedAt: 'desc' },
+        },
         classSchedules: {
           orderBy: { scheduledTime: 'asc' },
         },
@@ -143,6 +158,7 @@ export const StudentService = {
       classesRemaining,
       upcomingClasses: student.classSchedules,
       studentDecks: student.studentDecks as any, // Cast for now, fix PopulatedStudentDeck if needed
+      studentGenericDecks: student.studentGenericDecks as any,
       notes: student.notes, // Ensure notes is passed correctly
     } as FullStudentProfile; // Cast to the correct, extended type
   },

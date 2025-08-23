@@ -11,6 +11,7 @@ import {
   Student,
   Payment,
   StudentDeck,
+  StudentGenericDeck,
   ClassSchedule,
   Session,
   Prisma,
@@ -82,6 +83,13 @@ export type FullStudentProfile = Student & {
   classesRemaining: number;
   studentDecks: (StudentDeck & {
     deck: VocabularyDeck & {
+      _count: {
+        cards: number;
+      };
+    };
+  })[];
+  studentGenericDecks: (StudentGenericDeck & {
+    deck: GenericDeck & {
       _count: {
         cards: number;
       };

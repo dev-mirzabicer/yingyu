@@ -237,14 +237,29 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
     }
   }
 
-  const assignedDeckIds = new Set(student?.studentDecks.map((sd) => sd.deckId))
-  const availableDecks = decks.filter((deck) => !assignedDeckIds.has(deck.id))
+  // Combine vocabulary and generic decks for display
+  const allAssignedDecks = [
+    ...(student?.studentDecks.map(sd => ({ ...sd, type: 'Vocabulary' })) || []),
+    ...(student?.studentGenericDecks.map(sgd => ({ ...sgd, type: 'Generic' })) || [])
+  ]
+
+  const assignedVocabDeckIds = new Set(student?.studentDecks.map((sd) => sd.deckId))
+  const availableDecks = decks.filter((deck) => !assignedVocabDeckIds.has(deck.id))
 
   const deckColumns = [
     {
       key: "deck.name",
       header: "Deck Name",
       render: (value: any, row: any) => row.deck.name,
+    },
+    {
+      key: "type",
+      header: "Type",
+      render: (value: string) => (
+        <Badge variant={value === 'Vocabulary' ? "default" : "outline"}>
+          {value}
+        </Badge>
+      ),
     },
     {
       key: "assignedAt",
@@ -420,7 +435,7 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
                 <div className="flex items-center space-x-2">
                   <BookOpen className="h-5 w-5 text-green-600" />
                   <span className="text-2xl font-bold text-slate-900">
-                    {student.studentDecks.filter((deck) => deck.isActive).length}
+                    {allAssignedDecks.filter((deck) => deck.isActive).length}
                   </span>
                 </div>
               </CardContent>
@@ -529,7 +544,7 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
                   />
                 </div>
               )}
-              {student.studentDecks.length === 0 ? (
+              {allAssignedDecks.length === 0 ? (
                 <div className="text-center py-8">
                   <BookOpen className="h-12 w-12 text-slate-300 mx-auto mb-4" />
                   <p className="text-slate-500 mb-4">No decks assigned yet</p>
@@ -541,7 +556,7 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
                   </Button>
                 </div>
               ) : (
-                <DataTable data={student.studentDecks} columns={deckColumns} />
+                <DataTable data={allAssignedDecks} columns={deckColumns} />
               )}
             </CardContent>
           </Card>
