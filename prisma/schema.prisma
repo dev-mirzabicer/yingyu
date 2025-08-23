@@ -67,6 +67,7 @@ enum SessionStatus {
 
 enum JobType {
   INITIALIZE_CARD_STATES
+  INITIALIZE_GENERIC_CARD_STATES
   INITIALIZE_LISTENING_CARD_STATES
   GENERATE_PRACTICE_PDF
   OPTIMIZE_LISTENING_FSRS_PARAMS
@@ -147,6 +148,7 @@ model Student {
   payments                      Payment[]
   classSchedules                ClassSchedule[]
   studentDecks                  StudentDeck[]
+  studentGenericDecks           StudentGenericDeck[]
   cardStates                    StudentCardState[]
   listeningCardStates           ListeningCardState[]
   reviewHistory                 ReviewHistory[]
@@ -395,6 +397,7 @@ model GenericDeck {
   creator                Teacher?         @relation("TeacherCreatedGenericDecks", fields: [creatorId], references: [id], onDelete: SetNull)
   boundVocabularyDeck    VocabularyDeck?  @relation("BoundGenericDecks", fields: [boundVocabularyDeckId], references: [id], onDelete: SetNull)
   cards                  GenericCard[]
+  studentGenericDecks    StudentGenericDeck[]
   unitItem               UnitItem?
 }
 
@@ -433,6 +436,22 @@ model StudentDeck {
 
   student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
   deck    VocabularyDeck @relation(fields: [deckId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, deckId])
+}
+
+model StudentGenericDeck {
+  id               String   @id @default(uuid()) @db.Uuid
+  studentId        String   @db.Uuid
+  deckId           String   @db.Uuid
+  dailyNewCards    Int      @default(10)
+  dailyReviewLimit Int      @default(50)
+  assignedAt       DateTime @default(now())
+  completedAt      DateTime?
+  isActive         Boolean  @default(true)
+
+  student Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  deck    GenericDeck @relation(fields: [deckId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, deckId])
 }

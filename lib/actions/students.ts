@@ -8,6 +8,7 @@ import {
   Prisma,
   Student,
   StudentDeck,
+  StudentGenericDeck,
   ClassSchedule,
   ClassStatus,
 } from '@prisma/client';
@@ -229,6 +230,83 @@ export const StudentService = {
           });
 
           return { studentDeck: newAssignment, job: newJob };
+        }
+      }
+    });
+  },
+
+  async assignGenericDeckToStudent(
+    studentId: string,
+    teacherId: string,
+    deckId: string,
+    settings: { dailyNewCards?: number; dailyReviewLimit?: number }
+  ): Promise<{ studentGenericDeck: StudentGenericDeck; job: Job | null }> {
+    await authorizeTeacherForStudent(teacherId, studentId, {
+      checkIsActive: true,
+    });
+
+    // The transaction is now fully managed within this service.
+    return prisma.$transaction(async (tx) => {
+      const existingAssignment = await tx.studentGenericDeck.findUnique({
+        where: { studentId_deckId: { studentId, deckId } },
+      });
+
+      if (existingAssignment) {
+        const updatedAssignment = await tx.studentGenericDeck.update({
+          where: { id: existingAssignment.id },
+          data: { ...settings, isActive: true },
+        });
+        return { studentGenericDeck: updatedAssignment, job: null };
+      } else {
+        const newAssignment = await tx.studentGenericDeck.create({
+          data: { studentId, deckId, ...settings },
+        });
+
+        // Check deck size to decide between sync and async initialization
+        const cardCount = await tx.genericCard.count({
+          where: { deckId },
+        });
+
+        if (cardCount <= 50) {
+          // Initialize card states synchronously for small decks
+          const cards = await tx.genericCard.findMany({
+            where: { deckId },
+            select: { id: true },
+          });
+
+          if (cards.length > 0) {
+            const now = new Date();
+            const defaultDifficulty = 5.0;
+            const defaultStability = 1.0;
+            const cardStatesToCreate = cards.map((card) => ({
+              studentId: studentId,
+              cardId: card.id,
+              state: CardState.NEW,
+              due: now,
+              difficulty: defaultDifficulty,
+              stability: defaultStability,
+              reps: 0,
+              lapses: 0,
+            }));
+
+            await tx.studentGenericCardState.createMany({
+              data: cardStatesToCreate,
+              skipDuplicates: true,
+            });
+          }
+
+          return { studentGenericDeck: newAssignment, job: null };
+        } else {
+          // Use job system for larger decks
+          const newJob = await tx.job.create({
+            data: {
+              ownerId: teacherId,
+              type: 'INITIALIZE_GENERIC_CARD_STATES',
+              payload: { studentId, deckId },
+            },
+          });
+
+          return { studentGenericDeck: newAssignment, job: newJob };
         }
       }
     });
@@ -526,6 +604,42 @@ export const StudentService = {
     return { cardsInitialized: result.count };
   },
 
+  async _initializeGenericCardStates(
+    payload: Prisma.JsonValue
+  ): Promise<{ cardsInitialized: number }> {
+    const { studentId, deckId } = payload as {
+      studentId: string;
+      deckId: string;
+    };
+    if (!studentId || !deckId) {
+      throw new Error('Invalid payload: studentId and deckId are required.');
+    }
+    const cards = await prisma.genericCard.findMany({
+      where: { deckId: deckId },
+      select: { id: true },
+    });
+    if (cards.length === 0) return { cardsInitialized: 0 };
+    const now = new Date();
+    const defaultDifficulty = 5.0;
+    const defaultStability = 1.0;
+    const cardStatesToCreate: Prisma.StudentGenericCardStateCreateManyInput[] =
+      cards.map((card) => ({
+        studentId: studentId,
+        cardId: card.id,
+        state: CardState.NEW,
+        due: now,
+        difficulty: defaultDifficulty,
+        stability: defaultStability,
+        reps: 0,
+        lapses: 0,
+      }));
+    const result = await prisma.studentGenericCardState.createMany({
+      data: cardStatesToCreate,
+      skipDuplicates: true,
+    });
+    return { cardsInitialized: result.count };
+  },
+
   /**
    * [INTERNAL METHOD] Bulk adds students to a teacher's account.
    *
@@ -646,14 +760,21 @@ export const StudentService = {
       },
     });
 
-    // 2. Get all decks assigned to the student
+    // 2. Get all vocabulary decks assigned to the student
     const studentDecks = await prisma.studentDeck.findMany({
       where: { studentId },
       select: { deckId: true },
     });
-    const assignedDeckIds = new Set(studentDecks.map((sd) => sd.deckId));
+    const assignedVocabDeckIds = new Set(studentDecks.map((sd) => sd.deckId));
 
-    // 3. Get all card states for the student to calculate readiness
+    // 2b. Get all generic decks assigned to the student
+    const studentGenericDecks = await prisma.studentGenericDeck.findMany({
+      where: { studentId },
+      select: { deckId: true },
+    });
+    const assignedGenericDeckIds = new Set(studentGenericDecks.map((sgd) => sgd.deckId));
+
+    // 3. Get all vocabulary card states for the student to calculate readiness
     const studentCardStates = await prisma.studentCardState.findMany({
       where: { studentId },
       select: {
@@ -663,8 +784,18 @@ export const StudentService = {
       },
     });
 
+    // 3b. Get all generic card states for the student to calculate readiness
+    const studentGenericCardStates = await prisma.studentGenericCardState.findMany({
+      where: { studentId },
+      select: {
+        state: true,
+        due: true,
+        card: { select: { deckId: true } },
+      },
+    });
+
     // Map card states by deck for efficient lookup
-    const statesByDeck = studentCardStates.reduce((acc, state) => {
+    const vocabStatesByDeck = studentCardStates.reduce((acc, state) => {
       const deckId = state.card.deckId;
       if (!acc[deckId]) {
         acc[deckId] = [];
@@ -673,10 +804,23 @@ export const StudentService = {
       return acc;
     }, {} as Record<string, typeof studentCardStates>);
 
+    const genericStatesByDeck = studentGenericCardStates.reduce((acc, state) => {
+      const deckId = state.card.deckId;
+      if (!acc[deckId]) {
+        acc[deckId] = [];
+      }
+      acc[deckId].push(state);
+      return acc;
+    }, {} as Record<string, typeof studentGenericCardStates>);
 
     const availableUnits: AvailableUnit[] = allUnits.map((unit) => {
-      const unitDecks = unit.items
+      // Get both vocabulary and generic decks from the unit
+      const unitVocabDecks = unit.items
         .map((item) => item.vocabularyDeck)
+        .filter((deck): deck is NonNullable<typeof deck> => !!deck);
+        
+      const unitGenericDecks = unit.items
+        .map((item) => item.genericDeck)
         .filter((deck): deck is NonNullable<typeof deck> => !!deck);
 
       const missingPrerequisites: string[] = [];
@@ -684,13 +828,30 @@ export const StudentService = {
       let totalCards = 0;
       let readyCards = 0;
 
-      for (const deck of unitDecks) {
+      // Check vocabulary deck prerequisites
+      for (const deck of unitVocabDecks) {
         totalCards += deck._count?.cards || 0;
-        if (!assignedDeckIds.has(deck.id)) {
+        if (!assignedVocabDeckIds.has(deck.id)) {
           isAvailable = false;
-          missingPrerequisites.push(deck.name);
+          missingPrerequisites.push(`Vocabulary: ${deck.name}`);
         } else {
-          const deckStates = statesByDeck[deck.id] || [];
+          const deckStates = vocabStatesByDeck[deck.id] || [];
+          const dueInDeck = deckStates.filter(
+            (s) => s.state !== 'NEW' && new Date(s.due) <= now
+          ).length;
+          const newInDeck = deckStates.filter((s) => s.state === 'NEW').length;
+          readyCards += dueInDeck + newInDeck;
+        }
+      }
+
+      // Check generic deck prerequisites
+      for (const deck of unitGenericDecks) {
+        totalCards += deck._count?.cards || 0;
+        if (!assignedGenericDeckIds.has(deck.id)) {
+          isAvailable = false;
+          missingPrerequisites.push(`Generic: ${deck.name}`);
+        } else {
+          const deckStates = genericStatesByDeck[deck.id] || [];
           const dueInDeck = deckStates.filter(
             (s) => s.state !== 'NEW' && new Date(s.due) <= now
           ).length;

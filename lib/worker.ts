@@ -81,6 +81,11 @@ export async function processPendingJobs() {
           resultPayload = await StudentService._initializeCardStates(payload);
           break;
         }
+        case JobType.INITIALIZE_GENERIC_CARD_STATES: {
+          const payload = InitializeCardStatesPayloadSchema.parse(job.payload);
+          resultPayload = await StudentService._initializeGenericCardStates(payload);
+          break;
+        }
         case JobType.REBUILD_VOCABULARY_FSRS_CACHE: {
           const payload = RebuildCachePayloadSchema.parse(job.payload);
           resultPayload = await FSRSService._rebuildCacheForStudent(payload);
