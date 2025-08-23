@@ -7,7 +7,7 @@ import { apiResponse, handleApiError } from '@/lib/api-utils';
  * Retrieves all public Fill in the Blank decks.
  * This endpoint doesn't require authentication as public decks are available to all teachers.
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const decks = await ContentService.getPublicFillInTheBlankDecks();
     

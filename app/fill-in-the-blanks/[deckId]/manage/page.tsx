@@ -1,7 +1,7 @@
 "use client"
 
 import { use } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useFillInTheBlankDeck } from "@/hooks/api/content"
 import { PencilLine, BookOpen, ArrowLeft } from "lucide-react"
@@ -46,7 +46,7 @@ export default function FillInTheBlankDeckManagePage({ params }: PageProps) {
       <div className="flex flex-col items-center justify-center py-12">
         <PencilLine className="h-12 w-12 text-slate-300 mb-4" />
         <h2 className="text-xl font-semibold text-slate-900 mb-2">Deck Not Found</h2>
-        <p className="text-slate-600 mb-6">The fill-in-the-blank deck you're looking for doesn't exist or has been deleted.</p>
+        <p className="text-slate-600 mb-6">The fill-in-the-blank deck you&apos;re looking for doesn&apos;t exist or has been deleted.</p>
         <Link href="/fill-in-the-blanks">
           <Button variant="outline">
             <ArrowLeft className="h-4 w-4 mr-2" />

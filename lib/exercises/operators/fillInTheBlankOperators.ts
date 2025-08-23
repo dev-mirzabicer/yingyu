@@ -47,7 +47,11 @@ class SubmitCorrectnessOperator implements ProgressOperator {
     }
 
     const [currentCard, ...restOfQueue] = queue;
-    let newQueue = restOfQueue;
+    
+    // Use functional approach to avoid mutation and properly handle const
+    const newQueue = validatedPayload.isCorrect 
+      ? restOfQueue 
+      : [...restOfQueue, currentCard];
 
     if (validatedPayload.isCorrect) {
       // Mark the card as permanently done for this student
@@ -59,10 +63,8 @@ class SubmitCorrectnessOperator implements ProgressOperator {
       });
       
       // Card is removed from queue (already in restOfQueue)
-    } else {
-      // Add the card to the back of the queue for another attempt
-      newQueue.push(currentCard);
     }
+    // For incorrect answers, card is already added to the back of the queue above
 
     // Create the new progress state
     const newProgress: FillInTheBlankProgress = {

@@ -16,7 +16,7 @@ import {
 import { fullSessionStateInclude } from '@/lib/prisma-includes';
 import { VocabularyExerciseConfigSchema } from '@/lib/schemas';
 import { TransactionClient } from './operators/base';
-import { StudentGenericCardState, GenericCard } from '@prisma/client';
+import { StudentGenericCardState, GenericCard, Prisma } from '@prisma/client';
 
 type EnrichedStudentGenericCardState = StudentGenericCardState & { card: GenericCard };
 
@@ -79,11 +79,17 @@ class GenericDeckHandler implements ExerciseHandler {
       enhancedConfig
     );
 
-    const fetchCards = async (states: StudentGenericCardState[]) => {
+    const fetchCards = async (states: StudentGenericCardState[]): Promise<EnrichedStudentGenericCardState[]> => {
       const cardIds = states.map(s => s.cardId);
       const cards = await db.genericCard.findMany({ where: { id: { in: cardIds } } });
       const cardMap = new Map(cards.map(c => [c.id, c]));
-      return states.map(s => ({ ...s, card: cardMap.get(s.cardId)! }));
+      return states.map(s => {
+        const card = cardMap.get(s.cardId);
+        if (!card) {
+          throw new Error(`Card not found for cardId: ${s.cardId}`);
+        }
+        return { ...s, card };
+      });
     };
 
     const enrichedDueItems = await fetchCards(dueItems);
@@ -100,7 +106,7 @@ class GenericDeckHandler implements ExerciseHandler {
       };
       const updatedSession = await db.session.update({
         where: { id: sessionState.id },
-        data: { progress: emptyProgress as any },
+        data: { progress: emptyProgress as Prisma.InputJsonValue },
         include: fullSessionStateInclude,
       });
       return updatedSession as unknown as FullSessionState;
@@ -121,7 +127,7 @@ class GenericDeckHandler implements ExerciseHandler {
 
     const updatedSession = await db.session.update({
       where: { id: sessionState.id },
-      data: { progress: initialProgress as any },
+      data: { progress: initialProgress as Prisma.InputJsonValue },
       include: fullSessionStateInclude,
     });
 

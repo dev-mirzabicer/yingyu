@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db';
 import { authorizeTeacherForStudent, AuthorizationError } from '@/lib/auth';
-import { AvailableUnit, FullStudentProfile, PopulatedStudentDeck } from '@/lib/types';
+import { AvailableUnit, FullStudentProfile } from '@/lib/types';
 import {
   CardState,
   Job,
@@ -157,10 +157,10 @@ export const StudentService = {
       ...student,
       classesRemaining,
       upcomingClasses: student.classSchedules,
-      studentDecks: student.studentDecks as any, // Cast for now, fix PopulatedStudentDeck if needed
-      studentGenericDecks: student.studentGenericDecks as any,
-      notes: student.notes, // Ensure notes is passed correctly
-    } as FullStudentProfile; // Cast to the correct, extended type
+      studentDecks: student.studentDecks,
+      studentGenericDecks: student.studentGenericDecks,
+      notes: student.notes,
+    } as FullStudentProfile;
   },
 
   /**
@@ -413,6 +413,21 @@ export const StudentService = {
           },
           orderBy: { assignedAt: 'desc' },
         },
+        studentGenericDecks: {
+          where: { deck: { isArchived: false } },
+          include: {
+            deck: {
+              include: {
+                _count: {
+                  select: {
+                    cards: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: { assignedAt: 'desc' },
+        },
         classSchedules: {
           orderBy: { scheduledTime: 'asc' },
         },
@@ -435,9 +450,10 @@ export const StudentService = {
         ...student,
         classesRemaining,
         upcomingClasses: student.classSchedules,
-        studentDecks: student.studentDecks as any,
+        studentDecks: student.studentDecks,
+        studentGenericDecks: student.studentGenericDecks,
         notes: student.notes,
-      } as FullStudentProfile; // Cast each object in the array
+      } as FullStudentProfile;
     });
   },
 

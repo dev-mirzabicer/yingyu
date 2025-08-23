@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { ExerciseHandler } from './handler';
 import { revealAnswerOperator, submitCorrectnessOperator } from './operators/fillInTheBlankOperators';
 import { 
@@ -6,12 +7,12 @@ import {
   AnswerPayload, 
   SubmissionResult, 
   SessionProgress, 
-  FillInTheBlankProgress, 
-  FillInTheBlankExerciseConfig 
+  FillInTheBlankProgress
 } from '@/lib/types';
 import { fullSessionStateInclude } from '@/lib/prisma-includes';
 import { FillInTheBlankExerciseConfigSchema } from '@/lib/schemas';
 import { TransactionClient } from './operators/base';
+import { FSRSService } from '@/lib/actions/fsrs';
 
 /**
  * Handler for Fill in the Blank exercises.
@@ -117,7 +118,7 @@ class FillInTheBlankHandler implements ExerciseHandler {
     // Update the session with the initial progress
     const updatedSession = await db.session.update({
       where: { id: sessionState.id },
-      data: { progress: initialProgress as any },
+      data: { progress: initialProgress as Prisma.InputJsonValue },
       include: fullSessionStateInclude,
     });
 
@@ -141,7 +142,7 @@ class FillInTheBlankHandler implements ExerciseHandler {
 
     const services = { 
       tx, 
-      fsrsService: null as any, // FSRS not used for Fill in the Blank
+      fsrsService: FSRSService, // FSRS service provided but not used for Fill in the Blank
       studentId: sessionState.studentId, 
       sessionId: sessionState.id 
     };

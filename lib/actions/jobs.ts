@@ -6,6 +6,7 @@ import {
   BulkImportVocabularyPayloadSchema,
   BulkImportGenericDeckPayloadSchema,
 } from '../schemas';
+import { toJobPayload } from '../types';
 
 /**
  * Service responsible for managing asynchronous jobs.
@@ -48,7 +49,7 @@ export const JobService = {
     return this.createJob(
       ownerId,
       JobType.BULK_IMPORT_VOCABULARY,
-      validatedPayload as any
+      toJobPayload(validatedPayload)
     );
   },
 
@@ -60,7 +61,7 @@ export const JobService = {
     return this.createJob(
       ownerId,
       JobType.BULK_IMPORT_STUDENTS,
-      validatedPayload as any
+      toJobPayload(validatedPayload)
     );
   },
 
@@ -72,7 +73,7 @@ export const JobService = {
     return this.createJob(
       ownerId,
       JobType.BULK_IMPORT_SCHEDULES,
-      validatedPayload as any
+      toJobPayload(validatedPayload)
     );
   },
 
@@ -84,7 +85,7 @@ export const JobService = {
     return this.createJob(
       ownerId,
       JobType.BULK_IMPORT_GENERIC_DECK,
-      validatedPayload as any
+      toJobPayload(validatedPayload)
     );
   },
 

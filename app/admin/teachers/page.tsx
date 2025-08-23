@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { DataTable } from '@/components/data-table';
+import { DataTable, Column } from '@/components/data-table';
 import { useAdminAuthorized, useTeachers, topupTeacher, setTeacherValidity, AdminTeacher } from '@/hooks/api/admin';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -16,6 +16,39 @@ import { format } from 'date-fns';
 import { CalendarIcon, Clock, Plus } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+
+/**
+ * Type for error objects that may be thrown during API operations.
+ * Represents both Error instances and generic error objects with optional message properties.
+ */
+interface ApiError {
+  message?: string;
+}
+
+/**
+ * Type guard to check if an error has a message property
+ */
+function isErrorWithMessage(error: unknown): error is ApiError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof (error as Record<string, unknown>).message === 'string'
+  );
+}
+
+/**
+ * Safely extract error message from unknown error types
+ */
+function getErrorMessage(error: unknown): string {
+  if (isErrorWithMessage(error)) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  return 'An unknown error occurred';
+}
 
 function TopupDialog({ teacher, onSuccess }: { teacher: AdminTeacher; onSuccess: () => void }) {
   const [days, setDays] = useState('');
@@ -36,8 +69,9 @@ function TopupDialog({ teacher, onSuccess }: { teacher: AdminTeacher; onSuccess:
       toast({ title: 'Success', description: `Added ${daysNum} days to ${teacher.name}'s account` });
       setDays('');
       onSuccess();
-    } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Failed to top up account', variant: 'destructive' });
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error);
+      toast({ title: 'Error', description: errorMessage || 'Failed to top up account', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -89,8 +123,9 @@ function SetValidityDialog({ teacher, onSuccess }: { teacher: AdminTeacher; onSu
       toast({ title: 'Success', description: `Set validity for ${teacher.name} to ${format(date, 'PPP')}` });
       setDate(undefined);
       onSuccess();
-    } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Failed to set validity date', variant: 'destructive' });
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error);
+      toast({ title: 'Error', description: errorMessage || 'Failed to set validity date', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -161,7 +196,7 @@ export default function AdminTeachersPage() {
     return null; // Will redirect
   }
 
-  const columns = [
+  const columns: Column<AdminTeacher>[] = [
     {
       key: 'name',
       header: 'Name',
@@ -201,7 +236,7 @@ export default function AdminTeachersPage() {
       key: 'daysRemaining',
       header: 'Days Remaining',
       sortable: true,
-      render: (value: number | null, row: AdminTeacher) => {
+      render: (value: number | null) => {
         if (value === null) {
           return <Badge variant="secondary">No expiry</Badge>;
         }
@@ -219,7 +254,7 @@ export default function AdminTeachersPage() {
       header: 'Actions',
       sortable: false,
       searchable: false,
-      render: (value: any, row: AdminTeacher) => (
+      render: (_value: undefined, row: AdminTeacher) => (
         <div className="flex gap-2">
           <Dialog>
             <DialogTrigger asChild>

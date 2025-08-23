@@ -1,5 +1,4 @@
 // In /app/api/worker/run/route.ts
-import { NextResponse } from 'next/server';
 import { processPendingJobs } from '@/lib/worker';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
 

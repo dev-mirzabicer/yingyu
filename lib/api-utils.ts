@@ -3,6 +3,18 @@ import { ZodError } from 'zod';
 import { AuthorizationError, AuthenticationError } from './auth';
 
 /**
+ * Type definition for Prisma error objects that may contain error codes.
+ * This ensures type safety when checking for specific Prisma errors.
+ */
+interface PrismaError extends Error {
+  code?: string;
+  meta?: {
+    cause?: string;
+    [key: string]: unknown;
+  };
+}
+
+/**
  * A standardized wrapper for all API responses.
  * This ensures a consistent and predictable structure for clients.
  *
@@ -44,9 +56,10 @@ export function handleApiError(error: unknown): NextResponse {
 
   if (error instanceof Error) {
     // A simple heuristic to catch Prisma's "not found" errors.
+    const prismaError = error as PrismaError;
     if (
       error.message.includes('not found') ||
-      (error as any).code === 'P2025'
+      prismaError.code === 'P2025'
     ) {
       return apiResponse(404, null, 'The requested resource was not found.');
     }

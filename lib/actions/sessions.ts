@@ -5,6 +5,10 @@ import {
   AnswerPayload,
   SubmissionResult,
   SessionProgress,
+  ExerciseConfigOverrides,
+  SessionSummary,
+  isSessionProgress,
+  isExerciseConfig,
 } from '@/lib/types';
 import { Prisma, SessionStatus } from '@prisma/client';
 import { getHandler } from '../exercises/dispatcher';
@@ -76,7 +80,7 @@ export const SessionService = {
     teacherId: string,
     studentId: string,
     unitId: string,
-    configOverrides?: { [key: string]: any }
+    configOverrides?: ExerciseConfigOverrides
   ): Promise<FullSessionState> {
     await authorizeTeacherForStudent(teacherId, studentId, {
       checkIsActive: true,
@@ -96,8 +100,9 @@ export const SessionService = {
     if (configOverrides) {
       unit.items.forEach(item => {
         if (configOverrides[item.id]) {
+          const currentConfig = isExerciseConfig(item.exerciseConfig) ? item.exerciseConfig : {};
           item.exerciseConfig = {
-            ...item.exerciseConfig as any,
+            ...currentConfig,
             ...configOverrides[item.id],
           };
         }
@@ -265,7 +270,7 @@ export const SessionService = {
    * @param teacherId The UUID of the teacher.
    * @returns A promise that resolves to an array of session summaries.
    */
-  async getAllSessionsForTeacher(teacherId: string): Promise<any[]> {
+  async getAllSessionsForTeacher(teacherId: string): Promise<SessionSummary[]> {
     const sessions = await prisma.session.findMany({
       where: { teacherId },
       include: {
@@ -294,8 +299,8 @@ export const SessionService = {
           : 0;
 
       // Calculate real metrics from session progress
-      const cardsReviewed = session.progress ? 
-        (session.progress as any)?.payload?.queue?.length || 0 : 0;
+      const cardsReviewed = session.progress && isSessionProgress(session.progress) ? 
+        session.progress.payload?.queue?.length || 0 : 0;
       
       return {
         id: session.id,

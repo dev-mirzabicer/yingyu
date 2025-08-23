@@ -3,6 +3,9 @@ import { BulkImportGenericDeckPayloadSchema } from '@/lib/schemas';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
 import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth';
+import { z } from 'zod';
+
+type BulkImportGenericDeckPayload = z.infer<typeof BulkImportGenericDeckPayloadSchema>;
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,7 +16,7 @@ export async function POST(req: NextRequest) {
 
     const job = await JobService.createBulkImportGenericDeckJob(
       teacherId,
-      validatedPayload as any
+      validatedPayload as BulkImportGenericDeckPayload
     );
 
     return apiResponse(

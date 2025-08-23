@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db';
  * Health check endpoint for Docker and load balancers
  * Tests database connectivity and basic application health
  */
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   const startTime = Date.now();
   
   try {

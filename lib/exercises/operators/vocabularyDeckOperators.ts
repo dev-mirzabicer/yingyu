@@ -7,7 +7,11 @@ import {
   VocabularyDeckProgress,
   SessionProgress,
 } from '@/lib/types';
-import { StudentCardState, VocabularyCard, ReviewType } from '@prisma/client';
+import {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  StudentCardState,
+  ReviewType
+} from '@prisma/client';
 import { FsrsRating } from '@/lib/fsrs/engine';
 import { z } from 'zod';
 

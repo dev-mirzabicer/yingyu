@@ -7,7 +7,8 @@ import {
   GenericDeckProgress,
   SessionProgress,
 } from '@/lib/types';
-import { StudentGenericCardState, GenericCard, ReviewType } from '@prisma/client';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { StudentGenericCardState } from '@prisma/client';
 import { FsrsRating } from '@/lib/fsrs/engine';
 import { z } from 'zod';
 

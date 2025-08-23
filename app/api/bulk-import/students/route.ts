@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { JobService } from '@/lib/actions/jobs';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
 import { requireAuth } from '@/lib/auth';

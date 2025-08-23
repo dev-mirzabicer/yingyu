@@ -32,6 +32,37 @@ import { Textarea } from "@/components/ui/textarea"
 import { SessionStartDialog } from "@/components/session-start-dialog"
 import { JobStatusIndicator } from "@/components/ui/job-status-indicator"
 
+// TypeScript interfaces for data structures
+interface Student {
+  id: string
+  name: string
+  email: string | null
+  status: "ACTIVE" | "INACTIVE" | "PAUSED"
+  classesRemaining: number
+  proficiencyLevel: "BEGINNER" | "ELEMENTARY" | "INTERMEDIATE" | "ADVANCED"
+  studentDecks: Array<{ id: string }>
+  createdAt: string
+}
+
+interface Deck {
+  id: string
+  name: string
+}
+
+interface DataTableColumn<T> {
+  key: string
+  header: string
+  render: (value: unknown, row: T) => React.ReactNode
+}
+
+// Utility function for handling errors
+function handleError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+  return "An unexpected error occurred"
+}
+
 export default function StudentsPage() {
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false)
   const [newStudent, setNewStudent] = useState({
@@ -89,6 +120,7 @@ export default function StudentsPage() {
     setSelectedDeckId(null);
     setIsAddStudentOpen(false);
     } catch (error) {
+      console.error("Failed to add student:", error)
       toast({
         title: "Error",
         description: "Failed to add student. Please try again.",
@@ -113,7 +145,7 @@ export default function StudentsPage() {
     {
       key: "student",
       header: "Student",
-      render: (_: any, row: any) => (
+      render: (_: unknown, row: Student) => (
         <div className="flex items-center space-x-3">
           <Avatar>
             <AvatarImage src="/placeholder.svg" alt={row.name} />
@@ -156,7 +188,7 @@ export default function StudentsPage() {
     {
       key: "studentDecks",
       header: "Active Decks",
-      render: (value: any[]) => (
+      render: (value: Array<{ id: string }>) => (
         <span className="text-slate-900">{value.length}</span>
       ),
     },
@@ -168,7 +200,7 @@ export default function StudentsPage() {
     {
       key: "actions",
       header: "Actions",
-      render: (_: any, row: any) => (
+      render: (_: unknown, row: Student) => (
         <div className="flex items-center space-x-2">
           <Link href={`/students/${row.id}`}>
             <Button variant="outline" size="sm">

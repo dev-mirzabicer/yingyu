@@ -19,7 +19,7 @@ import {
   Teacher,
   StudentCardState,
   StudentGenericCardState,
-  Job,
+  ListeningCardState,
 } from '@prisma/client';
 import { z } from 'zod';
 import {
@@ -38,7 +38,7 @@ export type PopulatedUnitItem = UnitItem & {
   listeningExercise: ListeningExercise | null;
   fillInTheBlankDeck: (FillInTheBlankDeck & { cards: { id: string }[] }) | null;
   genericDeck: (GenericDeck & { cards: { id: string }[] }) | null;
-  config?: VocabularyExerciseConfig | FillInTheBlankExerciseConfig;
+  config?: VocabularyExerciseConfig | ListeningExerciseConfig | FillInTheBlankExerciseConfig | GrammarExerciseConfig;
 };
 
 export type FullUnit = Unit & {
@@ -203,6 +203,42 @@ export type ListeningExerciseConfig = {
 };
 
 /**
+ * Configuration for grammar exercises, stored in UnitItem.exerciseConfig.
+ * Supports dynamic question generation and difficulty scaling.
+ */
+export type GrammarExerciseConfig = {
+  /** Title of the grammar exercise */
+  title?: string;
+  /** Grammar topic/category (e.g., "Present Perfect", "Conditionals") */
+  grammarTopic?: string;
+  /** Difficulty level from 1 (beginner) to 5 (advanced) */
+  difficulty?: number;
+  /** Structured exercise data containing questions, instructions, etc. */
+  exerciseData?: {
+    /** Instructions shown to the student */
+    instructions?: string;
+    /** Array of question objects with their answers and options */
+    questions?: {
+      id?: string;
+      question: string;
+      options?: string[];
+      correctAnswer: string;
+      explanation?: string;
+    }[];
+    /** Additional configuration for question presentation */
+    settings?: {
+      randomizeQuestions?: boolean;
+      randomizeOptions?: boolean;
+      showExplanations?: boolean;
+    };
+  };
+  /** Optional explanation text for the grammar concept */
+  explanation?: string;
+  /** Tags for categorization and filtering */
+  tags?: string[];
+};
+
+/**
  * Configuration for fill-in-the-blank exercises, stored in UnitItem.exerciseConfig.
  */
 export type FillInTheBlankExerciseConfig = {
@@ -217,9 +253,9 @@ export type ListeningDeckProgress = {
   stage: 'PLAYING_AUDIO' | 'AWAITING_RATING';
   payload: {
     /** The dynamic, sorted queue of listening cards to be reviewed */
-    queue: Array<any>; // Will be typed as (ListeningCardState & { card: VocabularyCard })[]
+    queue: (ListeningCardState & { card: VocabularyCard })[];
     /** The full data for the current card (queue[0]) */
-    currentCardData?: any; // Will be typed as ListeningCardState & { card: VocabularyCard }
+    currentCardData?: ListeningCardState & { card: VocabularyCard };
     /** The original configuration for this session */
     config: ListeningExerciseConfig;
     /** Static list of all card IDs included at the start of the session */
@@ -293,12 +329,12 @@ export type NewUnitItemData =
   | {
     type: 'GRAMMAR_EXERCISE';
     order?: number;
-    config?: any;
+    config?: GrammarExerciseConfig;
     data: {
       title: string;
       grammarTopic: string;
       difficultyLevel?: number;
-      exerciseData: Prisma.InputJsonValue; // Use the correct input type
+      exerciseData: Prisma.InputJsonValue;
       explanation?: string;
       tags?: string[];
       isPublic?: boolean;
@@ -376,3 +412,122 @@ export type FsrsStats = {
   averageRetention: number;
   averageResponseTime: number;
 };
+
+// ================================================================= //
+// JOB SYSTEM TYPES (for type-safe job payloads)
+// ================================================================= //
+import { 
+  BulkImportVocabularyPayloadSchema,
+  BulkImportStudentsPayloadSchema, 
+  BulkImportSchedulesPayloadSchema,
+  BulkImportGenericDeckPayloadSchema,
+  OptimizeParamsPayloadSchema,
+  RebuildCachePayloadSchema,
+  InitializeCardStatesPayloadSchema
+} from './schemas';
+import { JobType, SessionStatus } from '@prisma/client';
+
+/**
+ * Union of all validated job payload types
+ */
+export type ValidatedJobPayload = 
+  | z.infer<typeof BulkImportVocabularyPayloadSchema>
+  | z.infer<typeof BulkImportStudentsPayloadSchema>
+  | z.infer<typeof BulkImportSchedulesPayloadSchema>
+  | z.infer<typeof BulkImportGenericDeckPayloadSchema>
+  | z.infer<typeof OptimizeParamsPayloadSchema>
+  | z.infer<typeof RebuildCachePayloadSchema>
+  | z.infer<typeof InitializeCardStatesPayloadSchema>;
+
+/**
+ * Job payload map that connects job types to their specific payload schemas
+ */
+export type JobPayloadMap = {
+  [JobType.BULK_IMPORT_VOCABULARY]: z.infer<typeof BulkImportVocabularyPayloadSchema>;
+  [JobType.BULK_IMPORT_STUDENTS]: z.infer<typeof BulkImportStudentsPayloadSchema>;
+  [JobType.BULK_IMPORT_SCHEDULES]: z.infer<typeof BulkImportSchedulesPayloadSchema>;
+  [JobType.BULK_IMPORT_GENERIC_DECK]: z.infer<typeof BulkImportGenericDeckPayloadSchema>;
+  [JobType.OPTIMIZE_VOCABULARY_FSRS_PARAMS]: z.infer<typeof OptimizeParamsPayloadSchema>;
+  [JobType.OPTIMIZE_GENERIC_FSRS_PARAMS]: z.infer<typeof OptimizeParamsPayloadSchema>;
+  [JobType.OPTIMIZE_LISTENING_FSRS_PARAMS]: z.infer<typeof OptimizeParamsPayloadSchema>;
+  [JobType.REBUILD_VOCABULARY_FSRS_CACHE]: z.infer<typeof RebuildCachePayloadSchema>;
+  [JobType.REBUILD_GENERIC_FSRS_CACHE]: z.infer<typeof RebuildCachePayloadSchema>;
+  [JobType.REBUILD_LISTENING_FSRS_CACHE]: z.infer<typeof RebuildCachePayloadSchema>;
+  [JobType.INITIALIZE_CARD_STATES]: z.infer<typeof InitializeCardStatesPayloadSchema>;
+  [JobType.INITIALIZE_GENERIC_CARD_STATES]: z.infer<typeof InitializeCardStatesPayloadSchema>;
+  [JobType.INITIALIZE_LISTENING_CARD_STATES]: z.infer<typeof InitializeCardStatesPayloadSchema>;
+};
+
+// ================================================================= //
+// SESSION SYSTEM TYPES (for type-safe session management)
+// ================================================================= //
+
+/**
+ * Type-safe exercise config overrides for session initialization
+ */
+export type ExerciseConfigOverrides = {
+  [itemId: string]: 
+    | VocabularyExerciseConfig 
+    | ListeningExerciseConfig 
+    | FillInTheBlankExerciseConfig
+    | GrammarExerciseConfig;
+};
+
+/**
+ * Session summary type for getAllSessionsForTeacher return value
+ */
+export interface SessionSummary {
+  id: string;
+  studentId: string;
+  studentName: string;
+  unitName: string;
+  status: SessionStatus;
+  startedAt: Date;
+  endedAt: Date | null;
+  duration: number;
+  cardsReviewed: number;
+}
+
+// ================================================================= //
+// TYPE GUARDS AND UTILITY FUNCTIONS
+// ================================================================= //
+
+/**
+ * Type guard to safely cast unknown JSON values to SessionProgress
+ */
+export function isSessionProgress(value: unknown): value is SessionProgress {
+  if (!value || typeof value !== 'object') return false;
+  
+  const obj = value as Record<string, unknown>;
+  const validTypes = ['VOCABULARY_DECK', 'LISTENING_EXERCISE', 'FILL_IN_THE_BLANK_EXERCISE', 'GENERIC_DECK'];
+  
+  return typeof obj.type === 'string' && 
+         validTypes.includes(obj.type) &&
+         typeof obj.stage === 'string' &&
+         obj.payload !== undefined;
+}
+
+/**
+ * Type guard to safely cast unknown JSON values to exercise configs
+ */
+export function isExerciseConfig(value: unknown): value is VocabularyExerciseConfig | ListeningExerciseConfig | FillInTheBlankExerciseConfig | GrammarExerciseConfig {
+  if (!value || typeof value !== 'object') return false;
+  
+  // Exercise configs are objects that may contain optional properties
+  // The presence of typical config properties indicates it's likely a config object
+  const obj = value as Record<string, unknown>;
+  const configProps = [
+    'newCards', 'maxDue', 'minDue', 'deckId', 'learningSteps', 
+    'vocabularyConfidenceThreshold', 'title', 'grammarTopic', 
+    'difficulty', 'exerciseData', 'explanation', 'tags'
+  ];
+  
+  return Object.keys(obj).some(key => configProps.includes(key));
+}
+
+/**
+ * Safely converts validated job payloads to Prisma.InputJsonValue
+ */
+export function toJobPayload(payload: ValidatedJobPayload): Prisma.InputJsonValue {
+  return payload as Prisma.InputJsonValue;
+}

@@ -7,6 +7,43 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 
+// Type definitions for admin API responses
+interface AuthorizeResponse {
+  ok: boolean;
+  data: null;
+  error: string | null;
+}
+
+interface CreateTeacherResponse {
+  ok: boolean;
+  data: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
+  error: string | null;
+}
+
+interface AuthorizedCheckResponse {
+  ok: boolean;
+  data: {
+    authorized: boolean;
+  } | null;
+  error: string | null;
+}
+
+// Utility function for safe error message extraction
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const errorObj = error as { message: unknown };
+    return typeof errorObj.message === 'string' ? errorObj.message : 'An error occurred';
+  }
+  return 'An unexpected error occurred';
+}
+
 function AdminKeyForm({ onAuthorized }: { onAuthorized: () => void }) {
   const [key, setKey] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,12 +58,16 @@ function AdminKeyForm({ onAuthorized }: { onAuthorized: () => void }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key }),
       });
-      const json = await res.json();
+      const json: AuthorizeResponse = await res.json();
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       toast({ title: 'Authorized', description: 'Admin registration session started.' });
       onAuthorized();
-    } catch (e: any) {
-      toast({ title: 'Authorization failed', description: e?.message || 'Invalid key', variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ 
+        title: 'Authorization failed', 
+        description: getErrorMessage(error) || 'Invalid key', 
+        variant: 'destructive' 
+      });
     } finally {
       setLoading(false);
     }
@@ -69,12 +110,16 @@ function TeacherCreateForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, name, password, timezone, phone: phone || undefined, validityDays: parseInt(validityDays, 10) }),
       });
-      const json = await res.json();
+      const json: CreateTeacherResponse = await res.json();
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-      toast({ title: 'Teacher created', description: `Account for ${json.data.name} created.` });
+      toast({ title: 'Teacher created', description: `Account for ${json.data?.name} created.` });
       setEmail(''); setName(''); setPassword(''); setPhone(''); setValidityDays('30');
-    } catch (e: any) {
-      toast({ title: 'Creation failed', description: e?.message || 'Error creating teacher', variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ 
+        title: 'Creation failed', 
+        description: getErrorMessage(error) || 'Error creating teacher', 
+        variant: 'destructive' 
+      });
     } finally {
       setLoading(false);
     }
@@ -132,7 +177,7 @@ export default function AdminRegisterPage() {
     const check = async () => {
       try {
         const res = await fetch('/api/admin/register/authorized');
-        const json = await res.json();
+        const json: AuthorizedCheckResponse = await res.json();
         setAuthorized(Boolean(json?.data?.authorized));
       } catch {
         setAuthorized(false);

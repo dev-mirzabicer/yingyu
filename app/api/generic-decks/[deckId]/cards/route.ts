@@ -3,7 +3,6 @@ import { ContentService } from '@/lib/actions/content';
 import { apiResponse, handleApiError } from '@/lib/api-utils';
 import { prisma } from '@/lib/db';
 import { CreateGenericCardSchema } from '@/lib/schemas';
-import { Prisma } from '@prisma/client';
 import { requireAuth } from '@/lib/auth';
 
 export async function GET(

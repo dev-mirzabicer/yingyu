@@ -1,7 +1,27 @@
 import { prisma } from '@/lib/db';
 import { StudentStatus } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
+import * as crypto from 'crypto';
+
+/**
+ * Type definition for NextRequest with cookie functionality.
+ * This ensures type safety when accessing cookies from NextRequest objects.
+ */
+interface RequestWithCookies extends Request {
+  cookies: {
+    get(name: string): { value: string } | undefined;
+  };
+}
+
+/**
+ * Type guard to check if a request object has the NextRequest cookies interface.
+ * This allows safe access to the cookies.get() method.
+ */
+function hasNextRequestCookies(req: Request | NextRequest): req is RequestWithCookies {
+  return 'cookies' in req && 
+         req.cookies !== undefined &&
+         typeof req.cookies.get === 'function';
+}
 
 const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'yingyu_session';
 const SESSION_TTL_DAYS = parseInt(process.env.SESSION_TTL_DAYS || '14', 10);
@@ -44,13 +64,16 @@ function parseCookieHeader(cookieHeader: string | null): Record<string, string> 
 
 export function getSessionTokenFromRequest(req: Request | NextRequest): string | null {
   // Prefer NextRequest.cookies() if available
-  const anyReq = req as any;
   try {
-    if (anyReq?.cookies && typeof anyReq.cookies.get === 'function') {
-      const c = anyReq.cookies.get(AUTH_COOKIE_NAME);
-      return c?.value || null;
+    if (hasNextRequestCookies(req)) {
+      const cookie = req.cookies.get(AUTH_COOKIE_NAME);
+      return cookie?.value || null;
     }
-  } catch {}
+  } catch {
+    // Fallback to manual cookie parsing if NextRequest cookies fail
+  }
+  
+  // Fallback to manual cookie header parsing
   const cookieHeader = req.headers.get('cookie');
   const cookies = parseCookieHeader(cookieHeader);
   return cookies[AUTH_COOKIE_NAME] || null;
@@ -217,13 +240,16 @@ export function clearAdminRegCookie(res: NextResponse) {
 }
 
 export function getAdminRegTokenFromRequest(req: Request | NextRequest): string | null {
-  const anyReq = req as any;
   try {
-    if (anyReq?.cookies && typeof anyReq.cookies.get === 'function') {
-      const c = anyReq.cookies.get(ADMIN_REG_COOKIE_NAME);
-      return c?.value || null;
+    if (hasNextRequestCookies(req)) {
+      const cookie = req.cookies.get(ADMIN_REG_COOKIE_NAME);
+      return cookie?.value || null;
     }
-  } catch {}
+  } catch {
+    // Fallback to manual cookie parsing if NextRequest cookies fail
+  }
+  
+  // Fallback to manual cookie header parsing
   const cookieHeader = req.headers.get('cookie');
   const cookies = parseCookieHeader(cookieHeader);
   return cookies[ADMIN_REG_COOKIE_NAME] || null;

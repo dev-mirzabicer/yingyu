@@ -71,8 +71,8 @@ export async function POST(req: NextRequest) {
       });
       // Optionally pre-create default settings lazily via getSettings; not required here.
       return apiResponse(201, { id: teacher.id, email: teacher.email, name: teacher.name, timezone: teacher.timezone }, null);
-    } catch (e: any) {
-      if (e?.code === 'P2002') {
+    } catch (e: unknown) {
+      if (e && typeof e === 'object' && 'code' in e && e.code === 'P2002') {
         return apiResponse(409, null, 'A teacher with this email already exists.');
       }
       throw e;

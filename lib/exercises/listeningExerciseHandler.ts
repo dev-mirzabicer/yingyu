@@ -16,8 +16,9 @@ import {
 import { fullSessionStateInclude } from '@/lib/prisma-includes';
 import { ListeningExerciseConfigSchema } from '@/lib/schemas';
 import { TransactionClient } from './operators/base';
+import { ListeningCardState, VocabularyCard, Prisma } from '@prisma/client';
 
-type EnrichedListeningCardState = any; // Will be typed as ListeningCardState & { card: VocabularyCard }
+type EnrichedListeningCardState = ListeningCardState & { card: VocabularyCard };
 
 class ListeningExerciseHandler implements ExerciseHandler {
   private operators = {
@@ -120,7 +121,7 @@ class ListeningExerciseHandler implements ExerciseHandler {
       };
       const updatedSession = await db.session.update({
         where: { id: sessionState.id },
-        data: { progress: emptyProgress as any },
+        data: { progress: emptyProgress as Prisma.InputJsonValue },
         include: fullSessionStateInclude,
       });
       return updatedSession as unknown as FullSessionState;
@@ -142,7 +143,7 @@ class ListeningExerciseHandler implements ExerciseHandler {
 
     const updatedSession = await db.session.update({
       where: { id: sessionState.id },
-      data: { progress: initialProgress as any },
+      data: { progress: initialProgress as Prisma.InputJsonValue },
       include: fullSessionStateInclude,
     });
 

@@ -7,6 +7,33 @@ import { AuthProvider, useAuth } from '@/hooks/auth/use-auth';
 
 const publicRoutes = ['/login', '/admin/register', '/admin/teachers']; // Public routes that don't require authentication
 
+/**
+ * Custom HTTP error class for typed error handling in SWR fetcher.
+ * Extends the base Error class with HTTP status information.
+ */
+class HttpError extends Error {
+  public readonly status: number;
+  
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'HttpError';
+    this.status = status;
+  }
+}
+
+/**
+ * Type guard to safely check if an error object has a status property.
+ * Used for type-safe error handling in SWR callbacks.
+ */
+function hasStatusProperty(error: unknown): error is { status: number } {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'status' in error &&
+    typeof (error as Record<string, unknown>).status === 'number'
+  );
+}
+
 function Gate({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -43,15 +70,14 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         const res = await fetch(url);
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          const err: any = new Error(body.error || `HTTP ${res.status}`);
-          err.status = res.status;
-          throw err;
+          const errorMessage = body.error || `HTTP ${res.status}`;
+          throw new HttpError(errorMessage, res.status);
         }
         const body = await res.json();
         return body.data;
       },
-      onError: (err: any) => {
-        if (typeof window !== 'undefined' && err?.status === 401) {
+      onError: (err: unknown) => {
+        if (typeof window !== 'undefined' && hasStatusProperty(err) && err.status === 401) {
           router.replace('/login');
         }
       },

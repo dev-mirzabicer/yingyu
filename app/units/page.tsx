@@ -17,6 +17,32 @@ import { useToast } from "@/hooks/use-toast"
 import { useUnits, createUnit } from "@/hooks/api"
 import { format } from "date-fns"
 
+// TypeScript interfaces for data structures
+interface Unit {
+  id: string
+  name: string
+  description: string | null
+  isPublic: boolean
+  createdAt: string
+  _count?: {
+    items: number
+  }
+}
+
+interface DataTableColumn<T> {
+  key: string
+  header: string
+  render: (value: unknown, row: T) => React.ReactNode
+}
+
+// Utility function for handling errors
+function handleError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+  return "An unexpected error occurred"
+}
+
 export default function UnitsPage() {
   const [isCreateUnitOpen, setIsCreateUnitOpen] = useState(false)
   const [newUnit, setNewUnit] = useState({ name: "", description: "", isPublic: false })
@@ -48,6 +74,7 @@ export default function UnitsPage() {
       setIsCreateUnitOpen(false)
       mutate()
     } catch (error) {
+      console.error("Failed to create unit:", error)
       toast({
         title: "Error",
         description: "Failed to create unit. Please try again.",
@@ -70,7 +97,7 @@ export default function UnitsPage() {
     {
       key: "name",
       header: "Unit Name",
-      render: (value: string, row: any) => (
+      render: (value: string, row: Unit) => (
         <div className="flex items-center space-x-3">
           <div className="p-2 bg-green-100 rounded-lg">
             <Layers className="h-5 w-5 text-green-600" />
@@ -87,7 +114,7 @@ export default function UnitsPage() {
     {
       key: "description",
       header: "Description",
-      render: (value: string) => (
+      render: (value: string | null) => (
         <span className="text-slate-600">{value || "No description"}</span>
       ),
     },
@@ -111,7 +138,7 @@ export default function UnitsPage() {
     {
       key: "actions",
       header: "Actions",
-      render: (_: any, row: any) => (
+      render: (_: unknown, row: Unit) => (
         <div className="flex items-center space-x-2">
           <Link href={`/units/${row.id}`}>
             <Button variant="outline" size="sm">

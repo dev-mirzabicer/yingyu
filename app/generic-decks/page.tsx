@@ -17,6 +17,47 @@ import { useGenericDecks, createGenericDeck, useStudents, assignGenericDeck, use
 import { format } from "date-fns"
 import Link from "next/link"
 
+// TypeScript interfaces for data structures
+interface GenericDeck {
+  id: string
+  name: string
+  description: string | null
+  isPublic: boolean
+  createdAt: string
+  boundVocabularyDeckId?: string
+  _count?: {
+    cards: number
+  }
+}
+
+interface VocabularyDeck {
+  id: string
+  name: string
+  _count?: {
+    cards: number
+  }
+}
+
+interface Student {
+  id: string
+  name: string
+  email: string
+}
+
+interface DataTableColumn<T> {
+  key: string
+  header: string
+  render: (value: unknown, row: T) => React.ReactNode
+}
+
+// Utility function for handling errors
+function handleError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+  return "An unexpected error occurred"
+}
+
 export default function GenericDecksPage() {
   const [isCreateDeckOpen, setIsCreateDeckOpen] = useState(false)
   const [newDeck, setNewDeck] = useState({ name: "", description: "", isPublic: false, boundVocabularyDeckId: "" })
@@ -24,7 +65,7 @@ export default function GenericDecksPage() {
   const [filterVisibility, setFilterVisibility] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [isAssignDeckOpen, setIsAssignDeckOpen] = useState(false)
-  const [selectedDeckForAssignment, setSelectedDeckForAssignment] = useState<any>(null)
+  const [selectedDeckForAssignment, setSelectedDeckForAssignment] = useState<GenericDeck | null>(null)
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
   const [isAssigning, setIsAssigning] = useState(false)
 
@@ -60,6 +101,7 @@ export default function GenericDecksPage() {
       setIsCreateDeckOpen(false)
       mutate()
     } catch (error) {
+      console.error("Failed to create deck:", error)
       toast({
         title: "Error",
         description: "Failed to create deck. Please try again.",
@@ -84,6 +126,7 @@ export default function GenericDecksPage() {
       setSelectedDeckForAssignment(null)
       setSelectedStudentId(null)
     } catch (error) {
+      console.error("Failed to assign deck:", error)
       toast({
         title: "Error",
         description: "Failed to assign deck. Please try again.",
@@ -94,7 +137,7 @@ export default function GenericDecksPage() {
     }
   }
 
-  const handleOpenAssignDialog = (deck: any) => {
+  const handleOpenAssignDialog = (deck: GenericDeck) => {
     setSelectedDeckForAssignment(deck)
     setIsAssignDeckOpen(true)
   }
@@ -111,7 +154,7 @@ export default function GenericDecksPage() {
     {
       key: "name",
       header: "Deck Name",
-      render: (value: string, row: any) => (
+      render: (value: string, row: GenericDeck) => (
         <div className="flex items-center space-x-3">
           <div className="p-2 bg-teal-100 rounded-lg">
             <Layers className="h-5 w-5 text-teal-600" />
@@ -126,7 +169,7 @@ export default function GenericDecksPage() {
     {
       key: "description",
       header: "Description",
-      render: (value: string) => (
+      render: (value: string | null) => (
         <span className="text-slate-600">{value || "No description"}</span>
       ),
     },
@@ -150,7 +193,7 @@ export default function GenericDecksPage() {
     {
       key: "actions",
       header: "Actions",
-      render: (_: any, row: any) => (
+      render: (_: unknown, row: GenericDeck) => (
         <div className="flex items-center space-x-2">
           <Link href={`/generic-decks/${row.id}/manage`}>
             <Button variant="outline" size="sm">
@@ -384,7 +427,7 @@ export default function GenericDecksPage() {
           <DialogHeader>
             <DialogTitle>Assign Deck to Student</DialogTitle>
             <DialogDescription>
-              Select a student to assign "{selectedDeckForAssignment?.name}" to. They will begin seeing cards from this deck in their sessions.
+              Select a student to assign &quot;{selectedDeckForAssignment?.name}&quot; to. They will begin seeing cards from this deck in their sessions.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
