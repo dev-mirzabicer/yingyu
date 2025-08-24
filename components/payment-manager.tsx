@@ -19,13 +19,26 @@ import {
   Receipt,
 } from "lucide-react"
 import { format } from "date-fns"
-import { cn, safeNumberConversion } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { recordPayment, useStudentPayments } from "@/hooks/api"
 import { useCurrencyFormatter } from "@/hooks/use-ui-preferences"
 import type { Payment } from "@prisma/client"
 import { DataTable } from "@/components/data-table"
 import { Skeleton } from "@/components/ui/skeleton"
+
+/**
+ * Client-safe number conversion for payment amounts.
+ * Handles the conversion of serialized Decimal values to numbers.
+ */
+const safeNumberConversion = (value: any, fallback = 0): number => {
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+  
+  const converted = Number(value);
+  return isNaN(converted) ? fallback : converted;
+};
 
 interface PaymentManagerProps {
   studentId: string
