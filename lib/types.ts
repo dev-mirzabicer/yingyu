@@ -1,6 +1,7 @@
 import {
   Unit,
   UnitItem,
+  UnitItemType,
   VocabularyDeck,
   GrammarExercise,
   ListeningExercise,
@@ -21,6 +22,7 @@ import {
   StudentGenericCardState,
   ListeningCardState,
 } from '@prisma/client';
+import { DataTableCompatible } from '@/components/data-table';
 import { z } from 'zod';
 import {
   BulkImportResultSchema,
@@ -49,28 +51,32 @@ export type UnitWithItems = Unit & {
   items: UnitItem[];
 };
 
-export type UnitWithCount = Unit & {
+export type UnitWithCount = Unit & DataTableCompatible & {
   _count: {
     items: number;
   };
+  [key: string]: unknown;
 };
 
-export type VocabularyDeckWithCount = VocabularyDeck & {
+export type VocabularyDeckWithCount = VocabularyDeck & DataTableCompatible & {
   _count: {
     cards: number;
   };
+  [key: string]: unknown;
 };
 
-export type FillInTheBlankDeckWithCount = FillInTheBlankDeck & {
+export type FillInTheBlankDeckWithCount = FillInTheBlankDeck & DataTableCompatible & {
   _count: {
     cards: number;
   };
+  [key: string]: unknown;
 };
 
-export type GenericDeckWithCount = GenericDeck & {
+export type GenericDeckWithCount = GenericDeck & DataTableCompatible & {
   _count: {
     cards: number;
   };
+  [key: string]: unknown;
 };
 
 export type PopulatedStudentDeck = StudentDeck & {
@@ -79,7 +85,7 @@ export type PopulatedStudentDeck = StudentDeck & {
   };
 };
 
-export type FullStudentProfile = Student & {
+export type FullStudentProfile = Student & DataTableCompatible & {
   classesRemaining: number;
   studentDecks: (StudentDeck & {
     deck: VocabularyDeck & {
@@ -99,6 +105,7 @@ export type FullStudentProfile = Student & {
   classSchedules: ClassSchedule[];
   notes: string | null;
   upcomingClasses: ClassSchedule[];
+  [key: string]: unknown;
 };
 
 // ================================================================= //
@@ -476,7 +483,7 @@ export type ExerciseConfigOverrides = {
 /**
  * Session summary type for getAllSessionsForTeacher return value
  */
-export interface SessionSummary {
+export interface SessionSummary extends DataTableCompatible {
   id: string;
   studentId: string;
   studentName: string;
@@ -486,6 +493,23 @@ export interface SessionSummary {
   endedAt: Date | null;
   duration: number;
   cardsReviewed: number;
+  [key: string]: unknown;
+}
+
+/**
+ * Session list item type for sessions page DataTable compatibility
+ */
+export interface SessionListItem extends DataTableCompatible {
+  id: string;
+  studentId: string;
+  studentName: string;
+  unitId: string;
+  unitName: string;
+  status: 'COMPLETED' | 'IN_PROGRESS' | 'CANCELLED';
+  startedAt: string;
+  duration: number;
+  cardsReviewed: number;
+  [key: string]: unknown;
 }
 
 // ================================================================= //
@@ -523,6 +547,115 @@ export function isExerciseConfig(value: unknown): value is VocabularyExerciseCon
   ];
   
   return Object.keys(obj).some(key => configProps.includes(key));
+}
+
+/**
+ * Specific type guard for vocabulary exercise configs
+ */
+export function isVocabularyExerciseConfig(value: unknown): value is VocabularyExerciseConfig {
+  if (!value || typeof value !== 'object') return false;
+  
+  const obj = value as Record<string, unknown>;
+  const vocabularyProps = ['newCards', 'maxDue', 'minDue', 'deckId', 'learningSteps'];
+  
+  // Check for vocabulary-specific properties or empty object (all properties are optional)
+  return Object.keys(obj).length === 0 || Object.keys(obj).some(key => vocabularyProps.includes(key));
+}
+
+/**
+ * Specific type guard for listening exercise configs
+ */
+export function isListeningExerciseConfig(value: unknown): value is ListeningExerciseConfig {
+  if (!value || typeof value !== 'object') return false;
+  
+  const obj = value as Record<string, unknown>;
+  const listeningProps = ['deckId', 'newCards', 'maxDue', 'minDue', 'vocabularyConfidenceThreshold', 'listeningCandidateThreshold', 'learningSteps'];
+  
+  // Listening configs typically have a deckId or other listening-specific properties
+  return Object.keys(obj).some(key => listeningProps.includes(key));
+}
+
+/**
+ * Specific type guard for grammar exercise configs
+ */
+export function isGrammarExerciseConfig(value: unknown): value is GrammarExerciseConfig {
+  if (!value || typeof value !== 'object') return false;
+  
+  const obj = value as Record<string, unknown>;
+  const grammarProps = ['title', 'grammarTopic', 'difficulty', 'exerciseData', 'explanation', 'tags'];
+  
+  // Grammar configs typically have grammar-specific properties
+  return Object.keys(obj).some(key => grammarProps.includes(key));
+}
+
+/**
+ * Specific type guard for fill-in-the-blank exercise configs
+ */
+export function isFillInTheBlankExerciseConfig(value: unknown): value is FillInTheBlankExerciseConfig {
+  if (!value || typeof value !== 'object') return false;
+  
+  const obj = value as Record<string, unknown>;
+  const fitbProps = ['vocabularyConfidenceThreshold'];
+  
+  // FITB configs are simple and may be empty objects
+  return Object.keys(obj).length === 0 || Object.keys(obj).some(key => fitbProps.includes(key));
+}
+
+/**
+ * Safe converter for exercise configs with proper type casting
+ */
+export function safeExerciseConfigConversion<T extends VocabularyExerciseConfig | ListeningExerciseConfig | FillInTheBlankExerciseConfig | GrammarExerciseConfig>(
+  value: unknown,
+  defaultConfig: T
+): T {
+  if (!isExerciseConfig(value)) {
+    return defaultConfig;
+  }
+  
+  // Merge the unknown config with the default to ensure all required properties exist
+  return { ...defaultConfig, ...value } as T;
+}
+
+/**
+ * Type-safe exercise config getter that narrows unknown configs to specific types
+ */
+export function getTypedExerciseConfig(
+  config: unknown,
+  exerciseType: UnitItemType
+): VocabularyExerciseConfig | ListeningExerciseConfig | FillInTheBlankExerciseConfig | GrammarExerciseConfig {
+  if (!config || typeof config !== 'object') {
+    // Return appropriate default based on exercise type
+    switch (exerciseType) {
+      case UnitItemType.VOCABULARY_DECK:
+        return {};
+      case UnitItemType.LISTENING_EXERCISE:
+        return { deckId: '' };
+      case UnitItemType.GRAMMAR_EXERCISE:
+        return {};
+      case UnitItemType.FILL_IN_THE_BLANK_EXERCISE:
+        return {};
+      case UnitItemType.GENERIC_DECK:
+        return {};
+      default:
+        return {};
+    }
+  }
+
+  const obj = config as Record<string, unknown>;
+  
+  switch (exerciseType) {
+    case UnitItemType.VOCABULARY_DECK:
+    case UnitItemType.GENERIC_DECK:
+      return safeExerciseConfigConversion(obj, {} as VocabularyExerciseConfig);
+    case UnitItemType.LISTENING_EXERCISE:
+      return safeExerciseConfigConversion(obj, { deckId: '' } as ListeningExerciseConfig);
+    case UnitItemType.GRAMMAR_EXERCISE:
+      return safeExerciseConfigConversion(obj, {} as GrammarExerciseConfig);
+    case UnitItemType.FILL_IN_THE_BLANK_EXERCISE:
+      return safeExerciseConfigConversion(obj, {} as FillInTheBlankExerciseConfig);
+    default:
+      return {};
+  }
 }
 
 /**

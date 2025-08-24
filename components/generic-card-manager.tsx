@@ -328,23 +328,29 @@ export function GenericCardManager({ deckId, deckName, isReadOnly = false }: Gen
     {
       key: "front",
       header: "Front",
-      render: (value: string, row: GenericCard & { boundVocabularyCard?: { englishWord: string } | null }) => (
-        <div className="space-y-1">
-          <div className="font-medium text-slate-900">{value}</div>
-          {row.boundVocabularyCard && (
-            <Badge variant="outline" className="text-xs">
-              Bound to: {row.boundVocabularyCard.englishWord}
-            </Badge>
-          )}
-        </div>
-      ),
+      render: (value: unknown, row: GenericCard & { boundVocabularyCard?: { englishWord: string } | null }) => {
+        const frontValue = String(value);
+        return (
+          <div className="space-y-1">
+            <div className="font-medium text-slate-900">{frontValue}</div>
+            {row.boundVocabularyCard && (
+              <Badge variant="outline" className="text-xs">
+                Bound to: {row.boundVocabularyCard.englishWord}
+              </Badge>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: "back",
       header: "Back",
-      render: (value: string) => (
-        <div className="text-slate-900">{value}</div>
-      ),
+      render: (value: unknown) => {
+        const backValue = String(value);
+        return (
+          <div className="text-slate-900">{backValue}</div>
+        );
+      },
     },
     {
       key: "actions",

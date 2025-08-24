@@ -21,21 +21,10 @@ import Link from "next/link"
 import { format } from "date-fns"
 import { useToast } from "@/hooks/use-toast"
 import { useStudents, useSessions } from "@/hooks/api"
-import type { FullStudentProfile } from "@/lib/types"
+import type { FullStudentProfile, SessionListItem } from "@/lib/types"
 import { SessionStartDialog } from "@/components/session-start-dialog"
+import { createTypedRender, typeGuards } from "@/components/data-table"
 
-// TypeScript interface for session data
-interface Session {
-  id: string
-  studentId: string
-  studentName: string
-  unitId: string
-  unitName: string
-  status: 'COMPLETED' | 'IN_PROGRESS' | 'CANCELLED'
-  startedAt: string
-  duration: number
-  cardsReviewed: number
-}
 
 export default function SessionsPage() {
   const { students, isLoading: studentsLoading } = useStudents()
@@ -88,55 +77,73 @@ export default function SessionsPage() {
     {
       key: "studentName",
       header: "Student",
-      render: (value: string) => (
-        <div className="flex items-center space-x-3">
-          <Avatar className="h-8 w-8">
-            <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${value}`} />
-            <AvatarFallback>{value.split(" ").map((n: string) => n[0]).join("")}</AvatarFallback>
-          </Avatar>
-          <span className="font-medium">{value}</span>
-        </div>
-      ),
+      render: createTypedRender<SessionListItem, "studentName">((value) => {
+        if (!typeGuards.isString(value)) return <span>—</span>
+        return (
+          <div className="flex items-center space-x-3">
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${value}`} />
+              <AvatarFallback>{value.split(" ").map((n: string) => n[0]).join("")}</AvatarFallback>
+            </Avatar>
+            <span className="font-medium">{value}</span>
+          </div>
+        )
+      }),
     },
     {
       key: "unitName",
       header: "Unit",
-      render: (value: string) => (
-        <div className="flex items-center space-x-2">
-          <BookOpen className="h-4 w-4 text-muted-foreground" />
-          <span>{value}</span>
-        </div>
-      ),
+      render: createTypedRender<SessionListItem, "unitName">((value) => {
+        if (!typeGuards.isString(value)) return <span>—</span>
+        return (
+          <div className="flex items-center space-x-2">
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
+            <span>{value}</span>
+          </div>
+        )
+      }),
     },
     {
       key: "status",
       header: "Status",
-      render: (value: string) => getStatusBadge(value),
+      render: createTypedRender<SessionListItem, "status">((value) => {
+        if (!typeGuards.isString(value)) return <span>—</span>
+        return getStatusBadge(value)
+      }),
     },
     {
       key: "startedAt",
       header: "Started",
-      render: (value: Date) => format(new Date(value), "MMM dd, HH:mm"),
+      render: createTypedRender<SessionListItem, "startedAt">((value) => {
+        if (!typeGuards.isDateString(value)) return <span>—</span>
+        return format(new Date(value), "MMM dd, HH:mm")
+      }),
     },
     {
       key: "duration",
       header: "Duration",
-      render: (value: number) => (
-        <div className="flex items-center space-x-1">
-          <Clock className="h-4 w-4 text-muted-foreground" />
-          <span>{value}m</span>
-        </div>
-      ),
+      render: createTypedRender<SessionListItem, "duration">((value) => {
+        if (!typeGuards.isNumber(value)) return <span>—</span>
+        return (
+          <div className="flex items-center space-x-1">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <span>{value}m</span>
+          </div>
+        )
+      }),
     },
     {
       key: "cardsReviewed",
       header: "Cards",
-      render: (value: number) => <span>{value}</span>,
+      render: createTypedRender<SessionListItem, "cardsReviewed">((value) => {
+        if (!typeGuards.isNumber(value)) return <span>—</span>
+        return <span>{value}</span>
+      }),
     },
     {
       key: "actions",
       header: "Actions",
-      render: (_: unknown, row: Session) => (
+      render: createTypedRender<SessionListItem, "id">((_, row) => (
         <div className="flex items-center space-x-2">
           {row.status === "IN_PROGRESS" && (
             <Button variant="outline" size="sm" asChild>
@@ -149,7 +156,7 @@ export default function SessionsPage() {
             <BarChart3 className="h-4 w-4" />
           </Button>
         </div>
-      ),
+      )),
     },
   ]
 
@@ -314,7 +321,7 @@ export default function SessionsPage() {
               </p>
             </div>
           ) : (
-            <DataTable
+            <DataTable<SessionListItem>
               columns={columns}
               data={filteredSessions}
             />

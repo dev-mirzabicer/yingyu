@@ -30,7 +30,7 @@ export function LoginForm() {
     } catch (err: unknown) {
       toast({
         title: "Login failed",
-        description: err?.message || "Invalid credentials.",
+        description: err instanceof Error ? err.message : "Invalid credentials.",
         variant: "destructive",
       })
     } finally {

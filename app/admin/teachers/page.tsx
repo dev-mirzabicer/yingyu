@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { DataTable, Column } from '@/components/data-table';
+import { DataTable, Column, typeGuards, createTypedRender } from '@/components/data-table';
 import { useAdminAuthorized, useTeachers, topupTeacher, setTeacherValidity, AdminTeacher } from '@/hooks/api/admin';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -41,7 +41,7 @@ function isErrorWithMessage(error: unknown): error is ApiError {
  * Safely extract error message from unknown error types
  */
 function getErrorMessage(error: unknown): string {
-  if (isErrorWithMessage(error)) {
+  if (isErrorWithMessage(error) && error.message) {
     return error.message;
   }
   if (typeof error === 'string') {
@@ -202,59 +202,100 @@ export default function AdminTeachersPage() {
       header: 'Name',
       sortable: true,
       searchable: true,
+      render: createTypedRender<AdminTeacher, 'name'>((value) => {
+        return typeGuards.isString(value) ? value : '—';
+      }),
     },
     {
       key: 'email',
       header: 'Email',
       sortable: true,
       searchable: true,
+      render: createTypedRender<AdminTeacher, 'email'>((value) => {
+        return typeGuards.isString(value) ? value : '—';
+      }),
     },
     {
       key: 'timezone',
       header: 'Timezone',
       sortable: true,
+      render: createTypedRender<AdminTeacher, 'timezone'>((value) => {
+        return typeGuards.isString(value) ? value : '—';
+      }),
     },
     {
       key: 'createdAt',
       header: 'Created',
       sortable: true,
-      render: (value: string) => format(new Date(value), 'MMM d, yyyy'),
+      render: createTypedRender<AdminTeacher, 'createdAt'>((value) => {
+        if (typeGuards.isString(value)) {
+          try {
+            return format(new Date(value), 'MMM d, yyyy');
+          } catch {
+            return 'Invalid date';
+          }
+        }
+        return '—';
+      }),
     },
     {
       key: 'lastLoginAt',
       header: 'Last Login',
       sortable: true,
-      render: (value: string | null) => value ? format(new Date(value), 'MMM d, yyyy HH:mm') : 'Never',
+      render: createTypedRender<AdminTeacher, 'lastLoginAt'>((value) => {
+        if (typeGuards.isStringOrNull(value)) {
+          if (value === null) return 'Never';
+          try {
+            return format(new Date(value), 'MMM d, yyyy HH:mm');
+          } catch {
+            return 'Invalid date';
+          }
+        }
+        return '—';
+      }),
     },
     {
       key: 'validityUntil',
       header: 'Valid Until',
       sortable: true,
-      render: (value: string | null) => value ? format(new Date(value), 'MMM d, yyyy') : 'No expiry',
+      render: createTypedRender<AdminTeacher, 'validityUntil'>((value) => {
+        if (typeGuards.isStringOrNull(value)) {
+          if (value === null) return 'No expiry';
+          try {
+            return format(new Date(value), 'MMM d, yyyy');
+          } catch {
+            return 'Invalid date';
+          }
+        }
+        return '—';
+      }),
     },
     {
       key: 'daysRemaining',
       header: 'Days Remaining',
       sortable: true,
-      render: (value: number | null) => {
-        if (value === null) {
-          return <Badge variant="secondary">No expiry</Badge>;
+      render: createTypedRender<AdminTeacher, 'daysRemaining'>((value) => {
+        if (typeGuards.isNumberOrNull(value)) {
+          if (value === null) {
+            return <Badge variant="secondary">No expiry</Badge>;
+          }
+          if (value <= 0) {
+            return <Badge variant="destructive">Expired</Badge>;
+          }
+          if (value <= 7) {
+            return <Badge variant="outline" className="border-orange-500 text-orange-600">{value} days</Badge>;
+          }
+          return <Badge variant="outline" className="border-green-500 text-green-600">{value} days</Badge>;
         }
-        if (value <= 0) {
-          return <Badge variant="destructive">Expired</Badge>;
-        }
-        if (value <= 7) {
-          return <Badge variant="outline" className="border-orange-500 text-orange-600">{value} days</Badge>;
-        }
-        return <Badge variant="outline" className="border-green-500 text-green-600">{value} days</Badge>;
-      },
+        return <Badge variant="secondary">Unknown</Badge>;
+      }),
     },
     {
       key: 'actions',
       header: 'Actions',
       sortable: false,
       searchable: false,
-      render: (_value: undefined, row: AdminTeacher) => (
+      render: createTypedRender<AdminTeacher, 'actions'>((_, row) => (
         <div className="flex gap-2">
           <Dialog>
             <DialogTrigger asChild>
@@ -275,7 +316,7 @@ export default function AdminTeachersPage() {
             <SetValidityDialog teacher={row} onSuccess={() => mutate()} />
           </Dialog>
         </div>
-      ),
+      )),
     },
   ];
 

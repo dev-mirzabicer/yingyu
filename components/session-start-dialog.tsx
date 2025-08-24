@@ -26,7 +26,8 @@ import { startSession } from "@/hooks/api/sessions"
 import { UnitItemType } from "@prisma/client"
 import { Input } from "./ui/input"
 import { Label } from "./ui/label"
-import type { AvailableUnit } from "@/lib/types"
+import type { AvailableUnit, PopulatedUnitItem, VocabularyExerciseConfig } from "@/lib/types"
+import { isVocabularyExerciseConfig } from "@/lib/types"
 
 interface SessionStartDialogProps {
   studentId: string
@@ -96,13 +97,21 @@ export function SessionStartDialog({
   }
 
   const handleConfigChange = (itemId: string, newConfig: unknown) => {
-    setConfigOverrides(prev => ({
-      ...prev,
-      [itemId]: {
-        ...prev[itemId],
-        ...newConfig,
-      },
-    }))
+    // Type-safe spread operations - ensure we only spread valid object types
+    const safeNewConfig = typeof newConfig === 'object' && newConfig !== null ? newConfig : {};
+    
+    setConfigOverrides(prev => {
+      const prevItemConfig = prev[itemId];
+      const safePrevConfig = typeof prevItemConfig === 'object' && prevItemConfig !== null ? prevItemConfig : {};
+      
+      return {
+        ...prev,
+        [itemId]: {
+          ...safePrevConfig,
+          ...safeNewConfig,
+        },
+      };
+    })
   }
 
   const handleStartSession = async () => {
@@ -329,10 +338,15 @@ export function SessionStartDialog({
                           <Settings className="h-4 w-4" />
                           <span>Session Configuration</span>
                         </h4>
-                        {selectedUnit.items.map((item: { type: UnitItemType; id: string; vocabularyDeck?: { name: string } }) => {
+                        {selectedUnit.items.map((item: PopulatedUnitItem) => {
                           if (item.type !== UnitItemType.VOCABULARY_DECK) {
                             return null;
                           }
+                          // Type-safe access to exerciseConfig with proper type casting
+                          const exerciseConfig = isVocabularyExerciseConfig(item.exerciseConfig) 
+                            ? item.exerciseConfig 
+                            : {} as VocabularyExerciseConfig;
+                          
                           return (
                             <div key={item.id} className="p-3 rounded-lg bg-slate-50 space-y-3">
                               <p className="text-sm font-medium text-slate-900">
@@ -344,7 +358,7 @@ export function SessionStartDialog({
                                   <Input
                                     id={`newCards-${item.id}`}
                                     type="number"
-                                    defaultValue={item.exerciseConfig?.newCards || 10}
+                                    defaultValue={exerciseConfig.newCards || 10}
                                     onChange={(e) => handleConfigChange(item.id, { newCards: parseInt(e.target.value) })}
                                     className="h-8"
                                   />
@@ -354,7 +368,7 @@ export function SessionStartDialog({
                                   <Input
                                     id={`minDue-${item.id}`}
                                     type="number"
-                                    defaultValue={item.exerciseConfig?.minDue || 10}
+                                    defaultValue={exerciseConfig.minDue || 10}
                                     onChange={(e) => handleConfigChange(item.id, { minDue: parseInt(e.target.value) })}
                                     className="h-8"
                                   />
@@ -364,7 +378,7 @@ export function SessionStartDialog({
                                   <Input
                                     id={`maxDue-${item.id}`}
                                     type="number"
-                                    defaultValue={item.exerciseConfig?.maxDue || 50}
+                                    defaultValue={exerciseConfig.maxDue || 50}
                                     onChange={(e) => handleConfigChange(item.id, { maxDue: parseInt(e.target.value) })}
                                     className="h-8"
                                   />

@@ -55,10 +55,11 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
   
   incrementReviewCount: () =>
     set((state) => {
-      const currentCardId = state.progress?.payload?.currentCardData?.cardId;
+      const currentCardData = state.progress?.payload?.currentCardData;
+      const currentCardId = currentCardData && ('cardId' in currentCardData ? currentCardData.cardId : currentCardData.id);
       if (currentCardId) {
         const newEncounteredCards = new Set(state.encounteredCards);
-        newEncounteredCards.add(currentCardId);
+        newEncounteredCards.add(String(currentCardId));
         return {
           reviewCount: state.reviewCount + 1,
           encounteredCards: newEncounteredCards,

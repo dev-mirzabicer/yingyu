@@ -16,19 +16,9 @@ import { useToast } from "@/hooks/use-toast"
 import { useGenericDecks, createGenericDeck, useStudents, assignGenericDeck, useDecks } from "@/hooks/api"
 import { format } from "date-fns"
 import Link from "next/link"
+import { createTypedRender, typeGuards } from "@/components/data-table"
+import type { GenericDeckWithCount } from "@/lib/types"
 
-// TypeScript interfaces for data structures
-interface GenericDeck {
-  id: string
-  name: string
-  description: string | null
-  isPublic: boolean
-  createdAt: string
-  boundVocabularyDeckId?: string
-  _count?: {
-    cards: number
-  }
-}
 
 
 export default function GenericDecksPage() {
@@ -38,7 +28,7 @@ export default function GenericDecksPage() {
   const [filterVisibility, setFilterVisibility] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [isAssignDeckOpen, setIsAssignDeckOpen] = useState(false)
-  const [selectedDeckForAssignment, setSelectedDeckForAssignment] = useState<GenericDeck | null>(null)
+  const [selectedDeckForAssignment, setSelectedDeckForAssignment] = useState<GenericDeckWithCount | null>(null)
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
   const [isAssigning, setIsAssigning] = useState(false)
 
@@ -110,7 +100,7 @@ export default function GenericDecksPage() {
     }
   }
 
-  const handleOpenAssignDialog = (deck: GenericDeck) => {
+  const handleOpenAssignDialog = (deck: GenericDeckWithCount) => {
     setSelectedDeckForAssignment(deck)
     setIsAssignDeckOpen(true)
   }
@@ -127,46 +117,56 @@ export default function GenericDecksPage() {
     {
       key: "name",
       header: "Deck Name",
-      render: (value: string, row: GenericDeck) => (
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-teal-100 rounded-lg">
-            <Layers className="h-5 w-5 text-teal-600" />
+      render: createTypedRender<GenericDeckWithCount, "name">((value, row) => {
+        if (!typeGuards.isString(value)) return <span>—</span>
+        return (
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-teal-100 rounded-lg">
+              <Layers className="h-5 w-5 text-teal-600" />
+            </div>
+            <div>
+              <div className="font-medium text-slate-900">{value}</div>
+              <div className="text-sm text-slate-500">{row._count?.cards || 0} cards</div>
+            </div>
           </div>
-          <div>
-            <div className="font-medium text-slate-900">{value}</div>
-            <div className="text-sm text-slate-500">{row._count?.cards || 0} cards</div>
-          </div>
-        </div>
-      ),
+        )
+      }),
     },
     {
       key: "description",
       header: "Description",
-      render: (value: string | null) => (
-        <span className="text-slate-600">{value || "No description"}</span>
-      ),
+      render: createTypedRender<GenericDeckWithCount, "description">((value) => {
+        if (!typeGuards.isStringOrNull(value)) return <span>—</span>
+        return <span className="text-slate-600">{value || "No description"}</span>
+      }),
     },
     {
       key: "isPublic",
       header: "Visibility",
-      render: (value: boolean) => (
-        <div className="flex items-center space-x-2">
-          {value ? <Globe className="h-4 w-4 text-green-600" /> : <Lock className="h-4 w-4 text-slate-400" />}
-          <Badge variant={value ? "default" : "secondary"}>
-            {value ? "Public" : "Private"}
-          </Badge>
-        </div>
-      ),
+      render: createTypedRender<GenericDeckWithCount, "isPublic">((value) => {
+        if (!typeGuards.isBoolean(value)) return <span>—</span>
+        return (
+          <div className="flex items-center space-x-2">
+            {value ? <Globe className="h-4 w-4 text-green-600" /> : <Lock className="h-4 w-4 text-slate-400" />}
+            <Badge variant={value ? "default" : "secondary"}>
+              {value ? "Public" : "Private"}
+            </Badge>
+          </div>
+        )
+      }),
     },
     {
       key: "createdAt",
       header: "Created",
-      render: (value: string) => format(new Date(value), "MMM dd, yyyy"),
+      render: createTypedRender<GenericDeckWithCount, "createdAt">((value) => {
+        if (!typeGuards.isDateString(value)) return <span>—</span>
+        return format(new Date(value), "MMM dd, yyyy")
+      }),
     },
     {
       key: "actions",
       header: "Actions",
-      render: (_: unknown, row: GenericDeck) => (
+      render: createTypedRender<GenericDeckWithCount, "id">((_, row) => (
         <div className="flex items-center space-x-2">
           <Link href={`/generic-decks/${row.id}/manage`}>
             <Button variant="outline" size="sm">
@@ -179,7 +179,7 @@ export default function GenericDecksPage() {
             Assign
           </Button>
         </div>
-      ),
+      )),
     },
   ]
 
@@ -307,7 +307,7 @@ export default function GenericDecksPage() {
               )}
             </div>
           ) : (
-            <DataTable data={filteredDecks} columns={deckColumns} pageSize={10} />
+            <DataTable<GenericDeckWithCount> data={filteredDecks} columns={deckColumns} pageSize={10} />
           )}
         </CardContent>
       </Card>

@@ -102,42 +102,55 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
     {
       key: "state",
       header: "State",
-      render: (value: string) => (
-        <Badge variant="outline" className={stateColors[value as keyof typeof stateColors]}>
-          {value.charAt(0) + value.slice(1).toLowerCase()}
-        </Badge>
-      ),
+      render: (value: unknown) => {
+        const stateValue = String(value);
+        return (
+          <Badge variant="outline" className={stateColors[stateValue as keyof typeof stateColors]}>
+            {stateValue.charAt(0) + stateValue.slice(1).toLowerCase()}
+          </Badge>
+        );
+      },
     },
     {
       key: "difficulty",
       header: "Difficulty",
-      render: (value: number) => (
-        <div className="text-sm text-slate-600">{value.toFixed(2)}</div>
-      ),
+      render: (value: unknown) => {
+        const numValue = Number(value);
+        return (
+          <div className="text-sm text-slate-600">{numValue.toFixed(2)}</div>
+        );
+      },
     },
     {
       key: "stability",
       header: "Stability",
-      render: (value: number) => <div className="text-sm text-slate-600">{value.toFixed(1)} days</div>,
+      render: (value: unknown) => {
+        const numValue = Number(value);
+        return <div className="text-sm text-slate-600">{numValue.toFixed(1)} days</div>;
+      },
     },
     {
       key: "retrievability",
       header: "Retention",
-      render: (value: number | null) => (
-        <div className="text-sm text-slate-600">{value ? `${(value * 100).toFixed(1)}%` : "N/A"}</div>
-      ),
+      render: (value: unknown) => {
+        const numValue = value !== null && value !== undefined ? Number(value) : null;
+        return (
+          <div className="text-sm text-slate-600">{numValue ? `${(numValue * 100).toFixed(1)}%` : "N/A"}</div>
+        );
+      },
     },
     {
       key: "due",
       header: "Due",
-      render: (value: string) => {
-        const dueDate = new Date(value)
-        const isOverdue = dueDate < new Date()
+      render: (value: unknown) => {
+        const dateValue = String(value);
+        const dueDate = new Date(dateValue);
+        const isOverdue = dueDate < new Date();
         return (
           <div className={`text-sm ${isOverdue ? "text-red-600 font-medium" : "text-slate-600"}`}>
             {format(dueDate, "MMM dd, HH:mm")}
           </div>
-        )
+        );
       },
     },
   ]
@@ -146,36 +159,45 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
     {
       key: "englishWord",
       header: "Word",
-      render: (value: string, row: VocabularyCard) => (
-        <div className="space-y-1">
-          <div className="font-medium text-slate-900">{value}</div>
-          <div className="text-sm text-slate-500">{row.chineseTranslation}</div>
-        </div>
-      ),
+      render: (value: unknown, row: VocabularyCard) => {
+        const wordValue = String(value);
+        return (
+          <div className="space-y-1">
+            <div className="font-medium text-slate-900">{wordValue}</div>
+            <div className="text-sm text-slate-500">{row.chineseTranslation}</div>
+          </div>
+        );
+      },
     },
     {
       key: "difficultyLevel",
       header: "Difficulty",
-      render: (value: number) => (
-        <Badge variant="outline" className={difficultyColors[value as keyof typeof difficultyColors]}>
-          Level {value}
-        </Badge>
-      ),
+      render: (value: unknown) => {
+        const levelValue = Number(value);
+        return (
+          <Badge variant="outline" className={difficultyColors[levelValue as keyof typeof difficultyColors]}>
+            Level {levelValue}
+          </Badge>
+        );
+      },
     },
     {
       key: "audioUrl",
       header: "Audio",
-      render: (value: string | null) => (
-        <div className="flex items-center">
-          {value ? (
-            <Button variant="ghost" size="sm" onClick={() => new Audio(value).play()}>
-              <Volume2 className="h-4 w-4" />
-            </Button>
-          ) : (
-            <span className="text-sm text-slate-400">No audio</span>
-          )}
-        </div>
-      ),
+      render: (value: unknown) => {
+        const audioUrl = value && typeof value === 'string' ? value : null;
+        return (
+          <div className="flex items-center">
+            {audioUrl ? (
+              <Button variant="ghost" size="sm" onClick={() => new Audio(audioUrl).play()}>
+                <Volume2 className="h-4 w-4" />
+              </Button>
+            ) : (
+              <span className="text-sm text-slate-400">No audio</span>
+            )}
+          </div>
+        );
+      },
     },
   ]
 

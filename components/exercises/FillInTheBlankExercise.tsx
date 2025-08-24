@@ -116,15 +116,28 @@ export function FillInTheBlankExercise({
               </div>
               
               {/* Show bound vocabulary word if available */}
-              {(currentCard as { boundVocabularyCard?: { englishWord: string } }).boundVocabularyCard && (
-                <div className="flex items-center justify-center space-x-2 text-sm text-slate-600">
-                  <BookOpen className="h-4 w-4 text-blue-600" />
-                  <span>Related vocabulary: </span>
-                  <span className="font-medium text-blue-700">
-                    {(currentCard as { boundVocabularyCard: { englishWord: string } }).boundVocabularyCard.englishWord}
-                  </span>
-                </div>
-              )}
+              {(() => {
+                interface CardWithBinding {
+                  boundVocabularyCard?: {
+                    englishWord: string;
+                  } | null;
+                }
+                const cardWithBinding = currentCard as CardWithBinding;
+                const hasVocabularyCard = cardWithBinding && 
+                  'boundVocabularyCard' in cardWithBinding && 
+                  cardWithBinding.boundVocabularyCard && 
+                  cardWithBinding.boundVocabularyCard.englishWord;
+                
+                return hasVocabularyCard ? (
+                  <div className="flex items-center justify-center space-x-2 text-sm text-slate-600">
+                    <BookOpen className="h-4 w-4 text-blue-600" />
+                    <span>Related vocabulary: </span>
+                    <span className="font-medium text-blue-700">
+                      {cardWithBinding.boundVocabularyCard?.englishWord}
+                    </span>
+                  </div>
+                ) : null;
+              })()}
             </>
           )}
         </CardContent>
@@ -145,7 +158,7 @@ export function FillInTheBlankExercise({
         {progress.stage === "AWAITING_CORRECTNESS" && (
           <div className="grid grid-cols-2 gap-4">
             <Button
-              onClick={() => onSubmitRating({ isCorrect: false })}
+              onClick={() => onSubmitRating(1)} // Rating 1 = Again (incorrect)
               disabled={isLoading}
               variant="outline"
               className="h-16 flex flex-col items-center justify-center gap-1 border-red-200 hover:bg-red-50"
@@ -155,7 +168,7 @@ export function FillInTheBlankExercise({
               <span className="text-xs text-slate-500">I got it wrong</span>
             </Button>
             <Button
-              onClick={() => onSubmitRating({ isCorrect: true })}
+              onClick={() => onSubmitRating(4)} // Rating 4 = Easy (correct)
               disabled={isLoading}
               variant="outline"
               className="h-16 flex flex-col items-center justify-center gap-1 border-green-200 hover:bg-green-50"

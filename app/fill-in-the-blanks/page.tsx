@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { DataTable } from "@/components/data-table"
+import { DataTable, Column, typeGuards, createTypedRender } from "@/components/data-table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -23,23 +23,12 @@ import { format } from "date-fns"
 import Link from "next/link"
 
 // TypeScript interfaces for data structures
-interface FillInTheBlankDeck {
-  id: string
-  name: string
-  description: string | null
-  isPublic: boolean
-  createdAt: string
-  boundVocabularyDeckId?: string
-  _count?: {
-    cards: number
-  }
-}
-
+import { FillInTheBlankDeckWithCount } from "@/lib/types"
 
 interface Student {
   id: string
   name: string
-  email: string
+  email: string | null
 }
 
 export default function FillInTheBlanksPage() {
@@ -54,7 +43,7 @@ export default function FillInTheBlanksPage() {
   const [filterVisibility, setFilterVisibility] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [isAssignDeckOpen, setIsAssignDeckOpen] = useState(false)
-  const [selectedDeckForAssignment, setSelectedDeckForAssignment] = useState<FillInTheBlankDeck | null>(null)
+  const [selectedDeckForAssignment, setSelectedDeckForAssignment] = useState<FillInTheBlankDeckWithCount | null>(null)
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
   const [isAssigning, setIsAssigning] = useState(false)
 
@@ -126,7 +115,7 @@ export default function FillInTheBlanksPage() {
     }
   }
 
-  const handleOpenAssignDialog = (deck: FillInTheBlankDeck) => {
+  const handleOpenAssignDialog = (deck: FillInTheBlankDeckWithCount) => {
     setSelectedDeckForAssignment(deck)
     setIsAssignDeckOpen(true)
   }
@@ -139,38 +128,44 @@ export default function FillInTheBlanksPage() {
     return matchesVisibility && matchesSearch
   })
 
-  const deckColumns = [
+  const deckColumns: Column<FillInTheBlankDeckWithCount>[] = [
     {
       key: "name",
       header: "Deck Name",
-      render: (value: string, row: FillInTheBlankDeck) => (
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-orange-100 rounded-lg">
-            <PencilLine className="h-5 w-5 text-orange-600" />
+      render: createTypedRender<FillInTheBlankDeckWithCount, 'name'>((value, row) => {
+        const name = typeGuards.isString(value) ? value : 'Unknown Deck';
+        const cardCount = row._count?.cards || 0;
+        return (
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-orange-100 rounded-lg">
+              <PencilLine className="h-5 w-5 text-orange-600" />
+            </div>
+            <div>
+              <div className="font-medium text-slate-900">{name}</div>
+              <div className="text-sm text-slate-500">{cardCount} cards</div>
+            </div>
           </div>
-          <div>
-            <div className="font-medium text-slate-900">{value}</div>
-            <div className="text-sm text-slate-500">{row._count?.cards || 0} cards</div>
-          </div>
-        </div>
-      ),
+        );
+      }),
     },
     {
       key: "description",
       header: "Description",
-      render: (value: string | null) => (
-        <span className="text-slate-600">{value || "No description"}</span>
-      ),
+      render: createTypedRender<FillInTheBlankDeckWithCount, 'description'>((value) => {
+        const description = typeGuards.isStringOrNull(value) ? (value || "No description") : "No description";
+        return <span className="text-slate-600">{description}</span>;
+      }),
     },
     {
       key: "boundVocabularyDeckId",
       header: "Bound Vocabulary",
-      render: (value: string | undefined) => {
-        if (!value) {
-          return <Badge variant="secondary">Not bound</Badge>
+      render: createTypedRender<FillInTheBlankDeckWithCount, 'boundVocabularyDeckId'>((value) => {
+        const boundId = typeGuards.isStringOrUndefined(value) ? value : undefined;
+        if (!boundId) {
+          return <Badge variant="secondary">Not bound</Badge>;
         }
         // Find the vocabulary deck name
-        const vocabDeck = vocabularyDecks.find(d => d.id === value)
+        const vocabDeck = vocabularyDecks.find(d => d.id === boundId);
         return (
           <div className="flex items-center space-x-2">
             <BookOpen className="h-4 w-4 text-blue-600" />
@@ -178,30 +173,42 @@ export default function FillInTheBlanksPage() {
               {vocabDeck ? vocabDeck.name : "Unknown deck"}
             </span>
           </div>
-        )
-      },
+        );
+      }),
     },
     {
       key: "isPublic",
       header: "Visibility",
-      render: (value: boolean) => (
-        <div className="flex items-center space-x-2">
-          {value ? <Globe className="h-4 w-4 text-green-600" /> : <Lock className="h-4 w-4 text-slate-400" />}
-          <Badge variant={value ? "default" : "secondary"}>
-            {value ? "Public" : "Private"}
-          </Badge>
-        </div>
-      ),
+      render: createTypedRender<FillInTheBlankDeckWithCount, 'isPublic'>((value) => {
+        const isPublic = typeGuards.isBoolean(value) ? value : false;
+        return (
+          <div className="flex items-center space-x-2">
+            {isPublic ? <Globe className="h-4 w-4 text-green-600" /> : <Lock className="h-4 w-4 text-slate-400" />}
+            <Badge variant={isPublic ? "default" : "secondary"}>
+              {isPublic ? "Public" : "Private"}
+            </Badge>
+          </div>
+        );
+      }),
     },
     {
       key: "createdAt",
       header: "Created",
-      render: (value: string) => format(new Date(value), "MMM dd, yyyy"),
+      render: createTypedRender<FillInTheBlankDeckWithCount, 'createdAt'>((value) => {
+        if (typeGuards.isString(value)) {
+          try {
+            return format(new Date(value), "MMM dd, yyyy");
+          } catch {
+            return 'Invalid date';
+          }
+        }
+        return '—';
+      }),
     },
     {
       key: "actions",
       header: "Actions",
-      render: (_: unknown, row: FillInTheBlankDeck) => (
+      render: createTypedRender<FillInTheBlankDeckWithCount, 'actions'>((_, row) => (
         <div className="flex items-center space-x-2">
           <Link href={`/fill-in-the-blanks/${row.id}/manage`}>
             <Button variant="outline" size="sm">
@@ -214,7 +221,7 @@ export default function FillInTheBlanksPage() {
             Assign
           </Button>
         </div>
-      ),
+      )),
     },
   ]
 
@@ -467,7 +474,7 @@ export default function FillInTheBlanksPage() {
                   ) : students.length > 0 ? (
                     students.map((student: Student) => (
                       <SelectItem key={student.id} value={student.id}>
-                        {student.name} ({student.email})
+                        {student.name} ({student.email || 'No email'})
                       </SelectItem>
                     ))
                   ) : (

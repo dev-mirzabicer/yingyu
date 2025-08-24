@@ -699,6 +699,7 @@ export const ContentService = {
             return {
               ...cardData,
               deckId: newExercise.id, // Link to the new forked deck
+              exampleSentences: cardData.exampleSentences as Prisma.InputJsonValue,
             };
           });
           await tx.vocabularyCard.createMany({
@@ -714,6 +715,7 @@ export const ContentService = {
             return {
               ...cardData,
               deckId: newExercise.id, // Link to the new forked deck
+              options: cardData.options as Prisma.InputJsonValue,
             };
           });
           await tx.fillInTheBlankCard.createMany({

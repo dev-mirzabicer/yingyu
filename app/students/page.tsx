@@ -20,6 +20,8 @@ import { useToast } from "@/hooks/use-toast"
 import { useStudents, createStudent } from "@/hooks/api/students"
 import { useDecks } from "@/hooks/api/content"
 import { format } from "date-fns"
+import { createTypedRender, typeGuards } from "@/components/data-table"
+import type { FullStudentProfile } from "@/lib/types"
 import {
   Dialog,
   DialogContent,
@@ -32,17 +34,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { SessionStartDialog } from "@/components/session-start-dialog"
 import { JobStatusIndicator } from "@/components/ui/job-status-indicator"
 
-// TypeScript interfaces for data structures
-interface Student {
-  id: string
-  name: string
-  email: string | null
-  status: "ACTIVE" | "INACTIVE" | "PAUSED"
-  classesRemaining: number
-  proficiencyLevel: "BEGINNER" | "ELEMENTARY" | "INTERMEDIATE" | "ADVANCED"
-  studentDecks: Array<{ id: string }>
-  createdAt: string
-}
 
 
 export default function StudentsPage() {
@@ -125,64 +116,77 @@ export default function StudentsPage() {
 
   const studentColumns = [
     {
-      key: "student",
+      key: "name",
       header: "Student",
-      render: (_: unknown, row: Student) => (
-        <div className="flex items-center space-x-3">
-          <Avatar>
-            <AvatarImage src="/placeholder.svg" alt={row.name} />
-            <AvatarFallback>
-              {row.name
-                .split(" ")
-                .map((n: string) => n[0])
-                .join("")}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <div className="font-medium text-slate-900">{row.name}</div>
-            <div className="text-sm text-slate-500">{row.email}</div>
+      render: createTypedRender<FullStudentProfile, "name">((value, row) => {
+        if (!typeGuards.isString(value)) return <span>—</span>
+        return (
+          <div className="flex items-center space-x-3">
+            <Avatar>
+              <AvatarImage src="/placeholder.svg" alt={value} />
+              <AvatarFallback>
+                {value
+                  .split(" ")
+                  .map((n: string) => n[0])
+                  .join("")}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <div className="font-medium text-slate-900">{value}</div>
+              <div className="text-sm text-slate-500">{row.email}</div>
+            </div>
           </div>
-        </div>
-      ),
+        )
+      }),
     },
     {
       key: "status",
       header: "Status",
-      render: (value: string) => (
-        <Badge variant={value === "ACTIVE" ? "default" : "secondary"}>
-          {value}
-        </Badge>
-      ),
+      render: createTypedRender<FullStudentProfile, "status">((value) => {
+        if (!typeGuards.isString(value)) return <span>—</span>
+        return (
+          <Badge variant={value === "ACTIVE" ? "default" : "secondary"}>
+            {value}
+          </Badge>
+        )
+      }),
     },
     {
       key: "classesRemaining",
       header: "Classes Remaining",
-      render: (value: number) => (
-        <span
-          className={
-            value <= 2 ? "font-bold text-red-600" : "font-medium text-slate-900"
-          }
-        >
-          {value}
-        </span>
-      ),
+      render: createTypedRender<FullStudentProfile, "classesRemaining">((value) => {
+        if (!typeGuards.isNumber(value)) return <span>—</span>
+        return (
+          <span
+            className={
+              value <= 2 ? "font-bold text-red-600" : "font-medium text-slate-900"
+            }
+          >
+            {value}
+          </span>
+        )
+      }),
     },
     {
       key: "studentDecks",
       header: "Active Decks",
-      render: (value: Array<{ id: string }>) => (
-        <span className="text-slate-900">{value.length}</span>
-      ),
+      render: createTypedRender<FullStudentProfile, "studentDecks">((value) => {
+        if (!Array.isArray(value)) return <span>—</span>
+        return <span className="text-slate-900">{value.length}</span>
+      }),
     },
     {
       key: "createdAt",
       header: "Joined",
-      render: (value: string) => format(new Date(value), "MMM dd, yyyy"),
+      render: createTypedRender<FullStudentProfile, "createdAt">((value) => {
+        if (!typeGuards.isDateString(value)) return <span>—</span>
+        return format(new Date(value), "MMM dd, yyyy")
+      }),
     },
     {
       key: "actions",
       header: "Actions",
-      render: (_: unknown, row: Student) => (
+      render: createTypedRender<FullStudentProfile, "id">((_, row) => (
         <div className="flex items-center space-x-2">
           <Link href={`/students/${row.id}`}>
             <Button variant="outline" size="sm">
@@ -198,7 +202,7 @@ export default function StudentsPage() {
             <Play className="h-4 w-4" />
           </Button>
         </div>
-      ),
+      )),
     },
   ]
 
@@ -355,7 +359,7 @@ export default function StudentsPage() {
               )}
             </div>
           ) : (
-            <DataTable
+            <DataTable<FullStudentProfile>
               data={filteredStudents}
               columns={studentColumns}
               pageSize={10}

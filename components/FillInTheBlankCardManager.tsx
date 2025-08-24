@@ -38,7 +38,7 @@ import {
   resolveFillInTheBlankBinding,
 } from "@/hooks/api/content"
 import type { FillInTheBlankCard, FillInTheBlankDeck } from "@prisma/client"
-import { DataTable } from "@/components/data-table"
+import { DataTable, DataTableCompatible, createTypedRender } from "@/components/data-table"
 import { BulkImportTools } from "@/components/bulk-import-tools"
 import Papa from "papaparse"
 import { saveAs } from "file-saver"
@@ -65,7 +65,7 @@ interface BoundVocabularyCard {
   englishWord: string
 }
 
-interface FillInTheBlankCardWithBinding extends FillInTheBlankCard {
+interface FillInTheBlankCardWithBinding extends FillInTheBlankCard, DataTableCompatible {
   boundVocabularyCard?: BoundVocabularyCard | null
 }
 
@@ -328,60 +328,63 @@ export function FillInTheBlankCardManager({ deckId, deck, isReadOnly = false }: 
 
   const cardColumns = [
     {
-      key: "question",
+      key: "question" as keyof FillInTheBlankCardWithBinding,
       header: "Question",
-      render: (value: string) => (
+      render: createTypedRender<FillInTheBlankCardWithBinding, 'question'>((value) => (
         <div className="max-w-md">
-          <p className="font-medium text-slate-900 line-clamp-2">{value}</p>
+          <p className="font-medium text-slate-900 line-clamp-2">{String(value)}</p>
         </div>
-      ),
+      )),
     },
     {
-      key: "answer",
+      key: "answer" as keyof FillInTheBlankCardWithBinding,
       header: "Answer",
-      render: (value: string) => (
+      render: createTypedRender<FillInTheBlankCardWithBinding, 'answer'>((value) => (
         <div className="font-mono bg-orange-50 px-2 py-1 rounded text-orange-700 font-medium">
-          {value}
+          {String(value)}
         </div>
-      ),
+      )),
     },
     {
-      key: "options",
+      key: "options" as keyof FillInTheBlankCardWithBinding,
       header: "Options",
-      render: (value: string[]) => (
-        <div className="flex flex-wrap gap-1 max-w-md">
-          {value && value.length > 0 ? (
-            value.slice(0, 3).map((option, index) => (
-              <Badge key={index} variant="outline" className="text-xs">
-                {option}
+      render: createTypedRender<FillInTheBlankCardWithBinding, 'options'>((value) => {
+        const optionsArray = Array.isArray(value) ? value as string[] : [];
+        return (
+          <div className="flex flex-wrap gap-1 max-w-md">
+            {optionsArray.length > 0 ? (
+              optionsArray.slice(0, 3).map((option, index) => (
+                <Badge key={index} variant="outline" className="text-xs">
+                  {String(option)}
+                </Badge>
+              ))
+            ) : (
+              <Badge variant="secondary" className="text-xs">No options</Badge>
+            )}
+            {optionsArray.length > 3 && (
+              <Badge variant="outline" className="text-xs">
+                +{optionsArray.length - 3}
               </Badge>
-            ))
-          ) : (
-            <Badge variant="secondary" className="text-xs">No options</Badge>
-          )}
-          {value && value.length > 3 && (
-            <Badge variant="outline" className="text-xs">
-              +{value.length - 3}
-            </Badge>
-          )}
-        </div>
-      ),
+            )}
+          </div>
+        );
+      }),
     },
     {
-      key: "explanation",
+      key: "explanation" as keyof FillInTheBlankCardWithBinding,
       header: "Explanation",
-      render: (value: string) => (
+      render: createTypedRender<FillInTheBlankCardWithBinding, 'explanation'>((value) => (
         <div className="max-w-md">
           <p className="text-sm text-slate-600 line-clamp-2">
-            {value || "No explanation"}
+            {String(value) || "No explanation"}
           </p>
         </div>
-      ),
+      )),
     },
     {
-      key: "boundVocabularyCard",
+      key: "boundVocabularyCard" as keyof FillInTheBlankCardWithBinding,
       header: "Bound Word",
-      render: (value: BoundVocabularyCard | null, row: FillInTheBlankCardWithBinding) => (
+      render: createTypedRender<FillInTheBlankCardWithBinding, 'boundVocabularyCard'>((value, row) => (
         <div className="flex items-center space-x-2">
           {row.boundVocabularyCard ? (
             <>
@@ -394,12 +397,12 @@ export function FillInTheBlankCardManager({ deckId, deck, isReadOnly = false }: 
             <Badge variant="secondary" className="text-xs">Not bound</Badge>
           )}
         </div>
-      ),
+      )),
     },
     {
-      key: "actions",
+      key: "id" as keyof FillInTheBlankCardWithBinding, // Use 'id' as the key since 'actions' isn't a real field
       header: "Actions",
-      render: (_: unknown, row: FillInTheBlankCard) => (
+      render: createTypedRender<FillInTheBlankCardWithBinding, 'id'>((_, row) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm">
@@ -421,7 +424,7 @@ export function FillInTheBlankCardManager({ deckId, deck, isReadOnly = false }: 
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      ),
+      )),
     },
   ]
 
@@ -543,7 +546,11 @@ export function FillInTheBlankCardManager({ deckId, deck, isReadOnly = false }: 
               )}
             </div>
           ) : (
-            <DataTable data={filteredCards} columns={cardColumns} pageSize={20} />
+            <DataTable 
+              data={filteredCards as FillInTheBlankCardWithBinding[]} 
+              columns={cardColumns} 
+              pageSize={20} 
+            />
           )}
         </CardContent>
       </Card>

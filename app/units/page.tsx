@@ -16,18 +16,9 @@ import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 import { useUnits, createUnit } from "@/hooks/api"
 import { format } from "date-fns"
+import { createTypedRender, typeGuards } from "@/components/data-table"
+import type { UnitWithCount } from "@/lib/types"
 
-// TypeScript interfaces for data structures
-interface Unit {
-  id: string
-  name: string
-  description: string | null
-  isPublic: boolean
-  createdAt: string
-  _count?: {
-    items: number
-  }
-}
 
 
 export default function UnitsPage() {
@@ -84,48 +75,58 @@ export default function UnitsPage() {
     {
       key: "name",
       header: "Unit Name",
-      render: (value: string, row: Unit) => (
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-green-100 rounded-lg">
-            <Layers className="h-5 w-5 text-green-600" />
+      render: createTypedRender<UnitWithCount, "name">((value, row) => {
+        if (!typeGuards.isString(value)) return <span>—</span>
+        return (
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <Layers className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <Link href={`/units/${row.id}`} className="font-medium text-blue-600 hover:text-blue-800">
+                {value}
+              </Link>
+              <div className="text-sm text-slate-500">{row._count?.items || 0} exercises</div>
+            </div>
           </div>
-          <div>
-            <Link href={`/units/${row.id}`} className="font-medium text-blue-600 hover:text-blue-800">
-              {value}
-            </Link>
-            <div className="text-sm text-slate-500">{row._count?.items || 0} exercises</div>
-          </div>
-        </div>
-      ),
+        )
+      }),
     },
     {
       key: "description",
       header: "Description",
-      render: (value: string | null) => (
-        <span className="text-slate-600">{value || "No description"}</span>
-      ),
+      render: createTypedRender<UnitWithCount, "description">((value) => {
+        if (!typeGuards.isStringOrNull(value)) return <span>—</span>
+        return <span className="text-slate-600">{value || "No description"}</span>
+      }),
     },
     {
       key: "isPublic",
       header: "Visibility",
-      render: (value: boolean) => (
-        <div className="flex items-center space-x-2">
-          {value ? <Globe className="h-4 w-4 text-green-600" /> : <Lock className="h-4 w-4 text-slate-400" />}
-          <Badge variant={value ? "default" : "secondary"}>
-            {value ? "Public" : "Private"}
-          </Badge>
-        </div>
-      ),
+      render: createTypedRender<UnitWithCount, "isPublic">((value) => {
+        if (!typeGuards.isBoolean(value)) return <span>—</span>
+        return (
+          <div className="flex items-center space-x-2">
+            {value ? <Globe className="h-4 w-4 text-green-600" /> : <Lock className="h-4 w-4 text-slate-400" />}
+            <Badge variant={value ? "default" : "secondary"}>
+              {value ? "Public" : "Private"}
+            </Badge>
+          </div>
+        )
+      }),
     },
     {
       key: "createdAt",
       header: "Created",
-      render: (value: string) => format(new Date(value), "MMM dd, yyyy"),
+      render: createTypedRender<UnitWithCount, "createdAt">((value) => {
+        if (!typeGuards.isDateString(value)) return <span>—</span>
+        return format(new Date(value), "MMM dd, yyyy")
+      }),
     },
     {
       key: "actions",
       header: "Actions",
-      render: (_: unknown, row: Unit) => (
+      render: createTypedRender<UnitWithCount, "id">((_, row) => (
         <div className="flex items-center space-x-2">
           <Link href={`/units/${row.id}`}>
             <Button variant="outline" size="sm">
@@ -134,7 +135,7 @@ export default function UnitsPage() {
             </Button>
           </Link>
         </div>
-      ),
+      )),
     },
   ]
 
@@ -262,7 +263,7 @@ export default function UnitsPage() {
               )}
             </div>
           ) : (
-            <DataTable data={filteredUnits} columns={unitColumns} pageSize={10} />
+            <DataTable<UnitWithCount> data={filteredUnits} columns={unitColumns} pageSize={10} />
           )}
         </CardContent>
       </Card>

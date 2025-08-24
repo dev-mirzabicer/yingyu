@@ -256,25 +256,34 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
     {
       key: "type",
       header: "Type",
-      render: (value: string) => (
-        <Badge variant={value === 'Vocabulary' ? "default" : "outline"}>
-          {value}
-        </Badge>
-      ),
+      render: (value: unknown) => {
+        const typeValue = String(value);
+        return (
+          <Badge variant={typeValue === 'Vocabulary' ? "default" : "outline"}>
+            {typeValue}
+          </Badge>
+        );
+      },
     },
     {
       key: "assignedAt",
       header: "Date Assigned",
-      render: (value: string) => format(new Date(value), "MMM dd, yyyy"),
+      render: (value: unknown) => {
+        const dateValue = String(value);
+        return format(new Date(dateValue), "MMM dd, yyyy");
+      },
     },
     {
       key: "isActive",
       header: "Status",
-      render: (value: boolean) => (
-        <Badge variant={value ? "default" : "secondary"}>
-          {value ? "Active" : "Inactive"}
-        </Badge>
-      ),
+      render: (value: unknown) => {
+        const isActive = Boolean(value);
+        return (
+          <Badge variant={isActive ? "default" : "secondary"}>
+            {isActive ? "Active" : "Inactive"}
+          </Badge>
+        );
+      },
     },
   ]
 

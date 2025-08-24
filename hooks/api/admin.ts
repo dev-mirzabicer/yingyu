@@ -1,8 +1,9 @@
 import useSWR from 'swr';
 import { fetcher, mutateWithOptimistic } from './utils';
+import { DataTableCompatible } from '@/components/data-table';
 
 // Types for teacher data with admin fields
-export interface AdminTeacher {
+export interface AdminTeacher extends DataTableCompatible {
   id: string;
   name: string;
   email: string;
@@ -11,6 +12,7 @@ export interface AdminTeacher {
   lastLoginAt: string | null;
   validityUntil: string | null;
   daysRemaining: number | null;
+  [key: string]: unknown;
 }
 
 // Hook to check if admin registration is authorized

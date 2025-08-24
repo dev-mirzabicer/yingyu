@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { useStudentSchedules, createSchedule, updateSchedule, deleteSchedule } from "@/hooks/api"
 import type { ClassSchedule, ClassStatus } from "@prisma/client"
-import { DataTable } from "@/components/data-table"
+import { DataTable, DataTableCompatible, createTypedRender } from "@/components/data-table"
 
 interface ClassSchedulerProps {
   studentId: string
@@ -304,34 +304,41 @@ export function ClassScheduler({ studentId, studentName, classesRemaining, onSch
     .filter((schedule) => new Date(schedule.scheduledTime) > new Date())
     .sort((a, b) => new Date(a.scheduledTime).getTime() - new Date(b.scheduledTime).getTime())
 
+  // Create typed columns for ClassSchedule that extends DataTableCompatible
+  type ClassScheduleDataTable = ClassSchedule & DataTableCompatible;
+
   const scheduleColumns = [
     {
-      key: "scheduledTime",
+      key: "scheduledTime" as keyof ClassScheduleDataTable,
       header: "Date & Time",
-      render: (value: string) => (
-        <div className="space-y-1">
-          <div className="font-medium">{format(new Date(value), "MMM dd, yyyy")}</div>
-          <div className="text-sm text-slate-500">{format(new Date(value), "h:mm a")}</div>
-        </div>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (value: ClassStatus) => {
-        const Icon = statusIcons[value]
+      render: createTypedRender<ClassScheduleDataTable, 'scheduledTime'>((value) => {
+        const dateValue = value instanceof Date ? value : new Date(String(value));
         return (
-          <Badge variant="outline" className={statusColors[value]}>
-            <Icon className="h-3 w-3 mr-1" />
-            {value.charAt(0) + value.slice(1).toLowerCase()}
-          </Badge>
-        )
-      },
+          <div className="space-y-1">
+            <div className="font-medium">{format(dateValue, "MMM dd, yyyy")}</div>
+            <div className="text-sm text-slate-500">{format(dateValue, "h:mm a")}</div>
+          </div>
+        );
+      }),
     },
     {
-      key: "actions",
+      key: "status" as keyof ClassScheduleDataTable,
+      header: "Status",
+      render: createTypedRender<ClassScheduleDataTable, 'status'>((value) => {
+        const statusValue = value as ClassStatus;
+        const Icon = statusIcons[statusValue];
+        return (
+          <Badge variant="outline" className={statusColors[statusValue]}>
+            <Icon className="h-3 w-3 mr-1" />
+            {statusValue.charAt(0) + statusValue.slice(1).toLowerCase()}
+          </Badge>
+        );
+      }),
+    },
+    {
+      key: "id" as keyof ClassScheduleDataTable, // Use 'id' as the key since 'actions' isn't a real field
       header: "Actions",
-      render: (_: unknown, row: ClassSchedule) => (
+      render: createTypedRender<ClassScheduleDataTable, 'id'>((_, row) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm">
@@ -365,7 +372,7 @@ export function ClassScheduler({ studentId, studentName, classesRemaining, onSch
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      ),
+      )),
     },
   ]
 
@@ -486,7 +493,11 @@ export function ClassScheduler({ studentId, studentName, classesRemaining, onSch
                 </Button>
               </div>
             ) : (
-              <DataTable data={schedules} columns={scheduleColumns} pageSize={10} />
+              <DataTable 
+                data={schedules as ClassScheduleDataTable[]} 
+                columns={scheduleColumns} 
+                pageSize={10} 
+              />
             )}
           </CardContent>
         </Card>

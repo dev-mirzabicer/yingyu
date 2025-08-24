@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { DataTable } from "@/components/data-table"
+import { DataTable, Column, typeGuards, createTypedRender } from "@/components/data-table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -18,16 +18,7 @@ import { format } from "date-fns"
 import Link from "next/link"
 
 // TypeScript interfaces for data structures
-interface VocabularyDeck {
-  id: string
-  name: string
-  description: string | null
-  isPublic: boolean
-  createdAt: string
-  _count?: {
-    cards: number
-  }
-}
+import { VocabularyDeckWithCount } from "@/lib/types"
 
 
 export default function DecksPage() {
@@ -37,7 +28,7 @@ export default function DecksPage() {
   const [filterVisibility, setFilterVisibility] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [isAssignDeckOpen, setIsAssignDeckOpen] = useState(false)
-  const [selectedDeckForAssignment, setSelectedDeckForAssignment] = useState<VocabularyDeck | null>(null)
+  const [selectedDeckForAssignment, setSelectedDeckForAssignment] = useState<VocabularyDeckWithCount | null>(null)
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
   const [isAssigning, setIsAssigning] = useState(false)
 
@@ -102,7 +93,7 @@ export default function DecksPage() {
     }
   }
 
-  const handleOpenAssignDialog = (deck: VocabularyDeck) => {
+  const handleOpenAssignDialog = (deck: VocabularyDeckWithCount) => {
     setSelectedDeckForAssignment(deck)
     setIsAssignDeckOpen(true)
   }
@@ -115,50 +106,67 @@ export default function DecksPage() {
     return matchesVisibility && matchesSearch
   })
 
-  const deckColumns = [
+  const deckColumns: Column<VocabularyDeckWithCount>[] = [
     {
       key: "name",
       header: "Deck Name",
-      render: (value: string, row: VocabularyDeck) => (
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-blue-100 rounded-lg">
-            <BookOpen className="h-5 w-5 text-blue-600" />
+      render: createTypedRender<VocabularyDeckWithCount, 'name'>((value, row) => {
+        const name = typeGuards.isString(value) ? value : 'Unknown Deck';
+        const cardCount = row._count?.cards || 0;
+        return (
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <BookOpen className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <div className="font-medium text-slate-900">{name}</div>
+              <div className="text-sm text-slate-500">{cardCount} cards</div>
+            </div>
           </div>
-          <div>
-            <div className="font-medium text-slate-900">{value}</div>
-            <div className="text-sm text-slate-500">{row._count?.cards || 0} cards</div>
-          </div>
-        </div>
-      ),
+        );
+      }),
     },
     {
       key: "description",
       header: "Description",
-      render: (value: string | null) => (
-        <span className="text-slate-600">{value || "No description"}</span>
-      ),
+      render: createTypedRender<VocabularyDeckWithCount, 'description'>((value) => {
+        const description = typeGuards.isStringOrNull(value) ? (value || "No description") : "No description";
+        return <span className="text-slate-600">{description}</span>;
+      }),
     },
     {
       key: "isPublic",
       header: "Visibility",
-      render: (value: boolean) => (
-        <div className="flex items-center space-x-2">
-          {value ? <Globe className="h-4 w-4 text-green-600" /> : <Lock className="h-4 w-4 text-slate-400" />}
-          <Badge variant={value ? "default" : "secondary"}>
-            {value ? "Public" : "Private"}
-          </Badge>
-        </div>
-      ),
+      render: createTypedRender<VocabularyDeckWithCount, 'isPublic'>((value) => {
+        const isPublic = typeGuards.isBoolean(value) ? value : false;
+        return (
+          <div className="flex items-center space-x-2">
+            {isPublic ? <Globe className="h-4 w-4 text-green-600" /> : <Lock className="h-4 w-4 text-slate-400" />}
+            <Badge variant={isPublic ? "default" : "secondary"}>
+              {isPublic ? "Public" : "Private"}
+            </Badge>
+          </div>
+        );
+      }),
     },
     {
       key: "createdAt",
       header: "Created",
-      render: (value: string) => format(new Date(value), "MMM dd, yyyy"),
+      render: createTypedRender<VocabularyDeckWithCount, 'createdAt'>((value) => {
+        if (typeGuards.isString(value)) {
+          try {
+            return format(new Date(value), "MMM dd, yyyy");
+          } catch {
+            return 'Invalid date';
+          }
+        }
+        return '—';
+      }),
     },
     {
       key: "actions",
       header: "Actions",
-      render: (_: unknown, row: VocabularyDeck) => (
+      render: createTypedRender<VocabularyDeckWithCount, 'actions'>((_, row) => (
         <div className="flex items-center space-x-2">
           <Link href={`/decks/${row.id}/manage`}>
             <Button variant="outline" size="sm">
@@ -171,7 +179,7 @@ export default function DecksPage() {
             Assign
           </Button>
         </div>
-      ),
+      )),
     },
   ]
 
@@ -382,7 +390,7 @@ export default function DecksPage() {
                   ) : students.length > 0 ? (
                     students.map(student => (
                       <SelectItem key={student.id} value={student.id}>
-                        {student.name} ({student.email})
+                        {student.name} ({student.email || 'No email'})
                       </SelectItem>
                     ))
                   ) : (

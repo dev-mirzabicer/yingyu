@@ -126,24 +126,33 @@ export function PaymentManager({ studentId, studentName, classesRemaining, onPay
     {
       key: "paymentDate",
       header: "Date",
-      render: (value: string) => format(new Date(value), "MMM dd, yyyy"),
+      render: (value: unknown) => {
+        const dateValue = String(value);
+        return format(new Date(dateValue), "MMM dd, yyyy");
+      },
     },
     {
       key: "amount",
       header: "Amount",
-      render: (value: string | number) => (
-        <div className="font-medium text-green-600">{formatCurrency(safeNumberConversion(value))}</div>
-      ),
+      render: (value: unknown) => {
+        const amountValue = typeof value === 'string' || typeof value === 'number' ? value : 0;
+        return (
+          <div className="font-medium text-green-600">{formatCurrency(safeNumberConversion(amountValue))}</div>
+        );
+      },
     },
     {
       key: "classesPurchased",
       header: "Classes",
-      render: (value: number, row: Payment) => (
-        <div className="space-y-1">
-          <div className="font-medium">{value} purchased</div>
-          <div className="text-sm text-slate-500">{row.classesUsed} used</div>
-        </div>
-      ),
+      render: (value: unknown, row: Payment) => {
+        const classCount = Number(value);
+        return (
+          <div className="space-y-1">
+            <div className="font-medium">{classCount} purchased</div>
+            <div className="text-sm text-slate-500">{row.classesUsed} used</div>
+          </div>
+        );
+      },
     },
     {
       key: "pricePerClass",

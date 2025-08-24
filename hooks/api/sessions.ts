@@ -4,21 +4,10 @@ import useSWR from "swr"
 import type {
   FullSessionState,
   AnswerPayload,
+  SessionListItem,
 } from "@/lib/types"
 import { fetcher, mutateWithOptimistic, ApiError } from "./utils"
 
-// TypeScript interface for session list data
-interface SessionListItem {
-  id: string
-  studentId: string
-  studentName: string
-  unitId: string
-  unitName: string
-  status: 'COMPLETED' | 'IN_PROGRESS' | 'CANCELLED'
-  startedAt: string
-  duration: number
-  cardsReviewed: number
-}
 
 // ============================================================================
 // SESSION MANAGEMENT HOOKS

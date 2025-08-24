@@ -8,17 +8,60 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from "lucide-react"
 
-interface Column<T> {
-  key: string
+/**
+ * Base type that all DataTable-compatible types must extend
+ * This ensures compatibility with the DataTable's generic constraint
+ */
+export type DataTableCompatible = Record<string, unknown> & {
+  [K in string]: unknown;
+};
+
+/**
+ * Generic column interface with enhanced type safety
+ * T must extend DataTableCompatible to ensure proper typing
+ */
+interface Column<T extends DataTableCompatible> {
+  key: keyof T | string // Allow string keys for backward compatibility
   header: string
   render?: (value: unknown, row: T) => React.ReactNode
   sortable?: boolean
   searchable?: boolean
 }
 
+/**
+ * Type-safe column render function helper
+ * Provides safe type conversion from unknown to expected types
+ */
+export const createTypedRender = <T extends DataTableCompatible, K extends keyof T>(
+  renderFn: (value: T[K], row: T) => React.ReactNode
+) => {
+  return (value: unknown, row: T): React.ReactNode => {
+    // Type assertion is safe here because we know the value comes from row[key]
+    return renderFn(value as T[K], row);
+  };
+};
+
+/**
+ * Type guards for common data types used in render functions
+ */
+export const typeGuards = {
+  isString: (value: unknown): value is string => typeof value === 'string',
+  isNumber: (value: unknown): value is number => typeof value === 'number',
+  isBoolean: (value: unknown): value is boolean => typeof value === 'boolean',
+  isStringOrNull: (value: unknown): value is string | null => 
+    typeof value === 'string' || value === null,
+  isNumberOrNull: (value: unknown): value is number | null => 
+    typeof value === 'number' || value === null,
+  isStringOrUndefined: (value: unknown): value is string | undefined => 
+    typeof value === 'string' || value === undefined,
+  isDate: (value: unknown): value is Date => value instanceof Date,
+  isDateString: (value: unknown): value is string => 
+    typeof value === 'string' && !isNaN(Date.parse(value)),
+};
+
 export type { Column }
 
-interface DataTableProps<T> {
+interface DataTableProps<T extends DataTableCompatible> {
   data: T[]
   columns: Column<T>[]
   pageSize?: number
@@ -27,7 +70,7 @@ interface DataTableProps<T> {
   className?: string
 }
 
-export function DataTable<T extends Record<string, unknown>>({
+export function DataTable<T extends DataTableCompatible>({
   data,
   columns,
   pageSize = 10,
@@ -60,7 +103,18 @@ export function DataTable<T extends Record<string, unknown>>({
 
         if (aValue === bValue) return 0
 
-        const comparison = aValue < bValue ? -1 : 1
+        // Safe comparison for unknown types
+        const comparison = (() => {
+          if (aValue == null && bValue == null) return 0
+          if (aValue == null) return -1
+          if (bValue == null) return 1
+          
+          // Convert to strings for safe comparison
+          const aStr = String(aValue)
+          const bStr = String(bValue)
+          return aStr < bStr ? -1 : aStr > bStr ? 1 : 0
+        })()
+        
         return sortDirection === "asc" ? comparison : -comparison
       })
       : filteredData
@@ -116,14 +170,14 @@ export function DataTable<T extends Record<string, unknown>>({
               <tr>
                 {columns.map((column) => (
                   <th
-                    key={column.key}
+                    key={String(column.key)}
                     className={`px-4 py-3 text-left text-sm font-medium text-slate-600 ${sortable && column.sortable !== false ? "cursor-pointer hover:bg-slate-100" : ""
                       }`}
-                    onClick={() => sortable && column.sortable !== false && handleSort(column.key)}
+                    onClick={() => sortable && column.sortable !== false && handleSort(String(column.key))}
                   >
                     <div className="flex items-center space-x-1">
                       <span>{column.header}</span>
-                      {sortable && column.sortable !== false && sortColumn === column.key && (
+                      {sortable && column.sortable !== false && sortColumn === String(column.key) && (
                         <span className="text-xs">{sortDirection === "asc" ? "↑" : "↓"}</span>
                       )}
                     </div>
@@ -142,7 +196,7 @@ export function DataTable<T extends Record<string, unknown>>({
                 paginatedData.map((row, index) => (
                   <tr key={index} className="hover:bg-slate-50">
                     {columns.map((column) => (
-                      <td key={column.key} className="px-4 py-3 text-sm text-slate-900">
+                      <td key={String(column.key)} className="px-4 py-3 text-sm text-slate-900">
                         {column.render ? column.render(row[column.key], row) : row[column.key]?.toString() || "—"}
                       </td>
                     ))}

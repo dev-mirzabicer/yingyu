@@ -47,8 +47,30 @@ import {
   removeUnitItem,
   updateUnitItemConfig,
 } from "@/hooks/api/content"
-import type { NewUnitItemData } from "@/lib/types"
+import type { 
+  NewUnitItemData,
+  VocabularyExerciseConfig,
+  ListeningExerciseConfig,
+  FillInTheBlankExerciseConfig,
+  GrammarExerciseConfig
+} from "@/lib/types"
+import { getTypedExerciseConfig } from "@/lib/types"
 import type { Unit, UnitItemType } from "@prisma/client"
+
+// Extended config types for UI-specific properties
+interface ExtendedVocabularyExerciseConfig extends VocabularyExerciseConfig {
+  enableAudio?: boolean;
+  showPinyin?: boolean;
+}
+
+interface ExtendedFillInTheBlankExerciseConfig extends FillInTheBlankExerciseConfig {
+  deckId?: string;
+}
+
+interface ExtendedGrammarExerciseConfig extends Omit<GrammarExerciseConfig, 'difficulty'> {
+  difficulty?: string | number; // Allow both string and number for UI flexibility
+}
+
 import { GrammarExerciseEditor } from "./grammar-exercise-editor"
 import { AlertTriangle } from "lucide-react"
 
@@ -161,6 +183,42 @@ const difficultyLevels = [
   { value: "EXPERT", label: "Expert", color: "bg-red-100 text-red-700" },
 ]
 
+// Type-safe config utilities
+function getSafeConfig(item: DraggableUnitItem): VocabularyExerciseConfig | ListeningExerciseConfig | FillInTheBlankExerciseConfig | GrammarExerciseConfig {
+  return getTypedExerciseConfig(item.config, item.type);
+}
+
+// Helper function to type-safely update config (currently unused but kept for potential future use)
+// function updateConfigSafely(item: DraggableUnitItem, updates: Record<string, unknown>): DraggableUnitItem {
+//   const currentConfig = getSafeConfig(item);
+//   return { ...item, config: { ...currentConfig, ...updates } };
+// }
+
+function updateVocabularyConfig(item: DraggableUnitItem, updates: Partial<ExtendedVocabularyExerciseConfig>): DraggableUnitItem {
+  const currentConfig = getSafeConfig(item) as ExtendedVocabularyExerciseConfig;
+  return { ...item, config: { ...currentConfig, ...updates } };
+}
+
+function updateListeningConfig(item: DraggableUnitItem, updates: Partial<ListeningExerciseConfig>): DraggableUnitItem {
+  const currentConfig = getSafeConfig(item) as ListeningExerciseConfig;
+  return { ...item, config: { ...currentConfig, ...updates } };
+}
+
+function updateGrammarConfig(item: DraggableUnitItem, updates: Partial<ExtendedGrammarExerciseConfig>): DraggableUnitItem {
+  const currentConfig = getSafeConfig(item) as ExtendedGrammarExerciseConfig;
+  return { ...item, config: { ...currentConfig, ...updates } };
+}
+
+function updateFillInTheBlankConfig(item: DraggableUnitItem, updates: Partial<ExtendedFillInTheBlankExerciseConfig>): DraggableUnitItem {
+  const currentConfig = getSafeConfig(item) as ExtendedFillInTheBlankExerciseConfig;
+  return { ...item, config: { ...currentConfig, ...updates } };
+}
+
+// Safe template config conversion
+function getSafeTemplateConfig(template: UnitItemTemplate): VocabularyExerciseConfig | ListeningExerciseConfig | FillInTheBlankExerciseConfig | GrammarExerciseConfig {
+  return getTypedExerciseConfig(template.defaultConfig, template.type);
+}
+
 export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
   const { mutate: mutateUnits } = useUnits() // Keep for mutation
   const { unit: fullUnitData } = useUnit(unitId || ""); // Use the specific hook
@@ -258,11 +316,12 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
   )
 
   const handleAddItem = (template: UnitItemTemplate) => {
+    const safeConfig = getSafeTemplateConfig(template);
     const newItem: DraggableUnitItem = {
       id: `temp-${Date.now()}`,
       type: template.type,
       title: template.title,
-      config: { ...template.defaultConfig },
+      config: safeConfig,
       order: unitItems.length,
       estimatedDuration: 15,
     }
@@ -328,7 +387,8 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
     }
 
     try {
-      await updateUnitItemConfig(updatedItem.id, updatedItem.config);
+      const typedConfig = getSafeConfig(updatedItem);
+      await updateUnitItemConfig(updatedItem.id, typedConfig as VocabularyExerciseConfig);
       toast({
         title: "Configuration Saved",
         description: "The exercise configuration has been updated.",
@@ -395,21 +455,22 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
           let itemData: NewUnitItemData
 
           if (item.type === 'VOCABULARY_DECK') {
-            if (item.config.deckId) {
+            const config = getSafeConfig(item) as ExtendedVocabularyExerciseConfig;
+            if (config.deckId) {
               // Existing deck mode
               itemData = {
                 type: 'VOCABULARY_DECK',
                 order: item.order,
-                config: item.config,
+                config: config,
                 mode: 'existing',
-                existingDeckId: item.config.deckId,
+                existingDeckId: config.deckId,
               }
             } else {
               // New deck mode
               itemData = {
                 type: 'VOCABULARY_DECK',
                 order: item.order,
-                config: item.config,
+                config: config,
                 mode: 'new',
                 data: {
                   name: item.title || "Untitled Vocabulary Deck",
@@ -420,15 +481,16 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
             }
           } else if (item.type === 'LISTENING_EXERCISE') {
             // Listening exercises always reference existing decks
-            if (!item.config.deckId) {
+            const config = getSafeConfig(item) as ListeningExerciseConfig;
+            if (!config.deckId) {
               throw new Error(`Listening exercise "${item.title}" must have a vocabulary deck selected.`)
             }
             itemData = {
               type: 'LISTENING_EXERCISE',
               order: item.order,
-              config: item.config,
+              config: config,
               mode: 'existing',
-              existingDeckId: item.config.deckId,
+              existingDeckId: config.deckId,
               data: {
                 title: item.title || "Untitled Listening Exercise",
                 difficultyLevel: 1,
@@ -438,15 +500,23 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               },
             }
           } else if (item.type === 'GRAMMAR_EXERCISE') {
+            const config = getSafeConfig(item) as ExtendedGrammarExerciseConfig;
+            // Convert extended config to standard config for API
+            const standardConfig: GrammarExerciseConfig = {
+              title: config.title,
+              grammarTopic: config.grammarTopic,
+              difficulty: typeof config.difficulty === 'string' ? parseInt(config.difficulty, 10) || 1 : config.difficulty,
+              exerciseData: config.exerciseData,
+            };
             itemData = {
               type: 'GRAMMAR_EXERCISE',
               order: item.order,
-              config: item.config,
+              config: standardConfig,
               data: {
                 title: item.title || "Untitled Grammar Exercise",
-                grammarTopic: item.config.grammarTopic || "General",
-                difficultyLevel: item.config.difficulty || 1,
-                exerciseData: item.config.exerciseData || {},
+                grammarTopic: config.grammarTopic || "General",
+                difficultyLevel: typeof config.difficulty === 'string' ? parseInt(config.difficulty, 10) || 1 : (config.difficulty || 1),
+                exerciseData: config.exerciseData || {},
                 explanation: "",
                 tags: [],
                 isPublic: false,
@@ -454,27 +524,29 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
             }
           } else if (item.type === 'FILL_IN_THE_BLANK_EXERCISE') {
             // Fill in the blank exercises always reference existing decks
-            if (!item.config.deckId) {
+            const config = getSafeConfig(item) as ExtendedFillInTheBlankExerciseConfig;
+            if (!config.deckId) {
               throw new Error(`Fill-in-the-blank exercise "${item.title}" must have a deck selected.`)
             }
             itemData = {
               type: 'FILL_IN_THE_BLANK_EXERCISE',
               order: item.order,
-              config: item.config,
+              config: config,
               mode: 'existing',
-              existingDeckId: item.config.deckId,
+              existingDeckId: config.deckId,
             }
           } else if (item.type === 'GENERIC_DECK') {
             // Generic deck exercises always reference existing decks
-            if (!item.config.deckId) {
+            const config = getSafeConfig(item) as ExtendedVocabularyExerciseConfig;
+            if (!config.deckId) {
               throw new Error(`Generic deck exercise "${item.title}" must have a deck selected.`)
             }
             itemData = {
               type: 'GENERIC_DECK',
               order: item.order,
-              config: item.config,
+              config: config,
               mode: 'existing',
-              existingDeckId: item.config.deckId,
+              existingDeckId: config.deckId,
             }
           } else {
             // This should not happen with current exercise types
@@ -513,12 +585,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
         <div className="space-y-2">
           <Label htmlFor="deckId">Vocabulary Deck *</Label>
           <Select
-            value={editingItem.config.deckId || ""}
+            value={(getSafeConfig(editingItem) as ExtendedVocabularyExerciseConfig).deckId || ""}
             onValueChange={(value) =>
-              setEditingItem({
-                ...editingItem,
-                config: { ...editingItem.config, deckId: value },
-              })
+              setEditingItem(updateVocabularyConfig(editingItem, { deckId: value }))
             }
           >
             <SelectTrigger>
@@ -542,12 +611,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               type="number"
               min="0"
               max="50"
-              value={editingItem.config.newCards || 10}
+              value={(getSafeConfig(editingItem) as ExtendedVocabularyExerciseConfig).newCards || 10}
               onChange={(e) =>
-                setEditingItem({
-                  ...editingItem,
-                  config: { ...editingItem.config, newCards: Number.parseInt(e.target.value) },
-                })
+                setEditingItem(updateVocabularyConfig(editingItem, { newCards: Number.parseInt(e.target.value) }))
               }
             />
           </div>
@@ -559,12 +625,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               type="number"
               min="0"
               max="200"
-              value={editingItem.config.maxDue || 50}
+              value={(getSafeConfig(editingItem) as ExtendedVocabularyExerciseConfig).maxDue || 50}
               onChange={(e) =>
-                setEditingItem({
-                  ...editingItem,
-                  config: { ...editingItem.config, maxDue: Number.parseInt(e.target.value) },
-                })
+                setEditingItem(updateVocabularyConfig(editingItem, { maxDue: Number.parseInt(e.target.value) }))
               }
             />
           </div>
@@ -576,12 +639,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               type="number"
               min="0"
               max="50"
-              value={editingItem.config.minDue || 10}
+              value={(getSafeConfig(editingItem) as ExtendedVocabularyExerciseConfig).minDue || 10}
               onChange={(e) =>
-                setEditingItem({
-                  ...editingItem,
-                  config: { ...editingItem.config, minDue: Number.parseInt(e.target.value) },
-                })
+                setEditingItem(updateVocabularyConfig(editingItem, { minDue: Number.parseInt(e.target.value) }))
               }
             />
           </div>
@@ -594,12 +654,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               <p className="text-sm text-slate-500">Play pronunciation audio for cards</p>
             </div>
             <Switch
-              checked={editingItem.config.enableAudio ?? true}
+              checked={(getSafeConfig(editingItem) as ExtendedVocabularyExerciseConfig).enableAudio ?? true}
               onCheckedChange={(checked) =>
-                setEditingItem({
-                  ...editingItem,
-                  config: { ...editingItem.config, enableAudio: checked },
-                })
+                setEditingItem(updateVocabularyConfig(editingItem, { enableAudio: checked }))
               }
             />
           </div>
@@ -610,12 +667,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               <p className="text-sm text-slate-500">Display pinyin pronunciation</p>
             </div>
             <Switch
-              checked={editingItem.config.showPinyin ?? true}
+              checked={(getSafeConfig(editingItem) as ExtendedVocabularyExerciseConfig).showPinyin ?? true}
               onCheckedChange={(checked) =>
-                setEditingItem({
-                  ...editingItem,
-                  config: { ...editingItem.config, showPinyin: checked },
-                })
+                setEditingItem(updateVocabularyConfig(editingItem, { showPinyin: checked }))
               }
             />
           </div>
@@ -643,12 +697,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
         <div className="space-y-2">
           <Label htmlFor="listeningDeckId">Vocabulary Deck *</Label>
           <Select
-            value={editingItem.config.deckId || ""}
+            value={(getSafeConfig(editingItem) as ListeningExerciseConfig).deckId || ""}
             onValueChange={(value) =>
-              setEditingItem({
-                ...editingItem,
-                config: { ...editingItem.config, deckId: value },
-              })
+              setEditingItem(updateListeningConfig(editingItem, { deckId: value }))
             }
           >
             <SelectTrigger>
@@ -675,12 +726,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               type="number"
               min="0"
               max="50"
-              value={editingItem.config.newCards || 5}
+              value={(getSafeConfig(editingItem) as ListeningExerciseConfig).newCards || 5}
               onChange={(e) =>
-                setEditingItem({
-                  ...editingItem,
-                  config: { ...editingItem.config, newCards: Number.parseInt(e.target.value) },
-                })
+                setEditingItem(updateListeningConfig(editingItem, { newCards: Number.parseInt(e.target.value) }))
               }
             />
           </div>
@@ -692,12 +740,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               type="number"
               min="0"
               max="200"
-              value={editingItem.config.maxDue || 25}
+              value={(getSafeConfig(editingItem) as ListeningExerciseConfig).maxDue || 25}
               onChange={(e) =>
-                setEditingItem({
-                  ...editingItem,
-                  config: { ...editingItem.config, maxDue: Number.parseInt(e.target.value) },
-                })
+                setEditingItem(updateListeningConfig(editingItem, { maxDue: Number.parseInt(e.target.value) }))
               }
             />
           </div>
@@ -709,12 +754,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               type="number"
               min="0"
               max="50"
-              value={editingItem.config.minDue || 0}
+              value={(getSafeConfig(editingItem) as ListeningExerciseConfig).minDue || 0}
               onChange={(e) =>
-                setEditingItem({
-                  ...editingItem,
-                  config: { ...editingItem.config, minDue: Number.parseInt(e.target.value) },
-                })
+                setEditingItem(updateListeningConfig(editingItem, { minDue: Number.parseInt(e.target.value) }))
               }
             />
           </div>
@@ -729,12 +771,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               min="0"
               max="1"
               step="0.1"
-              value={editingItem.config.vocabularyConfidenceThreshold || 0.8}
+              value={(getSafeConfig(editingItem) as ListeningExerciseConfig).vocabularyConfidenceThreshold || 0.8}
               onChange={(e) =>
-                setEditingItem({
-                  ...editingItem,
-                  config: { ...editingItem.config, vocabularyConfidenceThreshold: Number.parseFloat(e.target.value) },
-                })
+                setEditingItem(updateListeningConfig(editingItem, { vocabularyConfidenceThreshold: Number.parseFloat(e.target.value) }))
               }
             />
             <p className="text-sm text-slate-500">Minimum vocabulary retrievability (0.0-1.0)</p>
@@ -748,12 +787,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               min="0"
               max="1"
               step="0.1"
-              value={editingItem.config.listeningCandidateThreshold || 0.6}
+              value={(getSafeConfig(editingItem) as ListeningExerciseConfig).listeningCandidateThreshold || 0.6}
               onChange={(e) =>
-                setEditingItem({
-                  ...editingItem,
-                  config: { ...editingItem.config, listeningCandidateThreshold: Number.parseFloat(e.target.value) },
-                })
+                setEditingItem(updateListeningConfig(editingItem, { listeningCandidateThreshold: Number.parseFloat(e.target.value) }))
               }
             />
             <p className="text-sm text-slate-500">Minimum threshold for listening readiness (0.0-1.0)</p>
@@ -768,12 +804,11 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
           <Label htmlFor="grammarTitle">Exercise Title *</Label>
           <Input
             id="grammarTitle"
-            value={editingItem.config.title || ""}
+            value={(getSafeConfig(editingItem) as ExtendedGrammarExerciseConfig).title || ""}
             onChange={(e) =>
               setEditingItem({
-                ...editingItem,
+                ...updateGrammarConfig(editingItem, { title: e.target.value }),
                 title: e.target.value,
-                config: { ...editingItem.config, title: e.target.value },
               })
             }
             placeholder="Enter exercise title"
@@ -784,12 +819,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
           <Label htmlFor="grammarTopic">Grammar Topic</Label>
           <Input
             id="grammarTopic"
-            value={editingItem.config.grammarTopic || ""}
+            value={(getSafeConfig(editingItem) as ExtendedGrammarExerciseConfig).grammarTopic || ""}
             onChange={(e) =>
-              setEditingItem({
-                ...editingItem,
-                config: { ...editingItem.config, grammarTopic: e.target.value },
-              })
+              setEditingItem(updateGrammarConfig(editingItem, { grammarTopic: e.target.value }))
             }
             placeholder="e.g., Present Perfect, Conditionals"
           />
@@ -798,12 +830,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
         <div className="space-y-2">
           <Label htmlFor="difficulty">Difficulty Level</Label>
           <Select
-            value={editingItem.config.difficulty || "INTERMEDIATE"}
+            value={(getSafeConfig(editingItem) as ExtendedGrammarExerciseConfig).difficulty?.toString() || "INTERMEDIATE"}
             onValueChange={(value) =>
-              setEditingItem({
-                ...editingItem,
-                config: { ...editingItem.config, difficulty: value },
-              })
+              setEditingItem(updateGrammarConfig(editingItem, { difficulty: value }))
             }
           >
             <SelectTrigger>
@@ -820,12 +849,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
         </div>
 
         <GrammarExerciseEditor
-          value={editingItem.config.exerciseData || {}}
+          value={(getSafeConfig(editingItem) as ExtendedGrammarExerciseConfig).exerciseData || {}}
           onChange={(data) => {
-            setEditingItem({
-              ...editingItem,
-              config: { ...editingItem.config, exerciseData: data },
-            })
+            setEditingItem(updateGrammarConfig(editingItem, { exerciseData: data }))
           }}
         />
       </div>
@@ -836,12 +862,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
         <div className="space-y-2">
           <Label htmlFor="fillInTheBlankDeckId">Fill-in-the-Blank Deck *</Label>
           <Select
-            value={editingItem.config.deckId || ""}
+            value={(getSafeConfig(editingItem) as ExtendedFillInTheBlankExerciseConfig).deckId || ""}
             onValueChange={(value) =>
-              setEditingItem({
-                ...editingItem,
-                config: { ...editingItem.config, deckId: value },
-              })
+              setEditingItem(updateFillInTheBlankConfig(editingItem, { deckId: value } as Partial<ExtendedFillInTheBlankExerciseConfig>))
             }
           >
             <SelectTrigger>
@@ -862,7 +885,8 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
 
         {/* Conditional Vocabulary Confidence Threshold */}
         {(() => {
-          const selectedDeck = fillInTheBlankDecks.find(deck => deck.id === editingItem.config.deckId)
+          const config = getSafeConfig(editingItem) as ExtendedFillInTheBlankExerciseConfig;
+          const selectedDeck = fillInTheBlankDecks.find(deck => deck.id === config.deckId)
           const hasVocabularyBinding = selectedDeck && selectedDeck.boundVocabularyDeckId
           
           if (!hasVocabularyBinding) return null
@@ -870,7 +894,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
           return (
             <div className="space-y-2">
               <Label htmlFor="vocabularyConfidenceThreshold">
-                Vocabulary Confidence Threshold ({editingItem.config.vocabularyConfidenceThreshold || 0.8})
+                Vocabulary Confidence Threshold ({(getSafeConfig(editingItem) as ExtendedFillInTheBlankExerciseConfig).vocabularyConfidenceThreshold || 0.8})
               </Label>
               <div className="px-3">
                 <input
@@ -879,12 +903,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
                   min="0"
                   max="1"
                   step="0.1"
-                  value={editingItem.config.vocabularyConfidenceThreshold || 0.8}
+                  value={(getSafeConfig(editingItem) as ExtendedFillInTheBlankExerciseConfig).vocabularyConfidenceThreshold || 0.8}
                   onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      config: { ...editingItem.config, vocabularyConfidenceThreshold: parseFloat(e.target.value) },
-                    })
+                    setEditingItem(updateFillInTheBlankConfig(editingItem, { vocabularyConfidenceThreshold: parseFloat(e.target.value) }))
                   }
                   className="w-full"
                 />
@@ -908,12 +929,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
         <div className="space-y-2">
           <Label htmlFor="genericDeckId">Generic Deck *</Label>
           <Select
-            value={editingItem.config.deckId || ""}
+            value={(getSafeConfig(editingItem) as ExtendedVocabularyExerciseConfig).deckId || ""}
             onValueChange={(value) =>
-              setEditingItem({
-                ...editingItem,
-                config: { ...editingItem.config, deckId: value },
-              })
+              setEditingItem(updateVocabularyConfig(editingItem, { deckId: value }))
             }
           >
             <SelectTrigger>
@@ -940,12 +958,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               type="number"
               min="0"
               max="50"
-              value={editingItem.config.newCards || 10}
+              value={(getSafeConfig(editingItem) as ExtendedVocabularyExerciseConfig).newCards || 10}
               onChange={(e) =>
-                setEditingItem({
-                  ...editingItem,
-                  config: { ...editingItem.config, newCards: Number.parseInt(e.target.value) },
-                })
+                setEditingItem(updateVocabularyConfig(editingItem, { newCards: Number.parseInt(e.target.value) }))
               }
             />
           </div>
@@ -957,12 +972,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               type="number"
               min="0"
               max="200"
-              value={editingItem.config.maxDue || 50}
+              value={(getSafeConfig(editingItem) as ExtendedVocabularyExerciseConfig).maxDue || 50}
               onChange={(e) =>
-                setEditingItem({
-                  ...editingItem,
-                  config: { ...editingItem.config, maxDue: Number.parseInt(e.target.value) },
-                })
+                setEditingItem(updateVocabularyConfig(editingItem, { maxDue: Number.parseInt(e.target.value) }))
               }
             />
           </div>
@@ -974,12 +986,9 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               type="number"
               min="0"
               max="50"
-              value={editingItem.config.minDue || 10}
+              value={(getSafeConfig(editingItem) as ExtendedVocabularyExerciseConfig).minDue || 10}
               onChange={(e) =>
-                setEditingItem({
-                  ...editingItem,
-                  config: { ...editingItem.config, minDue: Number.parseInt(e.target.value) },
-                })
+                setEditingItem(updateVocabularyConfig(editingItem, { minDue: Number.parseInt(e.target.value) }))
               }
             />
           </div>
@@ -1276,82 +1285,113 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
                                     <div className="text-sm text-slate-600">
                                       {item.type === "VOCABULARY_DECK" && (
                                         <div className="space-y-1">
-                                          <p>
-                                            <strong>Deck:</strong>{" "}
-                                            {decks.find((d) => d.id === item.config.deckId)?.name || "Not selected"}
-                                          </p>
-                                          <p>
-                                            <strong>New Cards:</strong> {item.config.newCards || 10}
-                                          </p>
-                                          <p>
-                                            <strong>Max Due:</strong> {item.config.maxDue || 50}
-                                          </p>
-                                          <p>
-                                            <strong>Min Due:</strong> {item.config.minDue || 10}
-                                          </p>
+                                          {(() => {
+                                            const config = getSafeConfig(item) as ExtendedVocabularyExerciseConfig;
+                                            return (
+                                              <>
+                                                <p>
+                                                  <strong>Deck:</strong>{" "}
+                                                  {decks.find((d) => d.id === config.deckId)?.name || "Not selected"}
+                                                </p>
+                                                <p>
+                                                  <strong>New Cards:</strong> {config.newCards || 10}
+                                                </p>
+                                                <p>
+                                                  <strong>Max Due:</strong> {config.maxDue || 50}
+                                                </p>
+                                                <p>
+                                                  <strong>Min Due:</strong> {config.minDue || 10}
+                                                </p>
+                                              </>
+                                            );
+                                          })()}
                                         </div>
                                       )}
                                       {item.type === "LISTENING_EXERCISE" && (
                                         <div className="space-y-1">
-                                          <p>
-                                            <strong>Deck:</strong>{" "}
-                                            {item.config.deckId 
-                                              ? decks.find(d => d.id === item.config.deckId)?.name || "Selected" 
-                                              : "⚠ Not selected"}
-                                          </p>
-                                          <p>
-                                            <strong>New Cards:</strong> {item.config.newCards || 5}
-                                          </p>
-                                          <p>
-                                            <strong>Max Due:</strong> {item.config.maxDue || 25}
-                                          </p>
+                                          {(() => {
+                                            const config = getSafeConfig(item) as ListeningExerciseConfig;
+                                            return (
+                                              <>
+                                                <p>
+                                                  <strong>Deck:</strong>{" "}
+                                                  {config.deckId 
+                                                    ? decks.find(d => d.id === config.deckId)?.name || "Selected" 
+                                                    : "⚠ Not selected"}
+                                                </p>
+                                                <p>
+                                                  <strong>New Cards:</strong> {config.newCards || 5}
+                                                </p>
+                                                <p>
+                                                  <strong>Max Due:</strong> {config.maxDue || 25}
+                                                </p>
+                                              </>
+                                            );
+                                          })()}
                                         </div>
                                       )}
                                       {item.type === "GRAMMAR_EXERCISE" && (
                                         <div className="space-y-1">
-                                          <p>
-                                            <strong>Topic:</strong> {item.config.grammarTopic || "Not specified"}
-                                          </p>
-                                          <p>
-                                            <strong>Difficulty:</strong> {item.config.difficulty || "Intermediate"}
-                                          </p>
+                                          {(() => {
+                                            const config = getSafeConfig(item) as ExtendedGrammarExerciseConfig;
+                                            return (
+                                              <>
+                                                <p>
+                                                  <strong>Topic:</strong> {config.grammarTopic || "Not specified"}
+                                                </p>
+                                                <p>
+                                                  <strong>Difficulty:</strong> {config.difficulty || "Intermediate"}
+                                                </p>
+                                              </>
+                                            );
+                                          })()}
                                         </div>
                                       )}
                                       {item.type === "FILL_IN_THE_BLANK_EXERCISE" && (
                                         <div className="space-y-1">
-                                          <p>
-                                            <strong>Deck:</strong>{" "}
-                                            {fillInTheBlankDecks.find((d) => d.id === item.config.deckId)?.name || "Not selected"}
-                                          </p>
                                           {(() => {
-                                            const selectedDeck = fillInTheBlankDecks.find(deck => deck.id === item.config.deckId)
+                                            const config = getSafeConfig(item) as ExtendedFillInTheBlankExerciseConfig;
+                                            const selectedDeck = fillInTheBlankDecks.find(deck => deck.id === config.deckId)
                                             const hasVocabularyBinding = selectedDeck && selectedDeck.boundVocabularyDeckId
                                             
-                                            if (!hasVocabularyBinding) return null
-                                            
                                             return (
-                                              <p>
-                                                <strong>Vocab Threshold:</strong> {item.config.vocabularyConfidenceThreshold || 0.8}
-                                              </p>
-                                            )
+                                              <>
+                                                <p>
+                                                  <strong>Deck:</strong>{" "}
+                                                  {fillInTheBlankDecks.find((d) => d.id === config.deckId)?.name || "Not selected"}
+                                                </p>
+                                                {hasVocabularyBinding && (
+                                                  <p>
+                                                    <strong>Vocab Threshold:</strong> {config.vocabularyConfidenceThreshold || 0.8}
+                                                  </p>
+                                                )}
+                                              </>
+                                            );
                                           })()}
                                         </div>
                                       )}
                                       {item.type === "GENERIC_DECK" && (
                                         <div className="space-y-1">
-                                          <p>
-                                            <strong>Deck:</strong>{" "}
-                                            {genericDecks.find((d) => d.id === item.config.deckId)?.name || "Not selected"}
-                                          </p>
-                                          <p>
-                                            <strong>New Cards:</strong> {item.config.newCards || 10}
-                                          </p>
-                                          <p>
-                                            <strong>Max Due:</strong> {item.config.maxDue || 50}
-                                          </p>
-                                          <p>
-                                            <strong>Min Due:</strong> {item.config.minDue || 10}
-                                          </p>
+                                          {(() => {
+                                            const config = getSafeConfig(item) as ExtendedVocabularyExerciseConfig;
+                                            return (
+                                              <>
+                                                <p>
+                                                  <strong>Deck:</strong>{" "}
+                                                  {genericDecks.find((d) => d.id === config.deckId)?.name || "Not selected"}
+                                                </p>
+                                                <p>
+                                                  <strong>New Cards:</strong> {config.newCards || 10}
+                                                </p>
+                                                <p>
+                                                  <strong>Max Due:</strong> {config.maxDue || 50}
+                                                </p>
+                                                <p>
+                                                  <strong>Min Due:</strong> {config.minDue || 10}
+                                                </p>
+                                              </>
+                                            );
+                                          })()}
                                         </div>
                                       )}
                                     </div>
@@ -1376,14 +1416,16 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
       {renderItemConfigDialog()}
 
       {/* Validation Alerts */}
-      {unitItems.some(
-        (item) =>
-          (item.type === "VOCABULARY_DECK" && !item.config.deckId) ||
-          (item.type === "LISTENING_EXERCISE" && !item.config.deckId) ||
-          (item.type === "FILL_IN_THE_BLANK_EXERCISE" && !item.config.deckId) ||
-          (item.type === "GENERIC_DECK" && !item.config.deckId) ||
-          !item.config.title,
-      ) && (
+      {unitItems.some((item) => {
+        const config = getSafeConfig(item);
+        return (
+          (item.type === "VOCABULARY_DECK" && !(config as ExtendedVocabularyExerciseConfig).deckId) ||
+          (item.type === "LISTENING_EXERCISE" && !(config as ListeningExerciseConfig).deckId) ||
+          (item.type === "FILL_IN_THE_BLANK_EXERCISE" && !(config as ExtendedFillInTheBlankExerciseConfig).deckId) ||
+          (item.type === "GENERIC_DECK" && !(config as ExtendedVocabularyExerciseConfig).deckId) ||
+          (item.type === "GRAMMAR_EXERCISE" && !(config as ExtendedGrammarExerciseConfig).title)
+        );
+      }) && (
           <Alert>
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>

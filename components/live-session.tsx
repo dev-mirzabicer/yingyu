@@ -64,27 +64,37 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     }
 
     const { queue, currentCardData } = progress.payload;
-    const queueCardIds = new Set(queue.map(c => c.cardId));
+    // Handle different queue item types with proper type guards
+    const queueCardIds = new Set(
+      queue.map(c => {
+        // For vocabulary and listening exercises, use cardId
+        if ('cardId' in c && c.cardId) return c.cardId;
+        // For fill-in-the-blank exercises, use id
+        if ('id' in c && c.id) return c.id;
+        // Fallback to a unique identifier
+        return String(c);
+      })
+    );
     const totalUniqueCardsInSession = new Set([...encounteredCards, ...queueCardIds]).size;
     const completedCards = encounteredCards.size;
     const percentage = totalUniqueCardsInSession > 0 ? (completedCards / totalUniqueCardsInSession) * 100 : 0;
 
-    // Handle queue analysis differently for vocabulary vs listening
+    // Handle queue analysis differently for vocabulary vs listening vs fill-in-blank
     let queueAnalysis;
     if (progress.type === 'VOCABULARY_DECK') {
       queueAnalysis = {
         totalInQueue: queue.length,
-        newCards: queue.filter(c => c.state === 'NEW').length,
-        learningCards: queue.filter(c => c.state === 'LEARNING' || c.state === 'RELEARNING').length,
-        reviewCards: queue.filter(c => c.state === 'REVIEW').length,
+        newCards: queue.filter(c => 'state' in c && c.state === 'NEW').length,
+        learningCards: queue.filter(c => 'state' in c && (c.state === 'LEARNING' || c.state === 'RELEARNING')).length,
+        reviewCards: queue.filter(c => 'state' in c && c.state === 'REVIEW').length,
       };
     } else if (progress.type === 'LISTENING_EXERCISE') {
       // Listening exercises may have different state structure
       queueAnalysis = {
         totalInQueue: queue.length,
-        newCards: queue.filter(c => c.state === 'NEW').length,
-        learningCards: queue.filter(c => c.state === 'LEARNING' || c.state === 'RELEARNING').length,
-        reviewCards: queue.filter(c => c.state === 'REVIEW').length,
+        newCards: queue.filter(c => 'state' in c && c.state === 'NEW').length,
+        learningCards: queue.filter(c => 'state' in c && (c.state === 'LEARNING' || c.state === 'RELEARNING')).length,
+        reviewCards: queue.filter(c => 'state' in c && c.state === 'REVIEW').length,
       };
     } else if (progress.type === 'FILL_IN_THE_BLANK_EXERCISE') {
       // Fill in the blank exercises have a simple queue structure
@@ -162,7 +172,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     }
   }
 
-  const handleRating = async (rating: AnyRating) => {
+  const handleRating = async (rating: number | AnyRating) => {
     if (!session) return
 
     setActionLoading(true)

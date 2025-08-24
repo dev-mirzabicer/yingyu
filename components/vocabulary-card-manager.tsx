@@ -299,56 +299,66 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
     {
       key: "englishWord",
       header: "English Word",
-      render: (value: string, row: VocabularyCard) => (
-        <div className="space-y-1">
-          <div className="font-medium text-slate-900">{value}</div>
-          {row.wordType && (
-            <Badge variant="outline" className="text-xs">
-              {row.wordType}
-            </Badge>
-          )}
-        </div>
-      ),
+      render: (value: unknown, row: VocabularyCard) => {
+        const wordValue = String(value);
+        return (
+          <div className="space-y-1">
+            <div className="font-medium text-slate-900">{wordValue}</div>
+            {row.wordType && (
+              <Badge variant="outline" className="text-xs">
+                {row.wordType}
+              </Badge>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: "chineseTranslation",
       header: "Chinese Translation",
-      render: (value: string, row: VocabularyCard) => (
-        <div className="space-y-1">
-          <div className="text-slate-900">{value}</div>
-          {row.pinyin && <div className="text-sm text-slate-500">{row.pinyin}</div>}
-        </div>
-      ),
+      render: (value: unknown, row: VocabularyCard) => {
+        const translationValue = String(value);
+        return (
+          <div className="space-y-1">
+            <div className="text-slate-900">{translationValue}</div>
+            {row.pinyin && <div className="text-sm text-slate-500">{row.pinyin}</div>}
+          </div>
+        );
+      },
     },
     {
       key: "difficultyLevel",
       header: "Difficulty",
-      render: (value: number) => {
-        const level = difficultyLevels.find((l) => l.value === value)
+      render: (value: unknown) => {
+        const levelValue = Number(value);
+        const level = difficultyLevels.find((l) => l.value === levelValue);
         return (
-          <Badge variant={value <= 2 ? "secondary" : value <= 4 ? "default" : "destructive"}>
-            {level?.label || `Level ${value}`}
+          <Badge variant={levelValue <= 2 ? "secondary" : levelValue <= 4 ? "default" : "destructive"}>
+            {level?.label || `Level ${levelValue}`}
           </Badge>
-        )
+        );
       },
     },
     {
       key: "tags",
       header: "Tags",
-      render: (value: string[]) => (
-        <div className="flex flex-wrap gap-1">
-          {value?.slice(0, 3).map((tag, index) => (
-            <Badge key={index} variant="outline" className="text-xs">
-              {tag}
-            </Badge>
-          ))}
-          {value?.length > 3 && (
-            <Badge variant="outline" className="text-xs">
-              +{value.length - 3}
-            </Badge>
-          )}
-        </div>
-      ),
+      render: (value: unknown) => {
+        const tagsArray = Array.isArray(value) ? value as string[] : [];
+        return (
+          <div className="flex flex-wrap gap-1">
+            {tagsArray?.slice(0, 3).map((tag, index) => (
+              <Badge key={index} variant="outline" className="text-xs">
+                {String(tag)}
+              </Badge>
+            ))}
+            {tagsArray?.length > 3 && (
+              <Badge variant="outline" className="text-xs">
+                +{tagsArray.length - 3}
+              </Badge>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: "actions",

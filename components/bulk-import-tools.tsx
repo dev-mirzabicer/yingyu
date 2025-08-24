@@ -38,7 +38,7 @@ import {
   FileClock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { DataTable } from "@/components/data-table";
+import { DataTable, DataTableCompatible, createTypedRender } from "@/components/data-table";
 import { JobStatusIndicator } from "@/components/ui/job-status-indicator";
 import { Job } from "@prisma/client";
 import { BulkImportResult } from "@/lib/types";
@@ -52,7 +52,7 @@ interface BulkImportToolsProps {
 
 // Note: Local validation types are kept for the initial parsing step.
 // The final result from the job will use the official `BulkImportResult` types.
-interface ImportError {
+interface ImportError extends DataTableCompatible {
   row: number;
   field: string;
   message: string;
@@ -210,7 +210,8 @@ export function BulkImportTools({ type = "vocabulary", deckId }: BulkImportTools
         });
 
         template.requiredFields.forEach((field) => {
-          if (!rowData[field] || rowData[field].trim() === "") {
+          const fieldValue = rowData[field];
+          if (!fieldValue || (typeof fieldValue === 'string' && fieldValue.trim() === "")) {
             newErrors.push({
               row: i,
               field,
@@ -597,34 +598,36 @@ export function BulkImportTools({ type = "vocabulary", deckId }: BulkImportTools
                         {
                           key: "row",
                           header: "Row",
-                          render: (value, row) => (
+                          render: createTypedRender<ImportError, 'row'>((value, row) => (
                             <Badge variant="outline">Row {row.row}</Badge>
-                          ),
+                          )),
                         },
                         {
                           key: "field",
                           header: "Field",
-                          render: (value, row) => (
+                          render: createTypedRender<ImportError, 'field'>((value, row) => (
                             <code className="text-sm bg-slate-100 px-1 rounded">
                               {row.field}
                             </code>
-                          ),
+                          )),
                         },
                         {
                           key: "message",
                           header: "Message",
-                          render: (value, row) => row.message,
+                          render: createTypedRender<ImportError, 'message'>((value, row) => (
+                            <span>{row.message}</span>
+                          )),
                         },
                         {
                           key: "severity",
                           header: "Severity",
-                          render: (value, row) => (
+                          render: createTypedRender<ImportError, 'severity'>((value, row) => (
                             <Badge
                               variant={row.severity === "error" ? "destructive" : "secondary"}
                             >
                               {row.severity}
                             </Badge>
-                          ),
+                          )),
                         },
                       ]}
                       pageSize={10}
@@ -643,7 +646,7 @@ export function BulkImportTools({ type = "vocabulary", deckId }: BulkImportTools
                 </CardHeader>
                 <CardContent>
                   <DataTable
-                    data={previewData}
+                    data={previewData as DataTableCompatible[]}
                     columns={[
                       { key: "englishWord", header: "English Word" },
                       { key: "chineseTranslation", header: "Chinese Translation" },
