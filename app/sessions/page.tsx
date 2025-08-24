@@ -24,6 +24,19 @@ import { useStudents, useSessions } from "@/hooks/api"
 import type { FullStudentProfile } from "@/lib/types"
 import { SessionStartDialog } from "@/components/session-start-dialog"
 
+// TypeScript interface for session data
+interface Session {
+  id: string
+  studentId: string
+  studentName: string
+  unitId: string
+  unitName: string
+  status: 'COMPLETED' | 'IN_PROGRESS' | 'CANCELLED'
+  startedAt: string
+  duration: number
+  cardsReviewed: number
+}
+
 export default function SessionsPage() {
   const { students, isLoading: studentsLoading } = useStudents()
   const { sessions, isLoading: sessionsLoading, isError: sessionsError } = useSessions()
@@ -75,7 +88,7 @@ export default function SessionsPage() {
     {
       key: "studentName",
       header: "Student",
-      render: (value: string, row: any) => (
+      render: (value: string) => (
         <div className="flex items-center space-x-3">
           <Avatar className="h-8 w-8">
             <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${value}`} />
@@ -123,7 +136,7 @@ export default function SessionsPage() {
     {
       key: "actions",
       header: "Actions",
-      render: (_: any, row: any) => (
+      render: (_: unknown, row: Session) => (
         <div className="flex items-center space-x-2">
           {row.status === "IN_PROGRESS" && (
             <Button variant="outline" size="sm" asChild>

@@ -64,6 +64,7 @@ export function TeacherDashboard() {
       // Refresh the students list
       mutate()
     } catch (error) {
+      console.error("Failed to add student:", error)
       toast({
         title: "Error",
         description: "Failed to add student. Please try again.",
@@ -137,7 +138,7 @@ export function TeacherDashboard() {
       <div className="flex items-center justify-between">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold text-slate-900">Welcome back!</h1>
-          <p className="text-slate-600">Here's what's happening with your students today.</p>
+          <p className="text-slate-600">Here&apos;s what&apos;s happening with your students today.</p>
           {user && (
             <div className="flex items-center space-x-2">
               <Badge variant={getValidityStatus().variant} className="text-xs">
@@ -250,7 +251,7 @@ export function TeacherDashboard() {
         ) : students.length === 0 ? (
           <Card>
             <CardContent className="p-6 text-center">
-              <p className="text-slate-600 mb-4">You don't have any students yet.</p>
+              <p className="text-slate-600 mb-4">You don&apos;t have any students yet.</p>
               <Button onClick={() => setIsAddStudentOpen(true)}>
                 Add Your First Student
               </Button>

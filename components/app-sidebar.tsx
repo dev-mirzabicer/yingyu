@@ -2,7 +2,6 @@
 
 import type React from "react"
 
-import { useState } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -42,13 +41,12 @@ import {
   User,
   LogOut,
   ChevronUp,
-  Bell,
   HelpCircle,
   PencilLine,
   Package,
 } from "lucide-react"
 
-interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> { }
+type AppSidebarProps = React.ComponentProps<typeof Sidebar>
 
 const navigationItems = [
   {

@@ -1,10 +1,8 @@
 "use client"
 
 import {
-  FullSessionState,
   FillInTheBlankProgress,
 } from "@/lib/types"
-import { UnitItemType } from "@prisma/client"
 import {
   PencilLine,
   CheckCircle,
@@ -15,7 +13,6 @@ import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
 
-type CorrectnessRating = { isCorrect: boolean }
 
 import { ExerciseProps } from "./VocabularyExercise"
 
@@ -119,12 +116,12 @@ export function FillInTheBlankExercise({
               </div>
               
               {/* Show bound vocabulary word if available */}
-              {(currentCard as any).boundVocabularyCard && (
+              {(currentCard as { boundVocabularyCard?: { englishWord: string } }).boundVocabularyCard && (
                 <div className="flex items-center justify-center space-x-2 text-sm text-slate-600">
                   <BookOpen className="h-4 w-4 text-blue-600" />
                   <span>Related vocabulary: </span>
                   <span className="font-medium text-blue-700">
-                    {(currentCard as any).boundVocabularyCard.englishWord}
+                    {(currentCard as { boundVocabularyCard: { englishWord: string } }).boundVocabularyCard.englishWord}
                   </span>
                 </div>
               )}

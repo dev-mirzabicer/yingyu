@@ -1,7 +1,7 @@
 "use client"
 
 import { UnitItemType } from "@prisma/client"
-import { BookOpen, FileText, Mic } from "lucide-react"
+import { FileText } from "lucide-react"
 import { Card, CardContent } from "../ui/card"
 import { exerciseTypeInfo } from "./dispatcher"
 

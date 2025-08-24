@@ -38,10 +38,10 @@ import {
   FileClock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { DataTable, type Column } from "@/components/data-table";
+import { DataTable } from "@/components/data-table";
 import { JobStatusIndicator } from "@/components/ui/job-status-indicator";
 import { Job } from "@prisma/client";
-import { BulkImportResult, BulkImportError } from "@/lib/types";
+import { BulkImportResult } from "@/lib/types";
 import { BulkImportResultSchema } from "@/lib/schemas/jobs";
 
 interface BulkImportToolsProps {
@@ -135,13 +135,13 @@ const importTemplates = {
   },
 };
 
-export function BulkImportTools({ type = "vocabulary", deckId, onComplete }: BulkImportToolsProps) {
+export function BulkImportTools({ type = "vocabulary", deckId }: BulkImportToolsProps) {
   const [selectedTemplate, setSelectedTemplate] = useState<keyof typeof importTemplates>(type);
   const [jobId, setJobId] = useState<string | null>(null);
   const [importedData, setImportedData] = useState<BulkImportResult | null>(
     null
   );
-  const [previewData, setPreviewData] = useState<any[]>([]);
+  const [previewData, setPreviewData] = useState<Record<string, unknown>[]>([]);
   const [errors, setErrors] = useState<ImportError[]>([]);
   const [csvText, setCsvText] = useState("");
   const [fileName, setFileName] = useState("");
@@ -187,7 +187,7 @@ export function BulkImportTools({ type = "vocabulary", deckId, onComplete }: Bul
       const headers = lines[0].split(",").map((h) => h.trim().replace(/"/g, ""));
       const template = importTemplates[selectedTemplate];
       const newErrors: ImportError[] = [];
-      const parsedData: any[] = [];
+      const parsedData: Record<string, unknown>[] = [];
 
       const missingRequired = template.requiredFields.filter(
         (field) => !headers.includes(field)
@@ -203,7 +203,7 @@ export function BulkImportTools({ type = "vocabulary", deckId, onComplete }: Bul
 
       for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(",").map((v) => v.trim().replace(/"/g, ""));
-        const rowData: any = {};
+        const rowData: Record<string, unknown> = {};
 
         headers.forEach((header, index) => {
           rowData[header] = values[index] || "";
@@ -233,6 +233,7 @@ export function BulkImportTools({ type = "vocabulary", deckId, onComplete }: Bul
         } rows with ${newErrors.filter((e) => e.severity === "error").length} errors`,
       });
     } catch (error) {
+      console.error('Failed to parse CSV file:', error)
       toast({
         title: "Parse error",
         description: "Failed to parse CSV file. Please check the format.",
@@ -304,6 +305,7 @@ export function BulkImportTools({ type = "vocabulary", deckId, onComplete }: Bul
         description: `Job ${job.id} has been created and is now processing.`,
       });
     } catch (error) {
+      console.error('Import job failed:', error)
       toast({
         title: "Import failed",
         description: "An error occurred during import. Please try again.",
@@ -343,7 +345,7 @@ export function BulkImportTools({ type = "vocabulary", deckId, onComplete }: Bul
       ...template.sampleData.map((row) =>
         headers
           .map((header) => {
-            const value = (row as any)[header] || "";
+            const value = (row as Record<string, unknown>)[header] || "";
             return typeof value === "string" && value.includes(",")
               ? `"${value}"`
               : value;
@@ -379,29 +381,7 @@ export function BulkImportTools({ type = "vocabulary", deckId, onComplete }: Bul
     }
   };
 
-  const resultErrorColumns: Column<BulkImportError>[] = [
-    {
-      key: "rowNumber",
-      header: "Row",
-      render: (value, row) => (
-        <Badge variant="outline">Row {row.rowNumber}</Badge>
-      ),
-    },
-    {
-      key: "fieldName",
-      header: "Field",
-      render: (value, row) => (
-        <code className="text-sm bg-slate-100 px-1 rounded">
-          {row.fieldName}
-        </code>
-      ),
-    },
-    {
-      key: "errorMessage",
-      header: "Message",
-      render: (value, row) => row.errorMessage,
-    },
-  ];
+  // resultErrorColumns variable was removed as it was unused
 
   return (
     <div className="space-y-6">

@@ -7,12 +7,25 @@ import type {
 } from "@/lib/types"
 import { fetcher, mutateWithOptimistic, ApiError } from "./utils"
 
+// TypeScript interface for session list data
+interface SessionListItem {
+  id: string
+  studentId: string
+  studentName: string
+  unitId: string
+  unitName: string
+  status: 'COMPLETED' | 'IN_PROGRESS' | 'CANCELLED'
+  startedAt: string
+  duration: number
+  cardsReviewed: number
+}
+
 // ============================================================================
 // SESSION MANAGEMENT HOOKS
 // ============================================================================
 
 export function useSessions() {
-  const { data, error, isLoading, mutate } = useSWR<any[]>("/api/sessions", fetcher)
+  const { data, error, isLoading, mutate } = useSWR<SessionListItem[]>("/api/sessions", fetcher)
 
   return {
     sessions: data || [],
@@ -42,7 +55,7 @@ export function useSession(sessionId: string) {
 export async function startSession(
   studentId: string,
   unitId: string,
-  configOverrides?: { [key: string]: any }
+  configOverrides?: Record<string, unknown>
 ) {
   return mutateWithOptimistic<FullSessionState>("/api/sessions/start", "POST", {
     studentId,
@@ -52,7 +65,7 @@ export async function startSession(
 }
 
 export async function submitAnswer(sessionId: string, payload: AnswerPayload) {
-  return mutateWithOptimistic<{ newState: FullSessionState; submissionResult: any }>(
+  return mutateWithOptimistic<{ newState: FullSessionState; submissionResult: unknown }>(
     `/api/sessions/${sessionId}/submit`,
     "POST",
     payload,

@@ -11,8 +11,11 @@ import {
 import {
   ReviewHistory,
   StudentCardState,
+  StudentGenericCardState,
+  ListeningCardState,
   StudentStatus,
   VocabularyCard,
+  GenericCard,
   CardState,
   ReviewType,
   Job,
@@ -21,7 +24,122 @@ import {
 import { authorizeTeacherForStudent } from '../auth';
 import { JobService } from './jobs';
 import { FsrsStats, VocabularyExerciseConfig } from '../types';
-import { OptimizeParamsPayloadSchema, RebuildCachePayloadSchema } from '../schemas';
+import { RebuildCachePayloadSchema } from '../schemas';
+
+// ================================================================= //
+// FSRS SERVICE TYPE DEFINITIONS
+// ================================================================= //
+
+/**
+ * Prisma transaction delegate types for different FSRS contexts.
+ * These provide type safety for dynamic model access in transactions.
+ */
+type FsrsTransactionDelegate<T> = {
+  findUnique: (args: { where: Record<string, unknown>; select?: Record<string, boolean> }) => Promise<T | null>;
+  findMany: (args?: { where?: Record<string, unknown>; include?: Record<string, boolean>; orderBy?: Record<string, string>; take?: number; select?: Record<string, boolean> }) => Promise<T[]>;
+  create: (args: { data: Record<string, unknown>; include?: Record<string, boolean> }) => Promise<T>;
+  update: (args: { where: Record<string, unknown>; data: Record<string, unknown>; include?: Record<string, boolean> }) => Promise<T>;
+  updateMany: (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => Promise<Prisma.BatchPayload>;
+  delete: (args: { where: Record<string, unknown> }) => Promise<T>;
+  deleteMany: (args: { where: Record<string, unknown> }) => Promise<Prisma.BatchPayload>;
+  count: (args?: { where?: Record<string, unknown> }) => Promise<number>;
+  groupBy: (args: { by: string[]; where?: Record<string, unknown>; _count?: Record<string, boolean> }) => Promise<Array<Record<string, unknown>>>;
+  aggregate: (args: { where?: Record<string, unknown>; _sum?: Record<string, boolean>; _avg?: Record<string, boolean>; _count?: Record<string, boolean> }) => Promise<Record<string, unknown>>;
+};
+
+/**
+ * FSRS parameter optimization payload structure.
+ */
+interface FsrsOptimizationPayload {
+  studentId: string;
+}
+
+/**
+ * FSRS parameter optimization result structure.
+ */
+interface FsrsOptimizationResult {
+  message: string;
+  params?: {
+    id: string;
+    studentId: string;
+    w: number[];
+    isActive: boolean;
+    trainingDataSize: number;
+    lastOptimized: Date;
+  };
+}
+
+/**
+ * Session progress data structure for FSRS learning steps configuration.
+ */
+interface SessionProgressData {
+  payload?: {
+    config?: {
+      learningSteps?: string[];
+    };
+  };
+}
+
+/**
+ * Review queue item types for different FSRS contexts.
+ */
+type GenericReviewQueueItem = StudentGenericCardState & { card: GenericCard };
+type ListeningReviewQueueItem = ListeningCardState & { card: VocabularyCard };
+
+/**
+ * FSRS statistics for listening exercises.
+ */
+interface ListeningFsrsStats {
+  totalCards: number;
+  newCards: number;
+  learningCards: number;
+  reviewCards: number;
+  relearningCards: number;
+  dueToday: number;
+  dueThisWeek: number;
+  overdue: number;
+  totalReviews: number;
+  averageRetention: number;
+  averageResponseTime: number;
+}
+
+/**
+ * Listening candidate selection result with warnings.
+ */
+interface ListeningCandidateResult {
+  candidates: VocabularyCard[];
+  warnings?: {
+    suboptimalCandidates: number;
+    recommendedMaxCards: number;
+  };
+}
+
+/**
+ * Listening review queue result.
+ */
+interface ListeningReviewQueueResult {
+  dueItems: ListeningReviewQueueItem[];
+  newItems: ListeningReviewQueueItem[];
+  warnings?: {
+    suboptimalCandidates: number;
+    recommendedMaxCards: number;
+  };
+}
+
+/**
+ * Generic review queue result.
+ */
+interface GenericReviewQueueResult {
+  dueItems: GenericReviewQueueItem[];
+  newItems: GenericReviewQueueItem[];
+}
+
+/**
+ * Cache rebuild result structure.
+ */
+interface CacheRebuildResult {
+  cardsRebuilt: number;
+}
 
 /**
  * A constant representing the minimum retrievability for a card to be considered
@@ -107,13 +225,12 @@ async function _recordReviewInternal(
   cardId: string,
   rating: FsrsRating,
   sessionId?: string
-): Promise<any> {
+): Promise<StudentCardState | StudentGenericCardState | ListeningCardState> {
   return prisma.$transaction(async (tx) => {
     const now = new Date();
-    // Cast dynamic model delegates to `any` to avoid union call signature issues.
-    // This preserves behavior while keeping the refactor non-breaking.
-    const stateDelegate = tx[context.stateModel] as any;
-    const paramsDelegate = tx[context.paramsModel] as any;
+    // Use type-safe delegates for dynamic model access
+    const stateDelegate = tx[context.stateModel] as FsrsTransactionDelegate<StudentCardState | StudentGenericCardState | ListeningCardState>;
+    const paramsDelegate = tx[context.paramsModel] as FsrsTransactionDelegate<Record<string, unknown>>;
 
     // 1. Get learning steps configuration
     let learningSteps = DEFAULT_LEARNING_STEPS;
@@ -125,7 +242,7 @@ async function _recordReviewInternal(
         });
 
         if (session?.progress) {
-          const progress = session.progress as any;
+          const progress = session.progress as SessionProgressData;
           const config = progress?.payload?.config;
           if (config?.learningSteps && Array.isArray(config.learningSteps)) {
             learningSteps = config.learningSteps;
@@ -305,7 +422,7 @@ async function _shouldUseLearningStepsInternal(
   studentId: string,
   cardId: string,
   learningSteps: string[],
-  tx: any
+  tx: Prisma.TransactionClient
 ): Promise<boolean> {
   const stateDelegate = tx[context.stateModel];
 
@@ -341,7 +458,7 @@ async function _calculateLearningStepsDueInternal(
   cardId: string,
   rating: FsrsRating,
   learningSteps: string[],
-  tx: any
+  tx: Prisma.TransactionClient
 ): Promise<{ shouldGraduate: boolean; newDueDate: Date }> {
   const now = new Date();
 
@@ -387,13 +504,13 @@ async function _calculateLearningStepsDueInternal(
 async function _optimizeParametersInternal(
   context: FsrsContextConfig,
   payload: Prisma.JsonValue
-): Promise<{ message: string; params?: any }> {
-  const { studentId } = payload as { studentId: string };
+): Promise<FsrsOptimizationResult> {
+  const { studentId } = payload as FsrsOptimizationPayload;
   if (!studentId) {
     throw new Error('Invalid payload: studentId is required.');
   }
 
-  const paramsDelegate = prisma[context.paramsModel];
+  // Remove unused paramsDelegate - FSRS optimization uses direct prisma calls
 
   // Only get FSRS reviews (exclude learning step reviews) for optimization
   const allHistory = await prisma.reviewHistory.findMany({
@@ -427,11 +544,12 @@ async function _optimizeParametersInternal(
   const newWeights = await engine.computeParameters(trainingSet, true);
 
   const result = await prisma.$transaction(async (tx) => {
-    await (tx[context.paramsModel] as any).updateMany({
+    const contextParamsDelegate = tx[context.paramsModel] as FsrsTransactionDelegate<Record<string, unknown>>;
+    await contextParamsDelegate.updateMany({
       where: { studentId },
       data: { isActive: false },
     });
-    const newParams = await (tx[context.paramsModel] as any).create({
+    const newParams = await contextParamsDelegate.create({
       data: {
         studentId,
         w: newWeights,
@@ -483,7 +601,7 @@ export const FSRSService = {
     studentId: string,
     cardId: string,
     learningSteps: string[],
-    tx?: any
+    tx?: Prisma.TransactionClient
   ): Promise<boolean> {
     return _shouldUseLearningStepsInternal(
       VOCABULARY_CONTEXT,
@@ -503,7 +621,7 @@ export const FSRSService = {
     cardId: string,
     rating: FsrsRating,
     learningSteps: string[],
-    tx?: any
+    tx?: Prisma.TransactionClient
   ): Promise<{ shouldGraduate: boolean; newDueDate: Date }> {
     return _calculateLearningStepsDueInternal(
       VOCABULARY_CONTEXT,
@@ -544,7 +662,7 @@ export const FSRSService = {
    */
   async _optimizeParameters(
     payload: Prisma.JsonValue
-  ): Promise<{ message: string; params?: any }> {
+  ): Promise<FsrsOptimizationResult> {
     return _optimizeParametersInternal(VOCABULARY_CONTEXT, payload);
   },
 
@@ -796,8 +914,8 @@ export const FSRSService = {
    */
   async _rebuildCacheForStudent(
     payload: Prisma.JsonValue
-  ): Promise<{ cardsRebuilt: number }> {
-    const { studentId } = payload as { studentId: string };
+  ): Promise<CacheRebuildResult> {
+    const { studentId } = payload as FsrsOptimizationPayload;
     if (!studentId) {
       throw new Error('Invalid payload: studentId is required.');
     }
@@ -970,13 +1088,7 @@ export const FSRSService = {
       vocabularyConfidenceThreshold?: number;
       listeningCandidateThreshold?: number;
     } = {}
-  ): Promise<{
-    candidates: VocabularyCard[];
-    warnings?: {
-      suboptimalCandidates: number;
-      recommendedMaxCards: number;
-    };
-  }> {
+  ): Promise<ListeningCandidateResult> {
     const {
       maxCards = 20,
       vocabularyConfidenceThreshold = 0.8, // High vocabulary confidence required
@@ -1033,7 +1145,7 @@ export const FSRSService = {
     `;
 
     // Filter and sort candidates
-    let candidates = cardsWithStates
+    const candidates = cardsWithStates
       // Filter: Must have high vocabulary confidence
       .filter(card =>
         card.vocabularyRetrievability !== null &&
@@ -1112,14 +1224,7 @@ export const FSRSService = {
       vocabularyConfidenceThreshold?: number;
       listeningCandidateThreshold?: number;
     } = {}
-  ): Promise<{
-    dueItems: Array<any>;
-    newItems: Array<any>;
-    warnings?: {
-      suboptimalCandidates: number;
-      recommendedMaxCards: number;
-    };
-  }> {
+  ): Promise<ListeningReviewQueueResult> {
     const {
       newCards = 10,
       maxDue = 20,
@@ -1198,7 +1303,7 @@ export const FSRSService = {
     cardId: string,
     rating: FsrsRating,
     sessionId?: string
-  ): Promise<any> {
+  ): Promise<ListeningCardState> {
     return _recordReviewInternal(
       LISTENING_CONTEXT,
       studentId,
@@ -1211,7 +1316,7 @@ export const FSRSService = {
   /**
    * Get listening-specific FSRS statistics.
    */
-  async getListeningStats(studentId: string): Promise<any> {
+  async getListeningStats(studentId: string): Promise<ListeningFsrsStats | null> {
     const student = await prisma.student.findUnique({
       where: { id: studentId },
       select: { status: true },
@@ -1266,7 +1371,7 @@ export const FSRSService = {
   /**
    * Create job for optimizing listening FSRS parameters.
    */
-  async createOptimizeListeningParametersJob(studentId: string): Promise<any> {
+  async createOptimizeListeningParametersJob(studentId: string): Promise<Job> {
     const teacherId = await prisma.student.findUnique({
       where: { id: studentId },
       select: { teacherId: true }
@@ -1289,14 +1394,14 @@ export const FSRSService = {
    */
   async _optimizeListeningParameters(
     payload: Prisma.JsonValue
-  ): Promise<{ message: string; params?: any }> {
+  ): Promise<FsrsOptimizationResult> {
     return _optimizeParametersInternal(LISTENING_CONTEXT, payload);
   },
 
   /**
    * Create job for rebuilding listening FSRS cache.
    */
-  async createRebuildListeningCacheJob(studentId: string): Promise<any> {
+  async createRebuildListeningCacheJob(studentId: string): Promise<Job> {
     const teacherId = await prisma.student.findUnique({
       where: { id: studentId },
       select: { teacherId: true }
@@ -1318,8 +1423,9 @@ export const FSRSService = {
    */
   async _rebuildListeningCacheForStudent(
     payload: Prisma.JsonValue
-  ): Promise<{ cardsRebuilt: number }> {
-    const { studentId } = RebuildCachePayloadSchema.parse(payload);
+  ): Promise<CacheRebuildResult> {
+    const parsedPayload = RebuildCachePayloadSchema.parse(payload);
+    const { studentId } = parsedPayload;
     const listeningReviews = await prisma.reviewHistory.findMany({
       where: {
         studentId,
@@ -1328,7 +1434,7 @@ export const FSRSService = {
       orderBy: [{ cardId: 'asc' }, { reviewedAt: 'asc' }],
     });
 
-    const cardStateMap = new Map<string, any>();
+    const cardStateMap = new Map<string, Partial<Prisma.ListeningCardStateCreateManyInput>>();
 
     // Process listening reviews chronologically per card
     for (const review of listeningReviews) {
@@ -1419,10 +1525,7 @@ export const FSRSService = {
   async getInitialGenericReviewQueue(
     studentId: string,
     config: VocabularyExerciseConfig
-  ): Promise<{
-    dueItems: any[]; // StudentGenericCardState[]
-    newItems: any[]; // StudentGenericCardState[]
-  }> {
+  ): Promise<GenericReviewQueueResult> {
     const now = new Date();
     const defaults = { newCards: 10, maxDue: 50, minDue: 10 };
     const finalConfig = { ...defaults, ...config };
@@ -1468,8 +1571,8 @@ export const FSRSService = {
       orderBy: { card: { createdAt: 'asc' } },
     });
 
-    const dueItems: any[] = dueCards;
-    const newItems: any[] = newCards;
+    const dueItems: GenericReviewQueueItem[] = dueCards;
+    const newItems: GenericReviewQueueItem[] = newCards;
 
     return { dueItems, newItems };
   },
@@ -1482,7 +1585,7 @@ export const FSRSService = {
     cardId: string,
     rating: FsrsRating,
     sessionId?: string
-  ): Promise<any> { // Returns StudentGenericCardState
+  ): Promise<StudentGenericCardState> {
     return _recordReviewInternal(
       GENERIC_CONTEXT,
       studentId,
@@ -1599,7 +1702,7 @@ export const FSRSService = {
    */
   async _optimizeGenericParameters(
     payload: Prisma.JsonValue
-  ): Promise<{ message: string; params?: any }> {
+  ): Promise<FsrsOptimizationResult> {
     return _optimizeParametersInternal(GENERIC_CONTEXT, payload);
   },
 
@@ -1622,8 +1725,8 @@ export const FSRSService = {
    */
   async _rebuildGenericCacheForStudent(
     payload: Prisma.JsonValue
-  ): Promise<{ cardsRebuilt: number }> {
-    const { studentId } = payload as { studentId: string };
+  ): Promise<CacheRebuildResult> {
+    const { studentId } = payload as FsrsOptimizationPayload;
     if (!studentId) {
       throw new Error('Invalid payload: studentId is required.');
     }

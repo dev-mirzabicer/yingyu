@@ -7,10 +7,7 @@ import {
   AlertTriangle,
   Loader2,
   Info,
-  Brain,
-  RefreshCw,
 } from "lucide-react"
-import { Progress } from "@/components/ui/progress"
 import { useJobStatus } from "@/hooks/api/jobs"
 
 interface JobStatusIndicatorProps {

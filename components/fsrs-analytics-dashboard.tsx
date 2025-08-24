@@ -13,16 +13,14 @@ import {
   TrendingUp,
   Clock,
   Target,
-  Zap,
   Volume2,
   BarChart3,
   Settings,
-  RefreshCw,
   AlertTriangle,
   CheckCircle,
   BookOpen,
 } from "lucide-react"
-import { format, subDays, startOfDay } from "date-fns"
+import { format } from "date-fns"
 import { useToast } from "@/hooks/use-toast"
 import {
   useDueCards,
@@ -31,7 +29,7 @@ import {
   optimizeFsrsParameters,
 } from "@/hooks/api/students"
 import { JobStatusIndicator } from "@/components/ui/job-status-indicator"
-import type { FullStudentProfile, FsrsStats } from "@/lib/types"
+import type { FullStudentProfile } from "@/lib/types"
 import type { StudentCardState, VocabularyCard } from "@prisma/client"
 import { DataTable } from "@/components/data-table"
 
@@ -81,6 +79,7 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
         description: "This may take a few minutes to complete.",
       })
     } catch (error) {
+      console.error("Failed to start parameter optimization:", error)
       toast({
         title: "Error",
         description: "Failed to start parameter optimization.",
@@ -93,7 +92,7 @@ export function FSRSAnalyticsDashboard({ student }: FSRSAnalyticsDashboardProps)
     {
       key: "card",
       header: "Word",
-      render: (_: any, row: DueCardWithCard) => (
+      render: (_: unknown, row: DueCardWithCard) => (
         <div className="space-y-1">
           <div className="font-medium text-slate-900">{row.card.englishWord}</div>
           <div className="text-sm text-slate-500">{row.card.chineseTranslation}</div>

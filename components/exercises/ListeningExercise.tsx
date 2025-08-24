@@ -22,12 +22,11 @@ import { Button } from "../ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
 import { Alert, AlertDescription } from "../ui/alert"
 
-type Rating = 1 | 2 | 3 | 4 // Again, Hard, Good, Easy
 
 export interface ExerciseProps {
   sessionState: FullSessionState
   onRevealAnswer: () => void
-  onSubmitRating: (rating: Rating) => void
+  onSubmitRating: (rating: number) => void
   isLoading: boolean
 }
 
@@ -90,6 +89,7 @@ export function ListeningExercise({
         setIsPlaying(true)
       }
     } catch (error) {
+      console.error('Failed to play audio:', error)
       setAudioError("Failed to play audio. Please try again.")
       setIsPlaying(false)
     }

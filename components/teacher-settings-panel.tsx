@@ -9,11 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import {
-  Settings,
-  Globe,
   Save,
   RotateCcw,
   AlertTriangle,
@@ -35,7 +32,7 @@ interface BackendSettingsData {
 }
 
 export function TeacherSettingsPanel() {
-  const { settings, isLoading, isError, mutate } = useTeacherSettings()
+  const { settings, isError, mutate } = useTeacherSettings()
 
   // Backend settings state
   const [backendSettings, setBackendSettings] = useState<BackendSettingsData>({
@@ -85,6 +82,7 @@ export function TeacherSettingsPanel() {
       setHasUnsavedBackendChanges(false)
       mutate()
     } catch (error) {
+      console.error("Failed to save account settings:", error)
       toast({
         title: "Error",
         description: "Failed to save account settings. Please try again.",
@@ -105,6 +103,7 @@ export function TeacherSettingsPanel() {
         description: "Your UI preferences have been saved to this browser.",
       })
     } catch (error) {
+      console.error("Failed to save browser preferences:", error)
       toast({
         title: "Error",
         description: "Failed to save browser preferences. Please try again.",

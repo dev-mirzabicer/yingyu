@@ -32,7 +32,6 @@ import {
   Archive,
   BookOpen,
   Calendar,
-  TrendingUp,
   Clock,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
@@ -58,8 +57,6 @@ import {
 import { PaymentManager } from "@/components/payment-manager"
 import { ClassScheduler } from "@/components/class-scheduler"
 import { JobStatusIndicator } from "@/components/ui/job-status-indicator"
-import type { AvailableUnit } from "@/lib/types"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 
 interface StudentProfileProps {
@@ -127,6 +124,7 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
       setIsEditingNotes(false)
       mutate()
     } catch (error) {
+      console.error("Failed to update notes:", error)
       toast({
         title: "Error",
         description: "Failed to update notes. Please try again.",
@@ -160,6 +158,7 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
       setIsAssignDeckOpen(false)
       setSelectedDeckId(null)
     } catch (error) {
+      console.error("Failed to assign deck:", error)
       toast({
         title: "Error",
         description: "Failed to assign deck. Please try again.",
@@ -204,6 +203,7 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
       setIsEditDetailsOpen(false)
       mutate()
     } catch (error) {
+      console.error("Failed to update student:", error)
       toast({
         title: "Error",
         description: "Failed to update student. Please try again.",
@@ -227,6 +227,7 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
       setIsArchiveConfirmOpen(false)
       window.location.href = "/students"
     } catch (error) {
+      console.error("Failed to archive student:", error)
       toast({
         title: "Error",
         description: "Failed to archive student. Please try again.",
@@ -250,7 +251,7 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
     {
       key: "deck.name",
       header: "Deck Name",
-      render: (value: any, row: any) => row.deck.name,
+      render: (value: unknown, row: { deck: { name: string } }) => row.deck.name,
     },
     {
       key: "type",
@@ -465,7 +466,7 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>Teacher's Notes</CardTitle>
+                <CardTitle>Teacher&apos;s Notes</CardTitle>
                 <Button
                   variant="outline"
                   size="sm"
@@ -661,7 +662,7 @@ export function StudentProfile({ studentId }: StudentProfileProps) {
           <DialogHeader>
             <DialogTitle>Edit Student Details</DialogTitle>
             <DialogDescription>
-              Update the student's information below.
+              Update the student&apos;s information below.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">

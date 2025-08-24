@@ -44,24 +44,6 @@ interface Student {
   createdAt: string
 }
 
-interface Deck {
-  id: string
-  name: string
-}
-
-interface DataTableColumn<T> {
-  key: string
-  header: string
-  render: (value: unknown, row: T) => React.ReactNode
-}
-
-// Utility function for handling errors
-function handleError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message
-  }
-  return "An unexpected error occurred"
-}
 
 export default function StudentsPage() {
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false)
@@ -387,7 +369,7 @@ export default function StudentsPage() {
           <DialogHeader>
             <DialogTitle>Add New Student</DialogTitle>
             <DialogDescription>
-              Enter the student's details and assign an initial deck.
+              Enter the student&apos;s details and assign an initial deck.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -395,7 +377,7 @@ export default function StudentsPage() {
               <Label htmlFor="student-name">Full Name *</Label>
               <Input
                 id="student-name"
-                placeholder="Enter student's full name"
+                placeholder="Enter student&apos;s full name"
                 value={newStudent.name}
                 onChange={(e) =>
                   setNewStudent({ ...newStudent, name: e.target.value })

@@ -37,8 +37,9 @@ interface SessionStartDialogProps {
   initialUnits?: AvailableUnit[]
 }
 
-// Exercise type information mapping
-const exerciseTypeInfo = {
+// Exercise type information mapping (unused for now)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _exerciseTypeInfo = {
   [UnitItemType.VOCABULARY_DECK]: {
     label: "Vocabulary",
     icon: BookOpen,
@@ -83,7 +84,7 @@ export function SessionStartDialog({
     }
   }, [open, initialUnitId, units]);
   const [isStarting, setIsStarting] = useState(false)
-  const [configOverrides, setConfigOverrides] = useState<{ [key: string]: any }>({})
+  const [configOverrides, setConfigOverrides] = useState<{ [key: string]: unknown }>({})
   const router = useRouter()
   const { toast } = useToast()
 
@@ -94,7 +95,7 @@ export function SessionStartDialog({
     setConfigOverrides({}) // Reset overrides when unit changes
   }
 
-  const handleConfigChange = (itemId: string, newConfig: any) => {
+  const handleConfigChange = (itemId: string, newConfig: unknown) => {
     setConfigOverrides(prev => ({
       ...prev,
       [itemId]: {
@@ -131,8 +132,8 @@ export function SessionStartDialog({
     }
   }
 
-  const availableUnits = units.filter((unit: any) => unit.isAvailable)
-  const unavailableUnits = units.filter((unit: any) => !unit.isAvailable)
+  const availableUnits = units.filter((unit: AvailableUnit) => unit.isAvailable)
+  const unavailableUnits = units.filter((unit: AvailableUnit) => !unit.isAvailable)
 
 
   return (
@@ -186,7 +187,7 @@ export function SessionStartDialog({
                 ) : (
                   <>
                     {/* Available Units */}
-                    {availableUnits.map((unit: any) => (
+                    {availableUnits.map((unit: AvailableUnit) => (
                       <Card
                         key={unit.id}
                         className={`cursor-pointer transition-all hover:shadow-md ${selectedUnit?.id === unit.id
@@ -246,7 +247,7 @@ export function SessionStartDialog({
                             <span>Prerequisites Required</span>
                           </h4>
                         </div>
-                        {unavailableUnits.map((unit: any) => (
+                        {unavailableUnits.map((unit: AvailableUnit) => (
                           <Card key={unit.id} className="opacity-60 border-amber-200">
                             <CardContent className="p-4">
                               <div className="space-y-3">
@@ -328,7 +329,7 @@ export function SessionStartDialog({
                           <Settings className="h-4 w-4" />
                           <span>Session Configuration</span>
                         </h4>
-                        {selectedUnit.items.map((item: any) => {
+                        {selectedUnit.items.map((item: { type: UnitItemType; id: string; vocabularyDeck?: { name: string } }) => {
                           if (item.type !== UnitItemType.VOCABULARY_DECK) {
                             return null;
                           }
@@ -392,7 +393,7 @@ export function SessionStartDialog({
         <div className="flex items-center justify-between pt-4 border-t">
           <div className="text-sm text-slate-600">
             {selectedUnit ? (
-              <span>Ready to start "{selectedUnit.name}" with {studentName}</span>
+              <span>Ready to start &quot;{selectedUnit.name}&quot; with {studentName}</span>
             ) : (
               <span>Choose a unit to start the learning session</span>
             )}

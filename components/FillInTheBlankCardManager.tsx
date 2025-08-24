@@ -13,7 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
 import {
   Plus,
   Edit,
@@ -24,7 +23,6 @@ import {
   Download,
   Copy,
   BookOpen,
-  Shuffle,
   AlertTriangle,
   CheckCircle,
   XCircle,
@@ -38,7 +36,6 @@ import {
   deleteFillInTheBlankCard,
   autoBindFillInTheBlankDeck,
   resolveFillInTheBlankBinding,
-  useDecks
 } from "@/hooks/api/content"
 import type { FillInTheBlankCard, FillInTheBlankDeck } from "@prisma/client"
 import { DataTable } from "@/components/data-table"
@@ -63,14 +60,23 @@ interface CardFormData {
   explanation: string
 }
 
+interface BoundVocabularyCard {
+  id: string
+  englishWord: string
+}
+
+interface FillInTheBlankCardWithBinding extends FillInTheBlankCard {
+  boundVocabularyCard?: BoundVocabularyCard | null
+}
+
 interface AutoBindResults {
   automaticMatches: Array<{
     fillInTheBlankCard: FillInTheBlankCard
-    vocabularyCard: { id: string; englishWord: string }
+    vocabularyCard: BoundVocabularyCard
   }>
   ambiguities: Array<{
     fillInTheBlankCard: FillInTheBlankCard
-    possibleMatches: Array<{ id: string; englishWord: string }>
+    possibleMatches: Array<BoundVocabularyCard>
   }>
   noMatches: FillInTheBlankCard[]
 }
@@ -163,6 +169,7 @@ export function FillInTheBlankCardManager({ deckId, deck, isReadOnly = false }: 
       setIsAddCardOpen(false)
       mutate()
     } catch (error) {
+      console.error('Failed to add card:', error)
       toast({
         title: "Error",
         description: "Failed to add card. Please try again.",
@@ -205,6 +212,7 @@ export function FillInTheBlankCardManager({ deckId, deck, isReadOnly = false }: 
       setEditingCard(null)
       mutate()
     } catch (error) {
+      console.error('Failed to update card:', error)
       toast({
         title: "Error",
         description: "Failed to update card. Please try again.",
@@ -228,6 +236,7 @@ export function FillInTheBlankCardManager({ deckId, deck, isReadOnly = false }: 
       })
       mutate()
     } catch (error) {
+      console.error('Failed to delete card:', error)
       toast({
         title: "Error",
         description: "Failed to delete card. Please try again.",
@@ -274,6 +283,7 @@ export function FillInTheBlankCardManager({ deckId, deck, isReadOnly = false }: 
       setAmbiguityResolutions({}) // Reset resolutions
       setIsBindingOpen(true)
     } catch (error) {
+      console.error('Auto-binding failed:', error)
       toast({
         title: "Auto-binding failed",
         description: "Failed to perform automatic vocabulary binding. Please try again.",
@@ -305,6 +315,7 @@ export function FillInTheBlankCardManager({ deckId, deck, isReadOnly = false }: 
       setBindingResults(null)
       mutate() // Refresh cards to show updated bindings
     } catch (error) {
+      console.error('Failed to save binding resolutions:', error)
       toast({
         title: "Failed to save resolutions",
         description: "Could not save binding resolutions. Please try again.",
@@ -370,7 +381,7 @@ export function FillInTheBlankCardManager({ deckId, deck, isReadOnly = false }: 
     {
       key: "boundVocabularyCard",
       header: "Bound Word",
-      render: (value: any, row: any) => (
+      render: (value: BoundVocabularyCard | null, row: FillInTheBlankCardWithBinding) => (
         <div className="flex items-center space-x-2">
           {row.boundVocabularyCard ? (
             <>
@@ -388,7 +399,7 @@ export function FillInTheBlankCardManager({ deckId, deck, isReadOnly = false }: 
     {
       key: "actions",
       header: "Actions",
-      render: (_: any, row: FillInTheBlankCard) => (
+      render: (_: unknown, row: FillInTheBlankCard) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm">
@@ -432,7 +443,7 @@ export function FillInTheBlankCardManager({ deckId, deck, isReadOnly = false }: 
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Fill-in-the-Blank Cards</h2>
-          <p className="text-slate-600">Manage cards in "{deck.name}"</p>
+          <p className="text-slate-600">Manage cards in &quot;{deck.name}&quot;</p>
         </div>
         {!isReadOnly && (
           <div className="flex items-center space-x-2">
@@ -541,7 +552,7 @@ export function FillInTheBlankCardManager({ deckId, deck, isReadOnly = false }: 
       <Dialog open={isImporting} onOpenChange={setIsImporting}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Import Fill-in-the-Blank Cards to "{deck.name}"</DialogTitle>
+            <DialogTitle>Import Fill-in-the-Blank Cards to &quot;{deck.name}&quot;</DialogTitle>
           </DialogHeader>
           <BulkImportTools
             type="fill-in-the-blank"
@@ -710,7 +721,7 @@ export function FillInTheBlankCardManager({ deckId, deck, isReadOnly = false }: 
                   rows={3}
                 />
                 <p className="text-xs text-slate-500">
-                  Use underscores (___) or words like "BLANK" to indicate where the answer should go.
+                  Use underscores (___) or words like &quot;BLANK&quot; to indicate where the answer should go.
                 </p>
               </div>
 
@@ -800,7 +811,7 @@ export function FillInTheBlankCardManager({ deckId, deck, isReadOnly = false }: 
                   rows={3}
                 />
                 <p className="text-xs text-slate-500">
-                  Use underscores (___) or words like "BLANK" to indicate where the answer should go.
+                  Use underscores (___) or words like &quot;BLANK&quot; to indicate where the answer should go.
                 </p>
               </div>
 

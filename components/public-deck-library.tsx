@@ -6,8 +6,6 @@ import { useToast } from "@/hooks/use-toast"
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -71,8 +69,10 @@ export function PublicDeckLibrary({ onDeckImported }: PublicDeckLibraryProps) {
     (deck.description?.toLowerCase() || "").includes(searchTerm.toLowerCase())
   )
 
-  const isLoading = activeTab === "vocabulary" ? isLoadingVocab : isLoadingGeneric
-  const isError = activeTab === "vocabulary" ? isErrorVocab : isErrorGeneric
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _isLoading = activeTab === "vocabulary" ? isLoadingVocab : isLoadingGeneric
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _isError = activeTab === "vocabulary" ? isErrorVocab : isErrorGeneric
 
   const handleViewDeck = (deck: DeckWithCount) => {
     setSelectedDeck(deck)
@@ -96,6 +96,7 @@ export function PublicDeckLibrary({ onDeckImported }: PublicDeckLibraryProps) {
       }
       setIsDeckDetailOpen(false)
     } catch (error) {
+      console.error("Failed to import deck:", error)
       toast({
         title: "Import failed",
         description: "Failed to import deck. Please try again.",

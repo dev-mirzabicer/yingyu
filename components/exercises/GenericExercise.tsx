@@ -4,26 +4,21 @@ import {
   FullSessionState,
   GenericDeckProgress,
 } from "@/lib/types"
-import { UnitItemType } from "@prisma/client"
 import {
   Layers,
   CheckCircle,
-  FileText,
-  Mic,
   RotateCcw,
-  Volume2,
   XCircle,
 } from "lucide-react"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
 
-type Rating = 1 | 2 | 3 | 4 // Again, Hard, Good, Easy
 
 export interface ExerciseProps {
   sessionState: FullSessionState
   onRevealAnswer: () => void
-  onSubmitRating: (rating: any) => void // Made generic to support both numeric and boolean ratings
+  onSubmitRating: (rating: number) => void // FSRS rating: 1=Again, 2=Hard, 3=Good, 4=Easy
   isLoading: boolean
 }
 

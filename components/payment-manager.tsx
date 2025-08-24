@@ -9,8 +9,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   DollarSign,
@@ -19,9 +17,6 @@ import {
   TrendingUp,
   AlertTriangle,
   Receipt,
-  CreditCard,
-  Banknote,
-  Smartphone,
 } from "lucide-react"
 import { format } from "date-fns"
 import { cn, safeNumberConversion } from "@/lib/utils"
@@ -107,6 +102,7 @@ export function PaymentManager({ studentId, studentName, classesRemaining, onPay
       mutatePayments() // Re-fetch payments for this component
       onPaymentRecorded() // Re-fetch student data in parent
     } catch (error) {
+      console.error("Failed to record payment:", error)
       toast({
         title: "Error",
         description: "Failed to record payment. Please try again.",
@@ -152,7 +148,7 @@ export function PaymentManager({ studentId, studentName, classesRemaining, onPay
     {
       key: "pricePerClass",
       header: "Price/Class",
-      render: (_: any, row: Payment) => {
+      render: (_: unknown, row: Payment) => {
         const amount = safeNumberConversion(row.amount)
         const pricePerClass = row.classesPurchased > 0 ? amount / row.classesPurchased : 0
         return (
@@ -163,7 +159,7 @@ export function PaymentManager({ studentId, studentName, classesRemaining, onPay
     {
       key: "status",
       header: "Status",
-      render: (_: any, row: Payment) => {
+      render: (_: unknown, row: Payment) => {
         const p = row as Payment & { status: "ACTIVE" | "EXPIRED" | "REFUNDED" }
         let variant: "default" | "secondary" | "destructive" | "outline" = "outline";
         let text = p.status;

@@ -11,7 +11,7 @@ import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from "
 interface Column<T> {
   key: string
   header: string
-  render?: (value: any, row: T) => React.ReactNode
+  render?: (value: unknown, row: T) => React.ReactNode
   sortable?: boolean
   searchable?: boolean
 }
@@ -27,7 +27,7 @@ interface DataTableProps<T> {
   className?: string
 }
 
-export function DataTable<T extends Record<string, any>>({
+export function DataTable<T extends Record<string, unknown>>({
   data,
   columns,
   pageSize = 10,

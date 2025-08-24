@@ -28,7 +28,6 @@ import {
   Volume2,
   PenTool,
   PencilLine,
-  Brain,
   Target,
   Settings,
   Layers,
@@ -48,9 +47,8 @@ import {
   removeUnitItem,
   updateUnitItemConfig,
 } from "@/hooks/api/content"
-import type { FullUnit, NewUnitItemData } from "@/lib/types"
+import type { NewUnitItemData } from "@/lib/types"
 import type { Unit, UnitItemType } from "@prisma/client"
-import { FillInBlankExerciseEditor } from "./fill-in-blank-exercise-editor"
 import { GrammarExerciseEditor } from "./grammar-exercise-editor"
 import { AlertTriangle } from "lucide-react"
 
@@ -65,14 +63,14 @@ interface UnitItemTemplate {
   title: string
   description: string
   icon: React.ComponentType<{ className?: string }>
-  defaultConfig: any
+  defaultConfig: unknown
 }
 
 interface DraggableUnitItem {
   id: string
   type: UnitItemType
   title: string
-  config: any
+  config: unknown
   order: number
   estimatedDuration: number
 }
@@ -165,7 +163,7 @@ const difficultyLevels = [
 
 export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
   const { mutate: mutateUnits } = useUnits() // Keep for mutation
-  const { unit: fullUnitData, isLoading: isUnitLoading } = useUnit(unitId || ""); // Use the specific hook
+  const { unit: fullUnitData } = useUnit(unitId || ""); // Use the specific hook
   const { decks } = useDecks()
   const { decks: fillInTheBlankDecks } = useFillInTheBlankDecks()
   const { decks: genericDecks } = useGenericDecks()
@@ -201,7 +199,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
 
         // Convert unit items to draggable format
         const draggableItems: DraggableUnitItem[] =
-          existingUnit.items?.map((item, index) => ({
+          existingUnit.items?.map((item) => ({
             id: item.id,
             type: item.type,
             title:
@@ -246,6 +244,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
         });
         mutateUnits();
       } catch (error) {
+        console.error("Failed to save order:", error)
         toast({
           title: "Error",
           description: "Failed to save the new order. Please try again.",
@@ -293,6 +292,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
       });
       mutateUnits();
     } catch (error) {
+      console.error("Failed to remove item:", error)
       toast({
         title: "Error",
         description: "Failed to remove item. Please try again.",
@@ -338,6 +338,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
       setIsConfigDialogOpen(false)
       setEditingItem(null)
     } catch (error) {
+      console.error("Failed to save configuration:", error)
       toast({
         title: "Error",
         description: "Failed to save configuration. Please try again.",
@@ -492,6 +493,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
       mutateUnits()
       onUnitSaved?.(savedUnit)
     } catch (error) {
+      console.error("Failed to save unit:", error)
       toast({
         title: "Error",
         description: "Failed to save unit. Please try again.",
@@ -502,9 +504,6 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
     }
   }
 
-  const calculateTotalDuration = () => {
-    return unitItems.reduce((total, item) => total + item.estimatedDuration, 0)
-  }
 
   const renderItemConfigDialog = () => {
     if (!editingItem) return null
@@ -895,7 +894,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
                 </div>
               </div>
               <p className="text-sm text-slate-500">
-                Only show fill-in-the-blank cards where the student's vocabulary confidence is above this threshold.
+                Only show fill-in-the-blank cards where the student&apos;s vocabulary confidence is above this threshold.
                 This deck is bound to a vocabulary deck, enabling smart card filtering.
               </p>
             </div>

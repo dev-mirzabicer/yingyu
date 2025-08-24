@@ -5,7 +5,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -37,7 +36,6 @@ import {
   autoBindGenericDeck,
   resolveGenericBinding,
   useGenericDeck,
-  bulkImportGenericCards
 } from "@/hooks/api/content"
 import { useDecks } from "@/hooks/api/content"
 import type { GenericCard } from "@prisma/client"
@@ -83,7 +81,8 @@ const initialFormData: CardFormData = {
 export function GenericCardManager({ deckId, deckName, isReadOnly = false }: GenericCardManagerProps) {
   const { cards, isLoading, isError, mutate, error } = useGenericDeckCards(deckId)
   const { deck } = useGenericDeck(deckId)
-  const { decks: vocabularyDecks } = useDecks()
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { decks: _decks } = useDecks()
   const [isAddCardOpen, setIsAddCardOpen] = useState(false)
   const [isEditCardOpen, setIsEditCardOpen] = useState(false)
   const [editingCard, setEditingCard] = useState<GenericCard | null>(null)
@@ -150,6 +149,7 @@ export function GenericCardManager({ deckId, deckName, isReadOnly = false }: Gen
       setIsAddCardOpen(false)
       mutate()
     } catch (error) {
+      console.error("Failed to add card:", error)
       toast({
         title: "Error",
         description: "Failed to add card. Please try again.",
@@ -189,6 +189,7 @@ export function GenericCardManager({ deckId, deckName, isReadOnly = false }: Gen
       setEditingCard(null)
       mutate()
     } catch (error) {
+      console.error("Failed to update card:", error)
       toast({
         title: "Error",
         description: "Failed to update card. Please try again.",
@@ -212,6 +213,7 @@ export function GenericCardManager({ deckId, deckName, isReadOnly = false }: Gen
       })
       mutate()
     } catch (error) {
+      console.error("Failed to delete card:", error)
       toast({
         title: "Error",
         description: "Failed to delete card. Please try again.",
@@ -264,8 +266,8 @@ export function GenericCardManager({ deckId, deckName, isReadOnly = false }: Gen
       
       // Initialize resolutions for ambiguous cards
       const initialResolutions: { [key: string]: string | null } = {}
-      results.ambiguities?.forEach((ambiguity: any) => {
-        initialResolutions[ambiguity.cardId] = null
+      results.ambiguities?.forEach((ambiguity: { genericCard: { id: string } }) => {
+        initialResolutions[ambiguity.genericCard.id] = null
       })
       setResolutions(initialResolutions)
       
@@ -278,6 +280,7 @@ export function GenericCardManager({ deckId, deckName, isReadOnly = false }: Gen
         })
       }
     } catch (error) {
+      console.error("Failed to auto-bind cards:", error)
       toast({
         title: "Error",
         description: "Failed to auto-bind cards. Please try again.",
@@ -310,6 +313,7 @@ export function GenericCardManager({ deckId, deckName, isReadOnly = false }: Gen
       setResolutions({})
       mutate()
     } catch (error) {
+      console.error("Failed to resolve bindings:", error)
       toast({
         title: "Error",
         description: "Failed to resolve bindings. Please try again.",
@@ -345,7 +349,7 @@ export function GenericCardManager({ deckId, deckName, isReadOnly = false }: Gen
     {
       key: "actions",
       header: "Actions",
-      render: (_: any, row: GenericCard) => (
+      render: (_: unknown, row: GenericCard) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm">
@@ -562,7 +566,7 @@ export function GenericCardManager({ deckId, deckName, isReadOnly = false }: Gen
       <Dialog open={isImporting} onOpenChange={setIsImporting}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Import Generic Cards to "{deckName}"</DialogTitle>
+            <DialogTitle>Import Generic Cards to &quot;{deckName}&quot;</DialogTitle>
           </DialogHeader>
           <BulkImportTools
             deckId={deckId}

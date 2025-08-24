@@ -55,13 +55,17 @@ export function getExerciseComponent(
   type?: UnitItemType,
 ): ComponentType<ExerciseProps> {
   if (!type) {
-    return () => (
+    const NoExerciseComponent = () => (
       <Card>
         <CardContent className="p-8 text-center text-slate-600">
           No exercise loaded.
         </CardContent>
       </Card>
     )
+    NoExerciseComponent.displayName = 'NoExerciseComponent'
+    return NoExerciseComponent
   }
-  return exerciseDispatcher[type] || (() => <UnsupportedExercise type={type} />)
+  const UnsupportedComponent = () => <UnsupportedExercise type={type} />
+  UnsupportedComponent.displayName = `UnsupportedExercise_${type}`
+  return exerciseDispatcher[type] || UnsupportedComponent
 }

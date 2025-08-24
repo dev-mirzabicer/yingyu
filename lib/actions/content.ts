@@ -3,7 +3,6 @@ import {
   FullUnit,
   NewUnitItemData,
   VocabularyExerciseConfig,
-  ListeningExerciseConfig,
   FillInTheBlankExerciseConfig,
 } from '@/lib/types';
 import {
@@ -22,6 +21,118 @@ import {
 } from '@prisma/client';
 import { AuthorizationError } from '../auth';
 import { TransactionClient } from '@/lib/exercises/operators/base';
+
+// ================================================================= //
+// TYPE DEFINITIONS FOR CONTENT OPERATIONS
+// ================================================================= //
+
+/**
+ * Interface for models that can be forked (copied with cards)
+ */
+interface ForkableModel {
+  id: string;
+  creatorId: string | null;
+  isPublic: boolean;
+  originExerciseId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  name?: string;  // for decks
+  title?: string; // for exercises
+  cards?: Array<ForkableCard>;
+}
+
+/**
+ * Interface for cards that can be forked
+ */
+interface ForkableCard {
+  id: string;
+  deckId: string;
+  // Common card properties
+  createdAt?: Date;
+  updatedAt?: Date;
+  // Vocabulary card specific
+  englishWord?: string;
+  chineseTranslation?: string;
+  pinyin?: string;
+  ipaPronunciation?: string;
+  exampleSentences?: Prisma.JsonValue;
+  wordType?: string;
+  difficultyLevel?: number;
+  audioUrl?: string;
+  imageUrl?: string;
+  videoUrl?: string;
+  frequencyRank?: number;
+  tags?: string[];
+  // Fill in the blank card specific
+  sentence?: string;
+  answer?: string;
+  options?: string[];
+  explanation?: string;
+  boundVocabularyCardId?: string;
+  // Generic card specific
+  front?: string;
+  back?: string;
+}
+
+/**
+ * Interface for models that can be archived
+ */
+interface ArchivableModel {
+  id: string;
+  creatorId: string | null;
+}
+
+/**
+ * Type for bulk import generic card data
+ */
+interface BulkImportGenericCardData {
+  front: string;
+  back: string;
+  exampleSentences?: Prisma.JsonValue;
+  audioUrl?: string;
+  imageUrl?: string;
+  tags?: string[];
+}
+
+/**
+ * Type for bulk import generic card payload
+ */
+interface BulkImportGenericCardPayload {
+  deckId: string;
+  teacherId: string;
+  cards: BulkImportGenericCardData[];
+}
+
+/**
+ * Type-safe model accessor for transaction operations
+ */
+interface ModelOperations {
+  findUnique: (args: {
+    where: { id: string; isArchived?: boolean };
+    include?: {
+      cards?: boolean;
+    };
+  }) => Promise<ForkableModel | null>;
+  create: (args: {
+    data: Partial<ForkableModel> & {
+      name?: string;
+      title?: string;
+      creatorId: string;
+      isPublic: boolean;
+      originExerciseId: string;
+    };
+  }) => Promise<ForkableModel>;
+  update: (args: {
+    where: { id: string };
+    data: { isArchived: boolean };
+  }) => Promise<ArchivableModel>;
+}
+
+// Note: This type may be used in future card creation utilities
+// type CardCreateInput = 
+//   | Prisma.VocabularyCardCreateManyInput
+//   | Prisma.FillInTheBlankCardCreateManyInput
+//   | Prisma.GenericCardCreateManyInput;
 import {
   BulkImportVocabularyPayloadSchema,
   BulkImportFillInTheBlankPayloadSchema,
@@ -547,7 +658,8 @@ export const ContentService = {
           | 'genericDeck',
         id: string
       ) => {
-        const original = await (tx as any)[model].findUnique({
+        const modelOps = (tx as unknown as Record<string, ModelOperations>)[model];
+        const original = await modelOps.findUnique({
           where: { id, isArchived: false },
           include: (model === 'vocabularyDeck' || model === 'fillInTheBlankDeck' || model === 'genericDeck') ? { cards: true } : undefined,
         });
@@ -558,21 +670,20 @@ export const ContentService = {
           throw new Error('Only public exercises can be forked.');
 
         const {
-          id: _,
-          creatorId,
-          isPublic,
-          originExerciseId,
-          createdAt,
-          updatedAt,
           cards, // Exclude cards from the shallow copy
           ...dataToCopy
         } = original;
+        
+        // Remove system fields that should not be copied
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { id: _id, creatorId: _creatorId, isPublic: _isPublic, originExerciseId: _originExerciseId, createdAt: _createdAt, updatedAt: _updatedAt, ...cleanDataToCopy } = dataToCopy;
 
         // Create the new forked exercise
-        const newExercise = await (tx as any)[model].create({
+        const modelOpsForCreate = (tx as unknown as Record<string, ModelOperations>)[model];
+        const newExercise = await modelOpsForCreate.create({
           data: {
-            ...dataToCopy,
-            name: `${original.name} (Copy)`, // Append (Copy) to the name
+            ...cleanDataToCopy,
+            name: `${original.name || original.title} (Copy)`, // Append (Copy) to the name
             creatorId: newCreatorId,
             isPublic: false, // Forks are always private
             originExerciseId: original.id,
@@ -581,8 +692,10 @@ export const ContentService = {
 
         // **Meticulous Deep Copy for Vocabulary Decks and Fill in the Blank Decks**
         if (model === 'vocabularyDeck' && cards && cards.length > 0) {
-          const cardsToCreate = cards.map((card: VocabularyCard) => {
-            const { id: _cId, deckId: _dId, ...cardData } = card;
+          const vocabularyCards = cards as VocabularyCard[];
+          const cardsToCreate = vocabularyCards.map((card): Prisma.VocabularyCardCreateManyInput => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { id: _id, deckId: _deckId, ...cardData } = card;
             return {
               ...cardData,
               deckId: newExercise.id, // Link to the new forked deck
@@ -594,8 +707,10 @@ export const ContentService = {
         }
         
         if (model === 'fillInTheBlankDeck' && cards && cards.length > 0) {
-          const cardsToCreate = cards.map((card: FillInTheBlankCard) => {
-            const { id: _cId, deckId: _dId, ...cardData } = card;
+          const fillInTheBlankCards = cards as FillInTheBlankCard[];
+          const cardsToCreate = fillInTheBlankCards.map((card): Prisma.FillInTheBlankCardCreateManyInput => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { id: _id, deckId: _deckId, ...cardData } = card;
             return {
               ...cardData,
               deckId: newExercise.id, // Link to the new forked deck
@@ -606,7 +721,7 @@ export const ContentService = {
           });
         }
 
-        return newExercise;
+        return newExercise as Exercise;
       };
 
       switch (exerciseType) {
@@ -648,9 +763,10 @@ export const ContentService = {
         | 'genericDeck',
       id: string
     ) => {
-      const exercise = await (prisma[model] as any).findUnique({
+      const modelOps = (prisma as unknown as Record<string, ModelOperations>)[model];
+      const exercise = await modelOps.findUnique({
         where: { id },
-      });
+      }) as ArchivableModel | null;
 
       if (!exercise) throw new Error('Exercise not found.');
       if (exercise.creatorId !== requestingTeacherId) {
@@ -659,10 +775,11 @@ export const ContentService = {
         );
       }
 
-      return (prisma[model] as any).update({
+      const modelOpsForUpdate = (prisma as unknown as Record<string, ModelOperations>)[model];
+      return modelOpsForUpdate.update({
         where: { id },
         data: { isArchived: true },
-      });
+      }) as Promise<Exercise>;
     };
 
     switch (exerciseType) {
@@ -1734,20 +1851,14 @@ export const ContentService = {
    * This implementation mirrors _bulkAddVocabularyCards.
    */
   async _bulkAddGenericCards(
-    payload: Prisma.JsonValue
+    payload: BulkImportGenericCardPayload
   ): Promise<{ cardsAdded: number; errors: string[] }> {
-    const { deckId, teacherId, cards } = payload as {
+    const typedPayload = payload as {
       deckId: string;
       teacherId: string;
-      cards: Array<{
-        front: string;
-        back: string;
-        exampleSentences?: any;
-        audioUrl?: string;
-        imageUrl?: string;
-        tags?: string[];
-      }>;
+      cards: BulkImportGenericCardData[];
     };
+    const { deckId, teacherId, cards } = typedPayload;
 
     if (!Array.isArray(cards) || cards.length === 0) {
       throw new Error('Invalid payload: cards array is required and must not be empty.');
@@ -1790,9 +1901,9 @@ export const ContentService = {
             deckId,
             front: card.front.trim(),
             back: card.back.trim(),
-            exampleSentences: card.exampleSentences || null,
-            audioUrl: card.audioUrl || null,
-            imageUrl: card.imageUrl || null,
+            exampleSentences: card.exampleSentences || undefined,
+            audioUrl: card.audioUrl || undefined,
+            imageUrl: card.imageUrl || undefined,
             tags: card.tags || [],
           }));
 

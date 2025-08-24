@@ -5,7 +5,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -168,6 +167,7 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
       setIsAddCardOpen(false)
       mutate()
     } catch (error) {
+      console.error("Failed to add card:", error)
       toast({
         title: "Error",
         description: "Failed to add card. Please try again.",
@@ -210,6 +210,7 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
       setEditingCard(null)
       mutate()
     } catch (error) {
+      console.error("Failed to update card:", error)
       toast({
         title: "Error",
         description: "Failed to update card. Please try again.",
@@ -233,6 +234,7 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
       })
       mutate()
     } catch (error) {
+      console.error("Failed to delete card:", error)
       toast({
         title: "Error",
         description: "Failed to delete card. Please try again.",
@@ -351,7 +353,7 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
     {
       key: "actions",
       header: "Actions",
-      render: (_: any, row: VocabularyCard) => (
+      render: (_: unknown, row: VocabularyCard) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm">
@@ -395,7 +397,7 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Vocabulary Cards</h2>
-          <p className="text-slate-600">Manage cards in "{deckName}"</p>
+          <p className="text-slate-600">Manage cards in &quot;{deckName}&quot;</p>
         </div>
         {!isReadOnly && (
           <div className="flex items-center space-x-2">
@@ -500,7 +502,7 @@ export function VocabularyCardManager({ deckId, deckName, isReadOnly = false }: 
       <Dialog open={isImporting} onOpenChange={setIsImporting}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Import Vocabulary Cards to "{deckName}"</DialogTitle>
+            <DialogTitle>Import Vocabulary Cards to &quot;{deckName}&quot;</DialogTitle>
           </DialogHeader>
           <BulkImportTools
             deckId={deckId}

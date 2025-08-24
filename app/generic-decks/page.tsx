@@ -30,33 +30,6 @@ interface GenericDeck {
   }
 }
 
-interface VocabularyDeck {
-  id: string
-  name: string
-  _count?: {
-    cards: number
-  }
-}
-
-interface Student {
-  id: string
-  name: string
-  email: string
-}
-
-interface DataTableColumn<T> {
-  key: string
-  header: string
-  render: (value: unknown, row: T) => React.ReactNode
-}
-
-// Utility function for handling errors
-function handleError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message
-  }
-  return "An unexpected error occurred"
-}
 
 export default function GenericDecksPage() {
   const [isCreateDeckOpen, setIsCreateDeckOpen] = useState(false)

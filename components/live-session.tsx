@@ -10,7 +10,7 @@ import { Clock, ArrowLeft, Pause, Play, CheckCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { useSession, submitAnswer, endSession } from "@/hooks/api/sessions"
-import { AnswerPayload, VocabularyDeckProgress, ListeningDeckProgress, FillInTheBlankProgress, SessionProgress } from "@/lib/types"
+import { AnswerPayload, SessionProgress } from "@/lib/types"
 import { formatTime } from "@/lib/utils"
 import { useLiveSessionStore } from "@/hooks/stores/use-live-session-store"
 import { getExerciseComponent, exerciseTypeInfo } from "@/components/exercises/dispatcher"
@@ -149,6 +149,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
         setProgress(result.data.newState.progress as SessionProgress)
       }
     } catch (error) {
+      console.error("Failed to handle reveal/play action:", error)
       toast({
         title: "Error",
         description: progress?.type === 'LISTENING_EXERCISE' 
@@ -173,6 +174,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
         setProgress(result.data.newState.progress as SessionProgress)
       }
     } catch (error) {
+      console.error("Failed to submit rating:", error)
       toast({
         title: "Error",
         description: "Failed to submit rating. Please try again.",
@@ -194,6 +196,7 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
       })
       router.push(`/students/${session.studentId}`)
     } catch (error) {
+      console.error("Failed to end session:", error)
       toast({
         title: "Error",
         description: "Failed to end session. Please try again.",

@@ -31,7 +31,6 @@ import { useToast } from "@/hooks/use-toast"
 import { useStudentSchedules, createSchedule, updateSchedule, deleteSchedule } from "@/hooks/api"
 import type { ClassSchedule, ClassStatus } from "@prisma/client"
 import { DataTable } from "@/components/data-table"
-import { Skeleton } from "@/components/ui/skeleton"
 
 interface ClassSchedulerProps {
   studentId: string
@@ -89,11 +88,12 @@ const durations = [
   { value: 120, label: "2 hours" },
 ]
 
-const recurringPatterns = [
-  { value: "weekly", label: "Weekly" },
-  { value: "biweekly", label: "Every 2 weeks" },
-  { value: "monthly", label: "Monthly" },
-]
+// recurringPatterns removed as it was unused
+// const recurringPatterns = [
+//   { value: "weekly", label: "Weekly" },
+//   { value: "biweekly", label: "Every 2 weeks" },
+//   { value: "monthly", label: "Monthly" },
+// ]
 
 const statusColors = {
   SCHEDULED: "bg-blue-100 text-blue-700 border-blue-200",
@@ -177,6 +177,7 @@ export function ClassScheduler({ studentId, studentName, classesRemaining, onSch
       mutate()
       onScheduleUpdated()
     } catch (error) {
+      console.error('Failed to schedule class:', error)
       toast({
         title: "Error",
         description: "Failed to schedule class. Please try again.",
@@ -212,6 +213,7 @@ export function ClassScheduler({ studentId, studentName, classesRemaining, onSch
       mutate()
       onScheduleUpdated()
     } catch (error) {
+      console.error('Failed to update class:', error)
       toast({
         title: "Error",
         description: "Failed to update class. Please try again.",
@@ -240,6 +242,7 @@ export function ClassScheduler({ studentId, studentName, classesRemaining, onSch
       mutate()
       onScheduleUpdated()
     } catch (error) {
+      console.error('Failed to delete class:', error)
       toast({
         title: "Error",
         description: "Failed to delete class. Please try again.",
@@ -258,6 +261,7 @@ export function ClassScheduler({ studentId, studentName, classesRemaining, onSch
       mutate()
       onScheduleUpdated()
     } catch (error) {
+      console.error('Failed to update status:', error)
       toast({
         title: "Error",
         description: "Failed to update status. Please try again.",
@@ -327,7 +331,7 @@ export function ClassScheduler({ studentId, studentName, classesRemaining, onSch
     {
       key: "actions",
       header: "Actions",
-      render: (_: any, row: ClassSchedule) => (
+      render: (_: unknown, row: ClassSchedule) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm">
@@ -384,7 +388,7 @@ export function ClassScheduler({ studentId, studentName, classesRemaining, onSch
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Class Schedule</h2>
-          <p className="text-slate-600">Manage {studentName}'s class schedule</p>
+          <p className="text-slate-600">Manage {studentName}&apos;s class schedule</p>
         </div>
         <div className="flex items-center space-x-2">
           <div className="flex items-center space-x-1 bg-slate-100 rounded-lg p-1">

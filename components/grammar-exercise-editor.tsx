@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Trash2, PlusCircle } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 
-type ExerciseData = Record<string, any>
+type ExerciseData = Record<string, unknown>
 
 interface GrammarExerciseEditorProps {
   value: ExerciseData
@@ -29,6 +29,7 @@ export function GrammarExerciseEditor({ value, onChange, disabled }: GrammarExer
   }
 
   const handleRemoveEntry = (keyToRemove: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { [keyToRemove]: _, ...rest } = value
     onChange(rest)
   }
@@ -53,7 +54,7 @@ export function GrammarExerciseEditor({ value, onChange, disabled }: GrammarExer
             onChange({ ...value, [key]: parsed });
             return;
         }
-    } catch (e) {
+    } catch {
         // Not valid JSON, treat as string
     }
     onChange({ ...value, [key]: newValue })
@@ -63,7 +64,7 @@ export function GrammarExerciseEditor({ value, onChange, disabled }: GrammarExer
     <div className="space-y-4">
       <Label>Exercise Data</Label>
       <p className="text-sm text-slate-500">
-        Define the structure of your grammar exercise, e.g., "instructions", "questions". Values can be text or JSON.
+        Define the structure of your grammar exercise, e.g., &quot;instructions&quot;, &quot;questions&quot;. Values can be text or JSON.
       </p>
       
       {entries.length === 0 && (

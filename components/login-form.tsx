@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { GraduationCap, Loader2 } from "lucide-react"
-import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/hooks/auth/use-auth"
 
@@ -28,7 +27,7 @@ export function LoginForm() {
         title: "Welcome back!",
         description: "Successfully logged in.",
       })
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
         title: "Login failed",
         description: err?.message || "Invalid credentials.",
