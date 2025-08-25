@@ -178,7 +178,18 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
     setActionLoading(true)
     try {
       incrementReviewCount() // Optimistic update
-      const payload: AnswerPayload = { action: 'SUBMIT_RATING', data: rating }
+      
+      // Convert rating to the expected backend format
+      let data: { rating: number } | { isCorrect: boolean };
+      if (typeof rating === 'number') {
+        data = { rating };
+      } else if (typeof rating === 'object' && 'isCorrect' in rating) {
+        data = { isCorrect: rating.isCorrect };
+      } else {
+        throw new Error('Invalid rating format');
+      }
+      
+      const payload: AnswerPayload = { action: 'SUBMIT_RATING', data }
       const result = await submitAnswer(sessionId, payload)
       if (result.data.newState.progress) {
         setProgress(result.data.newState.progress as SessionProgress)
