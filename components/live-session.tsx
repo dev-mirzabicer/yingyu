@@ -181,8 +181,19 @@ export function LiveSession({ sessionId }: LiveSessionProps) {
       
       // Convert rating to the expected backend format
       let data: { rating: number } | { isCorrect: boolean };
+      
+      // Fill-in-the-blank exercises expect isCorrect format instead of rating format
+      const isFillInTheBlank = session.currentUnitItem?.type === 'FILL_IN_THE_BLANK_EXERCISE';
+      
       if (typeof rating === 'number') {
-        data = { rating };
+        if (isFillInTheBlank) {
+          // Convert numeric rating to boolean for fill-in-the-blank
+          // Rating 1 = incorrect, Rating 4 = correct
+          data = { isCorrect: rating === 4 };
+        } else {
+          // Use numeric rating for other exercise types
+          data = { rating };
+        }
       } else if (typeof rating === 'object' && 'isCorrect' in rating) {
         data = { isCorrect: rating.isCorrect };
       } else {

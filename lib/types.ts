@@ -137,7 +137,8 @@ export type AnswerPayload = {
   /**
    * The data associated with the action, to be validated by the specific operator.
    * Frontend sends numbers/booleans which are converted to proper object format:
-   * - number -> { rating: number } for FSRS ratings
+   * - number -> { rating: number } for FSRS ratings (vocabulary, listening, generic)
+   * - number -> { isCorrect: boolean } for fill-in-the-blank (rating 1=false, 4=true)
    * - boolean -> { isCorrect: boolean } for correctness ratings
    */
   data?: { [key: string]: unknown } | number | boolean;
