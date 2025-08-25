@@ -3,6 +3,7 @@ import {
   FullUnit,
   NewUnitItemData,
   VocabularyExerciseConfig,
+  ListeningExerciseConfig,
   FillInTheBlankExerciseConfig,
 } from '@/lib/types';
 import {
@@ -137,6 +138,7 @@ import {
   BulkImportVocabularyPayloadSchema,
   BulkImportFillInTheBlankPayloadSchema,
   VocabularyExerciseConfigSchema,
+  ListeningExerciseConfigSchema,
   FillInTheBlankExerciseConfigSchema,
 } from '../schemas';
 import { z } from 'zod';
@@ -872,7 +874,7 @@ export const ContentService = {
   async updateUnitItemConfig(
     unitItemId: string,
     teacherId: string,
-    config: VocabularyExerciseConfig | FillInTheBlankExerciseConfig
+    config: VocabularyExerciseConfig | ListeningExerciseConfig | FillInTheBlankExerciseConfig
   ): Promise<UnitItem> {
     const unitItem = await prisma.unitItem.findUnique({
       where: { id: unitItemId },
@@ -887,10 +889,19 @@ export const ContentService = {
 
     // Validate config based on exercise type
     let validatedConfig;
-    if (unitItem.type === 'FILL_IN_THE_BLANK_EXERCISE') {
-      validatedConfig = FillInTheBlankExerciseConfigSchema.parse(config);
-    } else {
-      validatedConfig = VocabularyExerciseConfigSchema.parse(config);
+    switch (unitItem.type) {
+      case 'VOCABULARY_DECK':
+      case 'GENERIC_DECK':
+        validatedConfig = VocabularyExerciseConfigSchema.parse(config);
+        break;
+      case 'LISTENING_EXERCISE':
+        validatedConfig = ListeningExerciseConfigSchema.parse(config);
+        break;
+      case 'FILL_IN_THE_BLANK_EXERCISE':
+        validatedConfig = FillInTheBlankExerciseConfigSchema.parse(config);
+        break;
+      default:
+        throw new Error(`Unsupported exercise type: ${unitItem.type}`);
     }
 
     const updatedUnitItem = await prisma.unitItem.update({

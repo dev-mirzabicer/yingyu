@@ -51,8 +51,7 @@ import type {
   NewUnitItemData,
   VocabularyExerciseConfig,
   ListeningExerciseConfig,
-  FillInTheBlankExerciseConfig,
-  GrammarExerciseConfig
+  FillInTheBlankExerciseConfig
 } from "@/lib/types"
 import { getTypedExerciseConfig } from "@/lib/types"
 import type { Unit, UnitItemType } from "@prisma/client"
@@ -67,11 +66,6 @@ interface ExtendedFillInTheBlankExerciseConfig extends FillInTheBlankExerciseCon
   deckId?: string;
 }
 
-interface ExtendedGrammarExerciseConfig extends Omit<GrammarExerciseConfig, 'difficulty'> {
-  difficulty?: string | number; // Allow both string and number for UI flexibility
-}
-
-import { GrammarExerciseEditor } from "./grammar-exercise-editor"
 import { AlertTriangle } from "lucide-react"
 
 interface UnitBuilderProps {
@@ -128,28 +122,6 @@ const unitItemTemplates: UnitItemTemplate[] = [
     },
   },
   {
-    id: "grammar-exercise",
-    type: "GRAMMAR_EXERCISE",
-    title: "Grammar Exercise",
-    description: "Grammar rules and sentence construction",
-    icon: PenTool,
-    defaultConfig: {
-      title: "Grammar Practice",
-      grammarTopic: "",
-      exerciseData: {
-        instructions: "Choose the correct option to complete the sentence.",
-        questions: [
-          {
-            text: "He ___ to the store every day.",
-            options: ["go", "goes", "is going"],
-            answer: "goes"
-          }
-        ]
-      },
-      difficulty: "INTERMEDIATE",
-    },
-  },
-  {
     id: "fill-in-the-blank",
     type: "FILL_IN_THE_BLANK_EXERCISE",
     title: "Fill in the Blank",
@@ -184,7 +156,7 @@ const difficultyLevels = [
 ]
 
 // Type-safe config utilities
-function getSafeConfig(item: DraggableUnitItem): VocabularyExerciseConfig | ListeningExerciseConfig | FillInTheBlankExerciseConfig | GrammarExerciseConfig {
+function getSafeConfig(item: DraggableUnitItem): VocabularyExerciseConfig | ListeningExerciseConfig | FillInTheBlankExerciseConfig {
   return getTypedExerciseConfig(item.config, item.type);
 }
 
@@ -204,10 +176,6 @@ function updateListeningConfig(item: DraggableUnitItem, updates: Partial<Listeni
   return { ...item, config: { ...currentConfig, ...updates } };
 }
 
-function updateGrammarConfig(item: DraggableUnitItem, updates: Partial<ExtendedGrammarExerciseConfig>): DraggableUnitItem {
-  const currentConfig = getSafeConfig(item) as ExtendedGrammarExerciseConfig;
-  return { ...item, config: { ...currentConfig, ...updates } };
-}
 
 function updateFillInTheBlankConfig(item: DraggableUnitItem, updates: Partial<ExtendedFillInTheBlankExerciseConfig>): DraggableUnitItem {
   const currentConfig = getSafeConfig(item) as ExtendedFillInTheBlankExerciseConfig;
@@ -215,7 +183,7 @@ function updateFillInTheBlankConfig(item: DraggableUnitItem, updates: Partial<Ex
 }
 
 // Safe template config conversion
-function getSafeTemplateConfig(template: UnitItemTemplate): VocabularyExerciseConfig | ListeningExerciseConfig | FillInTheBlankExerciseConfig | GrammarExerciseConfig {
+function getSafeTemplateConfig(template: UnitItemTemplate): VocabularyExerciseConfig | ListeningExerciseConfig | FillInTheBlankExerciseConfig {
   return getTypedExerciseConfig(template.defaultConfig, template.type);
 }
 
@@ -388,7 +356,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
 
     try {
       const typedConfig = getSafeConfig(updatedItem);
-      await updateUnitItemConfig(updatedItem.id, typedConfig as VocabularyExerciseConfig);
+      await updateUnitItemConfig(updatedItem.id, typedConfig);
       toast({
         title: "Configuration Saved",
         description: "The exercise configuration has been updated.",
@@ -494,29 +462,6 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
               data: {
                 title: item.title || "Untitled Listening Exercise",
                 difficultyLevel: 1,
-                explanation: "",
-                tags: [],
-                isPublic: false,
-              },
-            }
-          } else if (item.type === 'GRAMMAR_EXERCISE') {
-            const config = getSafeConfig(item) as ExtendedGrammarExerciseConfig;
-            // Convert extended config to standard config for API
-            const standardConfig: GrammarExerciseConfig = {
-              title: config.title,
-              grammarTopic: config.grammarTopic,
-              difficulty: typeof config.difficulty === 'string' ? parseInt(config.difficulty, 10) || 1 : config.difficulty,
-              exerciseData: config.exerciseData,
-            };
-            itemData = {
-              type: 'GRAMMAR_EXERCISE',
-              order: item.order,
-              config: standardConfig,
-              data: {
-                title: item.title || "Untitled Grammar Exercise",
-                grammarTopic: config.grammarTopic || "General",
-                difficultyLevel: typeof config.difficulty === 'string' ? parseInt(config.difficulty, 10) || 1 : (config.difficulty || 1),
-                exerciseData: config.exerciseData || {},
                 explanation: "",
                 tags: [],
                 isPublic: false,
@@ -798,64 +743,6 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
       </div>
     )
 
-    const renderGrammarExerciseConfig = () => (
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="grammarTitle">Exercise Title *</Label>
-          <Input
-            id="grammarTitle"
-            value={(getSafeConfig(editingItem) as ExtendedGrammarExerciseConfig).title || ""}
-            onChange={(e) =>
-              setEditingItem({
-                ...updateGrammarConfig(editingItem, { title: e.target.value }),
-                title: e.target.value,
-              })
-            }
-            placeholder="Enter exercise title"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="grammarTopic">Grammar Topic</Label>
-          <Input
-            id="grammarTopic"
-            value={(getSafeConfig(editingItem) as ExtendedGrammarExerciseConfig).grammarTopic || ""}
-            onChange={(e) =>
-              setEditingItem(updateGrammarConfig(editingItem, { grammarTopic: e.target.value }))
-            }
-            placeholder="e.g., Present Perfect, Conditionals"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="difficulty">Difficulty Level</Label>
-          <Select
-            value={(getSafeConfig(editingItem) as ExtendedGrammarExerciseConfig).difficulty?.toString() || "INTERMEDIATE"}
-            onValueChange={(value) =>
-              setEditingItem(updateGrammarConfig(editingItem, { difficulty: value }))
-            }
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {difficultyLevels.map((level) => (
-                <SelectItem key={level.value} value={level.value}>
-                  {level.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <GrammarExerciseEditor
-          value={(getSafeConfig(editingItem) as ExtendedGrammarExerciseConfig).exerciseData || {}}
-          onChange={(data) => {
-            setEditingItem(updateGrammarConfig(editingItem, { exerciseData: data }))
-          }}
-        />
-      </div>
-    )
 
     const renderFillInTheBlankConfig = () => (
       <div className="space-y-4">
@@ -1014,7 +901,6 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
             <div className="space-y-6">
               {editingItem.type === "VOCABULARY_DECK" && renderVocabularyDeckConfig()}
               {editingItem.type === "LISTENING_EXERCISE" && renderListeningExerciseConfig()}
-              {editingItem.type === "GRAMMAR_EXERCISE" && renderGrammarExerciseConfig()}
               {editingItem.type === "FILL_IN_THE_BLANK_EXERCISE" && renderFillInTheBlankConfig()}
               {editingItem.type === "GENERIC_DECK" && renderGenericDeckConfig()}
 
@@ -1330,23 +1216,6 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
                                           })()}
                                         </div>
                                       )}
-                                      {item.type === "GRAMMAR_EXERCISE" && (
-                                        <div className="space-y-1">
-                                          {(() => {
-                                            const config = getSafeConfig(item) as ExtendedGrammarExerciseConfig;
-                                            return (
-                                              <>
-                                                <p>
-                                                  <strong>Topic:</strong> {config.grammarTopic || "Not specified"}
-                                                </p>
-                                                <p>
-                                                  <strong>Difficulty:</strong> {config.difficulty || "Intermediate"}
-                                                </p>
-                                              </>
-                                            );
-                                          })()}
-                                        </div>
-                                      )}
                                       {item.type === "FILL_IN_THE_BLANK_EXERCISE" && (
                                         <div className="space-y-1">
                                           {(() => {
@@ -1422,8 +1291,7 @@ export function UnitBuilder({ unitId, onUnitSaved }: UnitBuilderProps) {
           (item.type === "VOCABULARY_DECK" && !(config as ExtendedVocabularyExerciseConfig).deckId) ||
           (item.type === "LISTENING_EXERCISE" && !(config as ListeningExerciseConfig).deckId) ||
           (item.type === "FILL_IN_THE_BLANK_EXERCISE" && !(config as ExtendedFillInTheBlankExerciseConfig).deckId) ||
-          (item.type === "GENERIC_DECK" && !(config as ExtendedVocabularyExerciseConfig).deckId) ||
-          (item.type === "GRAMMAR_EXERCISE" && !(config as ExtendedGrammarExerciseConfig).title)
+          (item.type === "GENERIC_DECK" && !(config as ExtendedVocabularyExerciseConfig).deckId)
         );
       }) && (
           <Alert>

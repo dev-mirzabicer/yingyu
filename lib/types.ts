@@ -624,7 +624,7 @@ export function safeExerciseConfigConversion<T extends VocabularyExerciseConfig 
 export function getTypedExerciseConfig(
   config: unknown,
   exerciseType: UnitItemType
-): VocabularyExerciseConfig | ListeningExerciseConfig | FillInTheBlankExerciseConfig | GrammarExerciseConfig {
+): VocabularyExerciseConfig | ListeningExerciseConfig | FillInTheBlankExerciseConfig {
   if (!config || typeof config !== 'object') {
     // Return appropriate default based on exercise type
     switch (exerciseType) {
@@ -632,8 +632,6 @@ export function getTypedExerciseConfig(
         return {};
       case UnitItemType.LISTENING_EXERCISE:
         return { deckId: '' };
-      case UnitItemType.GRAMMAR_EXERCISE:
-        return {};
       case UnitItemType.FILL_IN_THE_BLANK_EXERCISE:
         return {};
       case UnitItemType.GENERIC_DECK:
@@ -651,8 +649,6 @@ export function getTypedExerciseConfig(
       return safeExerciseConfigConversion(obj, {} as VocabularyExerciseConfig);
     case UnitItemType.LISTENING_EXERCISE:
       return safeExerciseConfigConversion(obj, { deckId: '' } as ListeningExerciseConfig);
-    case UnitItemType.GRAMMAR_EXERCISE:
-      return safeExerciseConfigConversion(obj, {} as GrammarExerciseConfig);
     case UnitItemType.FILL_IN_THE_BLANK_EXERCISE:
       return safeExerciseConfigConversion(obj, {} as FillInTheBlankExerciseConfig);
     default:

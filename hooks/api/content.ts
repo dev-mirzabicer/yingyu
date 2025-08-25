@@ -8,6 +8,8 @@ import type {
   FillInTheBlankDeckWithCount,
   GenericDeckWithCount,
   VocabularyExerciseConfig,
+  ListeningExerciseConfig,
+  FillInTheBlankExerciseConfig,
   NewUnitItemData,
 } from "@/lib/types"
 import type {
@@ -183,7 +185,10 @@ export async function reorderUnitItems(unitId: string, itemIds: string[]) {
   return mutateWithOptimistic<any>(`/api/units/${unitId}/items/reorder`, "PUT", { itemIds });
 }
 
-export async function updateUnitItemConfig(unitItemId: string, config: VocabularyExerciseConfig) {
+export async function updateUnitItemConfig(
+  unitItemId: string, 
+  config: VocabularyExerciseConfig | ListeningExerciseConfig | FillInTheBlankExerciseConfig
+) {
   return mutateWithOptimistic<any>(`/api/items/${unitItemId}/config`, "PUT", config)
 }
 
