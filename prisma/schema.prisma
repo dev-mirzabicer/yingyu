@@ -29,6 +29,7 @@ enum PaymentStatus {
   EXPIRED
   REFUNDED
 }
+
 enum ClassStatus {
   SCHEDULED
   CONFIRMED
@@ -37,12 +38,14 @@ enum ClassStatus {
   CANCELLED
   RESCHEDULED
 }
+
 enum CardState {
   NEW
   LEARNING
   REVIEW
   RELEARNING
 }
+
 enum ReviewType {
   VOCABULARY
   LISTENING
@@ -97,29 +100,29 @@ enum JobStatus {
 // ================================================================= //
 
 model Teacher {
-  id           String    @id @default(uuid()) @db.Uuid
-  email        String    @unique
-  passwordHash String
-  name         String
-  phone        String?
-  timezone     String    @default("Asia/Shanghai")
-  avatarUrl    String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            String    @id @default(uuid()) @db.Uuid
+  email         String    @unique
+  passwordHash  String
+  name          String
+  phone         String?
+  timezone      String    @default("Asia/Shanghai")
+  avatarUrl     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   validityUntil DateTime?
   lastLoginAt   DateTime?
 
-  settings                       TeacherSettings?
-  students                       Student[]
-  sessions                       Session[]
-  jobs                           Job[]
-  createdDecks                   VocabularyDeck[]
-  createdGrammar                 GrammarExercise[]
-  createdListening               ListeningExercise[]
-  createdFillInTheBlankDecks     FillInTheBlankDeck[] @relation("TeacherCreatedFillInTheBlankDecks")
-  createdGenericDecks            GenericDeck[]       @relation("TeacherCreatedGenericDecks")
-  createdUnits                   Unit[]
-  authSessions                   AuthSession[]
+  settings                   TeacherSettings?
+  students                   Student[]
+  sessions                   Session[]
+  jobs                       Job[]
+  createdDecks               VocabularyDeck[]
+  createdGrammar             GrammarExercise[]
+  createdListening           ListeningExercise[]
+  createdFillInTheBlankDecks FillInTheBlankDeck[] @relation("TeacherCreatedFillInTheBlankDecks")
+  createdGenericDecks        GenericDeck[]        @relation("TeacherCreatedGenericDecks")
+  createdUnits               Unit[]
+  authSessions               AuthSession[]
 }
 
 model TeacherSettings {
@@ -132,33 +135,33 @@ model TeacherSettings {
 }
 
 model Student {
-  id               String         @id @default(uuid()) @db.Uuid
-  teacherId        String         @db.Uuid
+  id               String           @id @default(uuid()) @db.Uuid
+  teacherId        String           @db.Uuid
   name             String
   email            String?
   phone            String?
   proficiencyLevel ProficiencyLevel @default(BEGINNER)
   notes            String?
-  status           StudentStatus  @default(ACTIVE)
-  isArchived       Boolean        @default(false)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  status           StudentStatus    @default(ACTIVE)
+  isArchived       Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
-  teacher                       Teacher                         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  payments                      Payment[]
-  classSchedules                ClassSchedule[]
-  studentDecks                  StudentDeck[]
-  studentGenericDecks           StudentGenericDeck[]
-  cardStates                    StudentCardState[]
-  listeningCardStates           ListeningCardState[]
-  vocabularyReviewHistory       VocabularyReviewHistory[]
-  genericReviewHistory          GenericReviewHistory[]
-  fsrsParams                    StudentFsrsParams[]
-  listeningFsrsParams           ListeningFsrsParams[]
-  sessions                      Session[]
-  fillInTheBlankDoneRecords     StudentFillInTheBlankCardDone[]
-  genericCardStates             StudentGenericCardState[]
-  genericFsrsParams             GenericFsrsParams[]
+  teacher                   Teacher                         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  payments                  Payment[]
+  classSchedules            ClassSchedule[]
+  studentDecks              StudentDeck[]
+  studentGenericDecks       StudentGenericDeck[]
+  cardStates                StudentCardState[]
+  listeningCardStates       ListeningCardState[]
+  vocabularyReviewHistory   VocabularyReviewHistory[]
+  genericReviewHistory      GenericReviewHistory[]
+  fsrsParams                StudentFsrsParams[]
+  listeningFsrsParams       ListeningFsrsParams[]
+  sessions                  Session[]
+  fillInTheBlankDoneRecords StudentFillInTheBlankCardDone[]
+  genericCardStates         StudentGenericCardState[]
+  genericFsrsParams         GenericFsrsParams[]
 }
 
 // ================================================================= //
@@ -166,16 +169,16 @@ model Student {
 // ================================================================= //
 
 model Unit {
-  id                       String     @id @default(uuid()) @db.Uuid
-  creatorId                String?    @db.Uuid
+  id                       String   @id @default(uuid()) @db.Uuid
+  creatorId                String?  @db.Uuid
   name                     String
   description              String?
-  isPublic                 Boolean    @default(false)
-  isArchived               Boolean    @default(false)
+  isPublic                 Boolean  @default(false)
+  isArchived               Boolean  @default(false)
   estimatedMinimumDuration Int?
   estimatedMaximumDuration Int?
-  createdAt                DateTime   @default(now())
-  updatedAt                DateTime   @updatedAt
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 
   creator  Teacher?   @relation(fields: [creatorId], references: [id], onDelete: SetNull)
   items    UnitItem[]
@@ -183,23 +186,23 @@ model Unit {
 }
 
 model UnitItem {
-  id                         String       @id @default(uuid()) @db.Uuid
-  unitId                     String       @db.Uuid
-  order                      Int
-  type                       UnitItemType
-  exerciseConfig             Json?
-  vocabularyDeckId           String?      @db.Uuid
-  grammarExerciseId          String?      @db.Uuid
-  listeningExerciseId        String?      @db.Uuid
-  fillInTheBlankDeckId       String?      @db.Uuid
-  genericDeckId              String?      @db.Uuid
+  id                   String       @id @default(uuid()) @db.Uuid
+  unitId               String       @db.Uuid
+  order                Int
+  type                 UnitItemType
+  exerciseConfig       Json?
+  vocabularyDeckId     String?      @db.Uuid
+  grammarExerciseId    String?      @db.Uuid
+  listeningExerciseId  String?      @db.Uuid
+  fillInTheBlankDeckId String?      @db.Uuid
+  genericDeckId        String?      @db.Uuid
 
-  unit                     Unit                      @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  vocabularyDeck           VocabularyDeck?           @relation(fields: [vocabularyDeckId], references: [id], onDelete: SetNull)
-  grammarExercise          GrammarExercise?          @relation(fields: [grammarExerciseId], references: [id], onDelete: SetNull)
-  listeningExercise        ListeningExercise?        @relation(fields: [listeningExerciseId], references: [id], onDelete: SetNull)
-  fillInTheBlankDeck       FillInTheBlankDeck?       @relation(fields: [fillInTheBlankDeckId], references: [id], onDelete: SetNull)
-  genericDeck              GenericDeck?              @relation(fields: [genericDeckId], references: [id], onDelete: SetNull)
+  unit               Unit                @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  vocabularyDeck     VocabularyDeck?     @relation(fields: [vocabularyDeckId], references: [id], onDelete: SetNull)
+  grammarExercise    GrammarExercise?    @relation(fields: [grammarExerciseId], references: [id], onDelete: SetNull)
+  listeningExercise  ListeningExercise?  @relation(fields: [listeningExerciseId], references: [id], onDelete: SetNull)
+  fillInTheBlankDeck FillInTheBlankDeck? @relation(fields: [fillInTheBlankDeckId], references: [id], onDelete: SetNull)
+  genericDeck        GenericDeck?        @relation(fields: [genericDeckId], references: [id], onDelete: SetNull)
 
   activeSession Session?
 
@@ -217,10 +220,10 @@ model Session {
   endTime           DateTime?
   progress          Json?
 
-  student         Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  teacher         Teacher         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  unit            Unit            @relation(fields: [unitId], references: [id], onDelete: Restrict)
-  currentUnitItem UnitItem?       @relation(fields: [currentUnitItemId], references: [id], onDelete: SetNull)
+  student                 Student                   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher                 Teacher                   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  unit                    Unit                      @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  currentUnitItem         UnitItem?                 @relation(fields: [currentUnitItemId], references: [id], onDelete: SetNull)
   vocabularyReviewHistory VocabularyReviewHistory[]
   genericReviewHistory    GenericReviewHistory[]
 }
@@ -241,6 +244,7 @@ model Job {
   updatedAt DateTime  @updatedAt
 
   owner Teacher @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
   @@index([status, type])
 }
 
@@ -265,7 +269,7 @@ model VocabularyDeck {
   listeningExercises       ListeningExercise[]
   boundFillInTheBlankDecks FillInTheBlankDeck[] @relation("BoundFillInTheBlankDecks")
   boundGenericDecks        GenericDeck[]        @relation("BoundGenericDecks")
-  unitItem                 UnitItem?
+  unitItems                UnitItem[]
 }
 
 model VocabularyCard {
@@ -286,7 +290,7 @@ model VocabularyCard {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  deck                     VocabularyDeck         @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  deck                     VocabularyDeck            @relation(fields: [deckId], references: [id], onDelete: Cascade)
   cardStates               StudentCardState[]
   listeningCardStates      ListeningCardState[]
   boundFillInTheBlankCards FillInTheBlankCard[]
@@ -309,8 +313,8 @@ model GrammarExercise {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  creator  Teacher?  @relation(fields: [creatorId], references: [id], onDelete: SetNull)
-  unitItem UnitItem?
+  creator   Teacher?   @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  unitItems UnitItem[]
 }
 
 model ListeningExercise {
@@ -327,54 +331,54 @@ model ListeningExercise {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  creator         Teacher?        @relation(fields: [creatorId], references: [id], onDelete: SetNull)
-  vocabularyDeck  VocabularyDeck  @relation(fields: [vocabularyDeckId], references: [id], onDelete: Restrict)
-  unitItem        UnitItem?
+  creator        Teacher?       @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  vocabularyDeck VocabularyDeck @relation(fields: [vocabularyDeckId], references: [id], onDelete: Restrict)
+  unitItems      UnitItem[]
 }
 
 model FillInTheBlankDeck {
-  id                     String   @id @default(uuid()) @db.Uuid
-  creatorId              String?  @db.Uuid
-  name                   String
-  description            String?
-  isPublic               Boolean  @default(false)
-  isArchived             Boolean  @default(false)
-  originExerciseId       String?  @db.Uuid
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  id               String   @id @default(uuid()) @db.Uuid
+  creatorId        String?  @db.Uuid
+  name             String
+  description      String?
+  isPublic         Boolean  @default(false)
+  isArchived       Boolean  @default(false)
+  originExerciseId String?  @db.Uuid
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   // Optional binding to a VocabularyDeck
-  boundVocabularyDeckId  String?  @db.Uuid
+  boundVocabularyDeckId String? @db.Uuid
 
-  creator                Teacher?         @relation("TeacherCreatedFillInTheBlankDecks", fields: [creatorId], references: [id], onDelete: SetNull)
-  boundVocabularyDeck    VocabularyDeck?  @relation("BoundFillInTheBlankDecks", fields: [boundVocabularyDeckId], references: [id], onDelete: SetNull)
-  cards                  FillInTheBlankCard[]
-  unitItem               UnitItem?
+  creator             Teacher?             @relation("TeacherCreatedFillInTheBlankDecks", fields: [creatorId], references: [id], onDelete: SetNull)
+  boundVocabularyDeck VocabularyDeck?      @relation("BoundFillInTheBlankDecks", fields: [boundVocabularyDeckId], references: [id], onDelete: SetNull)
+  cards               FillInTheBlankCard[]
+  unitItems           UnitItem[]
 }
 
 model FillInTheBlankCard {
-  id                      String   @id @default(uuid()) @db.Uuid
-  deckId                  String   @db.Uuid
-  question                String   // e.g., "I ___ to the store yesterday."
-  answer                  String   // e.g., "went"
-  options                 Json?    // For multiple choice, e.g., ["go", "went", "gone"]
-  explanation             String?  // Optional explanation shown after revealing the answer
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  id          String   @id @default(uuid()) @db.Uuid
+  deckId      String   @db.Uuid
+  question    String // e.g., "I ___ to the store yesterday."
+  answer      String // e.g., "went"
+  options     Json? // For multiple choice, e.g., ["go", "went", "gone"]
+  explanation String? // Optional explanation shown after revealing the answer
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Optional binding to a specific VocabularyCard
-  boundVocabularyCardId   String?  @db.Uuid
+  boundVocabularyCardId String? @db.Uuid
 
-  deck                    FillInTheBlankDeck @relation(fields: [deckId], references: [id], onDelete: Cascade)
-  boundVocabularyCard     VocabularyCard?    @relation(fields: [boundVocabularyCardId], references: [id], onDelete: SetNull)
-  studentDoneRecords      StudentFillInTheBlankCardDone[]
+  deck                FillInTheBlankDeck              @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  boundVocabularyCard VocabularyCard?                 @relation(fields: [boundVocabularyCardId], references: [id], onDelete: SetNull)
+  studentDoneRecords  StudentFillInTheBlankCardDone[]
 
   @@index([deckId])
 }
 
 model StudentFillInTheBlankCardDone {
-  studentId String @db.Uuid
-  cardId    String @db.Uuid
+  studentId   String   @db.Uuid
+  cardId      String   @db.Uuid
   completedAt DateTime @default(now())
 
   student Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -384,59 +388,58 @@ model StudentFillInTheBlankCardDone {
 }
 
 model GenericDeck {
-  id                     String   @id @default(uuid()) @db.Uuid
-  creatorId              String?  @db.Uuid
-  name                   String
-  description            String?
-  isPublic               Boolean  @default(false)
-  isArchived             Boolean  @default(false)
-  originExerciseId       String?  @db.Uuid
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  id               String   @id @default(uuid()) @db.Uuid
+  creatorId        String?  @db.Uuid
+  name             String
+  description      String?
+  isPublic         Boolean  @default(false)
+  isArchived       Boolean  @default(false)
+  originExerciseId String?  @db.Uuid
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   // For optional thresholding features
-  boundVocabularyDeckId  String?  @db.Uuid
+  boundVocabularyDeckId String? @db.Uuid
 
-  creator                Teacher?         @relation("TeacherCreatedGenericDecks", fields: [creatorId], references: [id], onDelete: SetNull)
-  boundVocabularyDeck    VocabularyDeck?  @relation("BoundGenericDecks", fields: [boundVocabularyDeckId], references: [id], onDelete: SetNull)
-  cards                  GenericCard[]
-  studentGenericDecks    StudentGenericDeck[]
-  unitItem               UnitItem?
+  creator             Teacher?             @relation("TeacherCreatedGenericDecks", fields: [creatorId], references: [id], onDelete: SetNull)
+  boundVocabularyDeck VocabularyDeck?      @relation("BoundGenericDecks", fields: [boundVocabularyDeckId], references: [id], onDelete: SetNull)
+  cards               GenericCard[]
+  studentGenericDecks StudentGenericDeck[]
+  unitItems           UnitItem[]
 }
 
 model GenericCard {
-  id                 String   @id @default(uuid()) @db.Uuid
-  deckId             String   @db.Uuid
-  front              String   // Replaces englishWord
-  back               String   // Replaces chineseTranslation
-  exampleSentences   Json?    // Generic and useful
-  audioUrl           String?  // Generic and useful
-  imageUrl           String?  // Generic and useful
-  tags               String[]
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id               String   @id @default(uuid()) @db.Uuid
+  deckId           String   @db.Uuid
+  front            String // Replaces englishWord
+  back             String // Replaces chineseTranslation
+  exampleSentences Json? // Generic and useful
+  audioUrl         String? // Generic and useful
+  imageUrl         String? // Generic and useful
+  tags             String[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   // For auto-binding feature
-  boundVocabularyCardId   String?  @db.Uuid
+  boundVocabularyCardId String? @db.Uuid
 
-  deck                    GenericDeck      @relation(fields: [deckId], references: [id], onDelete: Cascade)
-  boundVocabularyCard     VocabularyCard?  @relation(fields: [boundVocabularyCardId], references: [id], onDelete: SetNull)
-  cardStates              StudentGenericCardState[]
-  reviewHistory           GenericReviewHistory[]
+  deck                GenericDeck               @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  boundVocabularyCard VocabularyCard?           @relation(fields: [boundVocabularyCardId], references: [id], onDelete: SetNull)
+  cardStates          StudentGenericCardState[]
+  reviewHistory       GenericReviewHistory[]
 
   @@index([deckId])
 }
 
-
 model StudentDeck {
-  id           String   @id @default(uuid()) @db.Uuid
-  studentId    String   @db.Uuid
-  deckId       String   @db.Uuid
-  dailyNewCards      Int      @default(10)
-  dailyReviewLimit   Int      @default(50)
-  assignedAt   DateTime @default(now())
-  completedAt  DateTime?
-  isActive     Boolean  @default(true)
+  id               String    @id @default(uuid()) @db.Uuid
+  studentId        String    @db.Uuid
+  deckId           String    @db.Uuid
+  dailyNewCards    Int       @default(10)
+  dailyReviewLimit Int       @default(50)
+  assignedAt       DateTime  @default(now())
+  completedAt      DateTime?
+  isActive         Boolean   @default(true)
 
   student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
   deck    VocabularyDeck @relation(fields: [deckId], references: [id], onDelete: Cascade)
@@ -445,14 +448,14 @@ model StudentDeck {
 }
 
 model StudentGenericDeck {
-  id               String   @id @default(uuid()) @db.Uuid
-  studentId        String   @db.Uuid
-  deckId           String   @db.Uuid
-  dailyNewCards    Int      @default(10)
-  dailyReviewLimit Int      @default(50)
-  assignedAt       DateTime @default(now())
+  id               String    @id @default(uuid()) @db.Uuid
+  studentId        String    @db.Uuid
+  deckId           String    @db.Uuid
+  dailyNewCards    Int       @default(10)
+  dailyReviewLimit Int       @default(50)
+  assignedAt       DateTime  @default(now())
   completedAt      DateTime?
-  isActive         Boolean  @default(true)
+  isActive         Boolean   @default(true)
 
   student Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
   deck    GenericDeck @relation(fields: [deckId], references: [id], onDelete: Cascade)
@@ -480,6 +483,7 @@ model StudentCardState {
 
   student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
   card    VocabularyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
   @@unique([studentId, cardId])
 }
 
@@ -566,7 +570,7 @@ model ListeningCardState {
 
   student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
   card    VocabularyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
-  
+
   @@unique([studentId, cardId])
   @@index([studentId, due])
   @@index([studentId, state])
@@ -607,7 +611,7 @@ model StudentGenericCardState {
 
   student Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
   card    GenericCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
-  
+
   @@unique([studentId, cardId])
   @@index([studentId, due])
   @@index([studentId, state])

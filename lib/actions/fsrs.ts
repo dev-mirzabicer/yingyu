@@ -543,11 +543,13 @@ async function _optimizeParametersInternal(
   const validatedPayload = validateFsrsOptimizationPayload(payload);
   const { studentId } = validatedPayload;
 
-  // Remove unused paramsDelegate - FSRS optimization uses direct prisma calls
+  // Define clear type aliases for our history records and the accumulator map
+  type ReviewHistoryRecord = VocabularyReviewHistory | GenericReviewHistory;
+  type ReviewsByCardMap = Record<string, ReviewHistoryRecord[]>;
 
   // Only get FSRS reviews (exclude learning step reviews) for optimization
   const historyDelegate = prisma[context.historyModel] as any;
-  const allHistory = await historyDelegate.findMany({
+  const allHistory: ReviewHistoryRecord[] = await historyDelegate.findMany({
     where: {
       studentId,
       isLearningStep: false
@@ -562,12 +564,16 @@ async function _optimizeParametersInternal(
     return { message };
   }
 
-  const reviewsByCard = allHistory.reduce((acc, review) => {
-    if (!acc[review.cardId]) acc[review.cardId] = [];
+  // FIX: Provide explicit types for the accumulator and parameters to restore type inference
+  const reviewsByCard = allHistory.reduce((acc: ReviewsByCardMap, review: ReviewHistoryRecord) => {
+    if (!acc[review.cardId]) {
+      acc[review.cardId] = [];
+    }
     acc[review.cardId].push(review);
     return acc;
-  }, {} as Record<string, (VocabularyReviewHistory | GenericReviewHistory)[]>);
+  }, {} as ReviewsByCardMap);
 
+  // The type of 'history' will now be correctly inferred as ReviewHistoryRecord[]
   const trainingSet = Object.values(reviewsByCard).map((history) => {
     const fsrsReviews = _mapHistoryToFsrsReviews(history);
     return new FSRSItem(fsrsReviews);
@@ -1812,10 +1818,12 @@ export const FSRSService = {
     const assignedGenericCards = await prisma.genericCard.findMany({
       where: {
         deck: {
-          unitItem: {
-            unit: {
-              sessions: {
-                some: { studentId }
+          unitItems: {
+            some: {
+              unit: {
+                sessions: {
+                  some: { studentId }
+                }
               }
             }
           }
