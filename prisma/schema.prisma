@@ -151,7 +151,8 @@ model Student {
   studentGenericDecks           StudentGenericDeck[]
   cardStates                    StudentCardState[]
   listeningCardStates           ListeningCardState[]
-  reviewHistory                 ReviewHistory[]
+  vocabularyReviewHistory       VocabularyReviewHistory[]
+  genericReviewHistory          GenericReviewHistory[]
   fsrsParams                    StudentFsrsParams[]
   listeningFsrsParams           ListeningFsrsParams[]
   sessions                      Session[]
@@ -187,11 +188,11 @@ model UnitItem {
   order                      Int
   type                       UnitItemType
   exerciseConfig             Json?
-  vocabularyDeckId           String?      @unique @db.Uuid
-  grammarExerciseId          String?      @unique @db.Uuid
-  listeningExerciseId        String?      @unique @db.Uuid
-  fillInTheBlankDeckId       String?      @unique @db.Uuid
-  genericDeckId              String?      @unique @db.Uuid
+  vocabularyDeckId           String?      @db.Uuid
+  grammarExerciseId          String?      @db.Uuid
+  listeningExerciseId        String?      @db.Uuid
+  fillInTheBlankDeckId       String?      @db.Uuid
+  genericDeckId              String?      @db.Uuid
 
   unit                     Unit                      @relation(fields: [unitId], references: [id], onDelete: Cascade)
   vocabularyDeck           VocabularyDeck?           @relation(fields: [vocabularyDeckId], references: [id], onDelete: SetNull)
@@ -220,7 +221,8 @@ model Session {
   teacher         Teacher         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   unit            Unit            @relation(fields: [unitId], references: [id], onDelete: Restrict)
   currentUnitItem UnitItem?       @relation(fields: [currentUnitItemId], references: [id], onDelete: SetNull)
-  reviewHistory   ReviewHistory[]
+  vocabularyReviewHistory VocabularyReviewHistory[]
+  genericReviewHistory    GenericReviewHistory[]
 }
 
 // ================================================================= //
@@ -289,6 +291,7 @@ model VocabularyCard {
   listeningCardStates      ListeningCardState[]
   boundFillInTheBlankCards FillInTheBlankCard[]
   boundGenericCards        GenericCard[]
+  reviewHistory            VocabularyReviewHistory[]
 }
 
 model GrammarExercise {
@@ -419,6 +422,7 @@ model GenericCard {
   deck                    GenericDeck      @relation(fields: [deckId], references: [id], onDelete: Cascade)
   boundVocabularyCard     VocabularyCard?  @relation(fields: [boundVocabularyCardId], references: [id], onDelete: SetNull)
   cardStates              StudentGenericCardState[]
+  reviewHistory           GenericReviewHistory[]
 
   @@index([deckId])
 }
@@ -479,12 +483,11 @@ model StudentCardState {
   @@unique([studentId, cardId])
 }
 
-model ReviewHistory {
+model VocabularyReviewHistory {
   id                 BigInt     @id @default(autoincrement())
   studentId          String     @db.Uuid
   cardId             String     @db.Uuid
   sessionId          String?    @db.Uuid
-  reviewType         ReviewType
   rating             Int
   responseTimeMs     Int?
   previousStability  Float?
@@ -494,8 +497,33 @@ model ReviewHistory {
   isLearningStep     Boolean    @default(false)
   reviewedAt         DateTime   @default(now())
 
-  student Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  session Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  card    VocabularyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  session Session?       @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([studentId, cardId])
+  @@index([studentId, cardId, isLearningStep])
+  @@index([reviewedAt])
+  @@index([sessionId])
+}
+
+model GenericReviewHistory {
+  id                 BigInt     @id @default(autoincrement())
+  studentId          String     @db.Uuid
+  cardId             String     @db.Uuid
+  sessionId          String?    @db.Uuid
+  rating             Int
+  responseTimeMs     Int?
+  previousStability  Float?
+  previousDifficulty Float?
+  previousDue        DateTime?
+  previousState      CardState?
+  isLearningStep     Boolean    @default(false)
+  reviewedAt         DateTime   @default(now())
+
+  student Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  card    GenericCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  session Session?    @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
   @@index([studentId, cardId])
   @@index([studentId, cardId, isLearningStep])

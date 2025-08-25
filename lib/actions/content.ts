@@ -1149,11 +1149,10 @@ export const ContentService = {
         where: { cardId }
       });
 
-      // Clean up listening review history
-      await tx.reviewHistory.deleteMany({
+      // Clean up vocabulary review history (includes both vocabulary and listening reviews)
+      await tx.vocabularyReviewHistory.deleteMany({
         where: { 
-          cardId,
-          reviewType: 'LISTENING'
+          cardId
         }
       });
 
@@ -1506,11 +1505,10 @@ export const ContentService = {
         where: { cardId }
       });
 
-      // Also delete related review history entries for listening
-      await tx.reviewHistory.deleteMany({
+      // Also delete related vocabulary review history entries
+      await tx.vocabularyReviewHistory.deleteMany({
         where: { 
-          cardId,
-          reviewType: 'LISTENING'
+          cardId
         }
       });
 
@@ -1732,11 +1730,10 @@ export const ContentService = {
         where: { cardId },
       });
 
-      // Delete review history for this card
-      await tx.reviewHistory.deleteMany({
+      // Delete generic review history for this card
+      await tx.genericReviewHistory.deleteMany({
         where: { 
-          cardId,
-          reviewType: 'GENERIC'
+          cardId
         },
       });
 

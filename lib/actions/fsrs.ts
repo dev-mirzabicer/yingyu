@@ -9,7 +9,8 @@ import {
   MemoryState,
 } from '@/lib/fsrs/engine';
 import {
-  ReviewHistory,
+  VocabularyReviewHistory,
+  GenericReviewHistory,
   StudentCardState,
   StudentGenericCardState,
   ListeningCardState,
@@ -214,24 +215,28 @@ function parseLearningStepDuration(step: string): number {
 type FsrsContextConfig = {
   stateModel: 'studentCardState' | 'listeningCardState' | 'studentGenericCardState';
   paramsModel: 'studentFsrsParams' | 'listeningFsrsParams' | 'genericFsrsParams';
+  historyModel: 'vocabularyReviewHistory' | 'genericReviewHistory';
   reviewType: ReviewType;
 };
 
 const VOCABULARY_CONTEXT: FsrsContextConfig = {
   stateModel: 'studentCardState',
   paramsModel: 'studentFsrsParams',
+  historyModel: 'vocabularyReviewHistory',
   reviewType: 'VOCABULARY',
 };
 
 const LISTENING_CONTEXT: FsrsContextConfig = {
   stateModel: 'listeningCardState',
   paramsModel: 'listeningFsrsParams',
+  historyModel: 'vocabularyReviewHistory', // Listening uses VocabularyCard, so vocabulary history
   reviewType: 'LISTENING',
 };
 
 const GENERIC_CONTEXT: FsrsContextConfig = {
   stateModel: 'studentGenericCardState',
   paramsModel: 'genericFsrsParams',
+  historyModel: 'genericReviewHistory',
   reviewType: 'GENERIC',
 };
 
@@ -332,12 +337,12 @@ async function _recordReviewInternal(
           },
         });
 
-        await tx.reviewHistory.create({
+        const historyDelegate = tx[context.historyModel] as any;
+        await historyDelegate.create({
           data: {
             studentId,
             cardId,
             rating,
-            reviewType: context.reviewType,
             sessionId,
             reviewedAt: now,
             previousState: previousCardState.state,
@@ -423,12 +428,12 @@ async function _recordReviewInternal(
     });
 
     // 11. Record as FSRS review
-    await tx.reviewHistory.create({
+    const historyDelegate = tx[context.historyModel] as any;
+    await historyDelegate.create({
       data: {
         studentId,
         cardId,
         rating,
-        reviewType: context.reviewType,
         sessionId,
         reviewedAt: now,
         previousState: previousCardState.state,
@@ -465,12 +470,12 @@ async function _shouldUseLearningStepsInternal(
     return false;
   }
 
-  // IMPORTANT FIX: We now correctly scope the learning step count to the review type.
-  const learningStepReviews = await tx.reviewHistory.count({
+  // Use the dynamic history model accessor
+  const historyDelegate = tx[context.historyModel] as any;
+  const learningStepReviews = await historyDelegate.count({
     where: {
       studentId,
       cardId,
-      reviewType: context.reviewType,
       isLearningStep: true
     }
   });
@@ -496,12 +501,12 @@ async function _calculateLearningStepsDueInternal(
     return { shouldGraduate: true, newDueDate: now };
   }
 
-  // IMPORTANT FIX: We now correctly scope the learning step count to the review type.
-  const currentStepReviews = await tx.reviewHistory.count({
+  // Use the dynamic history model accessor
+  const historyDelegate = tx[context.historyModel] as any;
+  const currentStepReviews = await historyDelegate.count({
     where: {
       studentId,
       cardId,
-      reviewType: context.reviewType,
       isLearningStep: true
     }
   });
@@ -541,10 +546,10 @@ async function _optimizeParametersInternal(
   // Remove unused paramsDelegate - FSRS optimization uses direct prisma calls
 
   // Only get FSRS reviews (exclude learning step reviews) for optimization
-  const allHistory = await prisma.reviewHistory.findMany({
+  const historyDelegate = prisma[context.historyModel] as any;
+  const allHistory = await historyDelegate.findMany({
     where: {
       studentId,
-      reviewType: context.reviewType,
       isLearningStep: false
     },
     orderBy: { reviewedAt: 'asc' },
@@ -561,10 +566,10 @@ async function _optimizeParametersInternal(
     if (!acc[review.cardId]) acc[review.cardId] = [];
     acc[review.cardId].push(review);
     return acc;
-  }, {} as Record<string, ReviewHistory[]>);
+  }, {} as Record<string, (VocabularyReviewHistory | GenericReviewHistory)[]>);
 
   const trainingSet = Object.values(reviewsByCard).map((history) => {
-    const fsrsReviews = _mapHistoryToFsrsReviews(history as ReviewHistory[]);
+    const fsrsReviews = _mapHistoryToFsrsReviews(history);
     return new FSRSItem(fsrsReviews);
   });
 
@@ -603,10 +608,10 @@ async function _optimizeParametersInternal(
 }
 
 /**
- * [PRIVATE] A helper function to transform our database ReviewHistory into the
+ * [PRIVATE] A helper function to transform our database review history into the
  * FSRSReview[] format required by the FSRS engine.
  */
-function _mapHistoryToFsrsReviews(history: ReviewHistory[]): FSRSReview[] {
+function _mapHistoryToFsrsReviews(history: (VocabularyReviewHistory | GenericReviewHistory)[]): FSRSReview[] {
   return history.map((review, index) => {
     let delta_t = 0;
     if (index > 0) {
@@ -817,7 +822,7 @@ export const FSRSService = {
    * [LEGACY COMPATIBILITY] Helper function for mapping history to FSRS reviews.
    * This is now a facade that calls the generic internal implementation.
    */
-  _mapHistoryToFsrsReviews(history: ReviewHistory[]): FSRSReview[] {
+  _mapHistoryToFsrsReviews(history: (VocabularyReviewHistory | GenericReviewHistory)[]): FSRSReview[] {
     return _mapHistoryToFsrsReviews(history);
   },
 
@@ -967,8 +972,8 @@ export const FSRSService = {
       studentDecks.flatMap((sd) => sd.deck.cards.map((c) => c.id))
     );
 
-    // Get ALL history (learning steps + FSRS) for complete reconstruction
-    const allHistory = await prisma.reviewHistory.findMany({
+    // Get ALL vocabulary history (learning steps + FSRS) for complete reconstruction
+    const allHistory = await prisma.vocabularyReviewHistory.findMany({
       where: { studentId },
       orderBy: { reviewedAt: 'asc' },
     });
@@ -976,7 +981,7 @@ export const FSRSService = {
       if (!acc[review.cardId]) acc[review.cardId] = [];
       acc[review.cardId].push(review);
       return acc;
-    }, {} as Record<string, ReviewHistory[]>);
+    }, {} as Record<string, VocabularyReviewHistory[]>);
 
     const w = (studentParams?.w as number[]) ?? FSRS_DEFAULT_PARAMETERS;
     const engine = new FSRS(w);
@@ -990,11 +995,11 @@ export const FSRSService = {
       const lastReview = cardHistory[cardHistory.length - 1];
 
       // Check if this card should still be in learning steps
-      // Count only learning step reviews for VOCABULARY (not FSRS reviews)
+      // Count only learning step reviews (reviewType filtering no longer needed)
       const learningSteps = DEFAULT_LEARNING_STEPS;
-      const learningStepReviews = cardHistory.filter(h => h.isLearningStep && h.reviewType === 'VOCABULARY').length;
+      const learningStepReviews = cardHistory.filter(h => h.isLearningStep).length;
       const shouldBeInLearningSteps = learningStepReviews < learningSteps.length &&
-        cardHistory.some(h => h.isLearningStep && h.reviewType === 'VOCABULARY'); // Has vocabulary learning step history
+        cardHistory.some(h => h.isLearningStep); // Has learning step history
 
       if (shouldBeInLearningSteps) {
         // Reconstruct learning steps state
@@ -1033,8 +1038,8 @@ export const FSRSService = {
       }
 
       // Use FSRS calculation for graduated or non-learning cards
-      // Only use VOCABULARY FSRS reviews (exclude learning step reviews)
-      const fsrsOnlyHistory = cardHistory.filter(h => !h.isLearningStep && h.reviewType === 'VOCABULARY');
+      // Only use FSRS reviews (exclude learning step reviews)
+      const fsrsOnlyHistory = cardHistory.filter(h => !h.isLearningStep);
       const fsrsReviews = _mapHistoryToFsrsReviews(fsrsOnlyHistory);
       const fsrsItem = new FSRSItem(fsrsReviews);
       const finalMemoryState = engine.memoryState(fsrsItem);
@@ -1379,7 +1384,7 @@ export const FSRSService = {
         COUNT(CASE WHEN due <= CURRENT_DATE THEN 1 END) as "dueToday",
         COUNT(CASE WHEN due <= CURRENT_DATE + INTERVAL '7 days' THEN 1 END) as "dueThisWeek",
         COUNT(CASE WHEN due < CURRENT_DATE THEN 1 END) as "overdue",
-        (SELECT COUNT(*) FROM "ReviewHistory" WHERE "studentId" = ${studentId}::uuid AND "reviewType" = 'LISTENING') as "totalReviews",
+        (SELECT COUNT(*) FROM "VocabularyReviewHistory" WHERE "studentId" = ${studentId}::uuid) as "totalReviews",
         AVG(CASE WHEN stability > 0 THEN stability END) as "averageRetention",
         AVG("averageResponseTimeMs") as "averageResponseTime"
       FROM "ListeningCardState"
@@ -1460,10 +1465,9 @@ export const FSRSService = {
   ): Promise<CacheRebuildResult> {
     const parsedPayload = RebuildCachePayloadSchema.parse(payload);
     const { studentId } = parsedPayload;
-    const listeningReviews = await prisma.reviewHistory.findMany({
+    const listeningReviews = await prisma.vocabularyReviewHistory.findMany({
       where: {
         studentId,
-        reviewType: 'LISTENING',
       },
       orderBy: [{ cardId: 'asc' }, { reviewedAt: 'asc' }],
     });
@@ -1822,11 +1826,10 @@ export const FSRSService = {
 
     const allAssignedCardIds = new Set(assignedGenericCards.map(c => c.id));
 
-    // Get ALL history (learning steps + FSRS) for complete reconstruction
-    const allHistory = await prisma.reviewHistory.findMany({
+    // Get ALL generic history (learning steps + FSRS) for complete reconstruction
+    const allHistory = await prisma.genericReviewHistory.findMany({
       where: { 
-        studentId, 
-        reviewType: 'GENERIC'
+        studentId
       },
       orderBy: { reviewedAt: 'asc' },
     });
@@ -1834,7 +1837,7 @@ export const FSRSService = {
       if (!acc[review.cardId]) acc[review.cardId] = [];
       acc[review.cardId].push(review);
       return acc;
-    }, {} as Record<string, ReviewHistory[]>);
+    }, {} as Record<string, GenericReviewHistory[]>);
 
     const w = (studentParams?.w as number[]) ?? FSRS_DEFAULT_PARAMETERS;
     const engine = new FSRS(w);
@@ -1848,11 +1851,11 @@ export const FSRSService = {
       const lastReview = cardHistory[cardHistory.length - 1];
 
       // Check if this card should still be in learning steps
-      // Count only learning step reviews for GENERIC (not FSRS reviews)
+      // Count only learning step reviews (reviewType filtering no longer needed)
       const learningSteps = DEFAULT_LEARNING_STEPS;
-      const learningStepReviews = cardHistory.filter(h => h.isLearningStep && h.reviewType === 'GENERIC').length;
+      const learningStepReviews = cardHistory.filter(h => h.isLearningStep).length;
       const shouldBeInLearningSteps = learningStepReviews < learningSteps.length &&
-        cardHistory.some(h => h.isLearningStep && h.reviewType === 'GENERIC'); // Has generic learning step history
+        cardHistory.some(h => h.isLearningStep); // Has learning step history
 
       if (shouldBeInLearningSteps) {
         // Reconstruct learning steps state
@@ -1891,8 +1894,8 @@ export const FSRSService = {
       }
 
       // Use FSRS calculation for graduated or non-learning cards
-      // Only use GENERIC FSRS reviews (exclude learning step reviews)
-      const fsrsOnlyHistory = cardHistory.filter(h => !h.isLearningStep && h.reviewType === 'GENERIC');
+      // Only use FSRS reviews (exclude learning step reviews)
+      const fsrsOnlyHistory = cardHistory.filter(h => !h.isLearningStep);
       const fsrsReviews = _mapHistoryToFsrsReviews(fsrsOnlyHistory);
       const fsrsItem = new FSRSItem(fsrsReviews);
       const finalMemoryState = engine.memoryState(fsrsItem);
